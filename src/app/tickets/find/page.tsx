@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { STUDENT_EMAIL_DOMAIN } from '@/lib/config';
 
 interface PublicEvent {
   id: string;
@@ -33,6 +34,7 @@ export default function FindTicketPage() {
   const [studentName, setStudentName] = useState('');
   const [studentNumber, setStudentNumber] = useState('');
   const [universityEmail, setUniversityEmail] = useState('');
+  const [isEmailEdited, setIsEmailEdited] = useState(false);
 
   // Fetch public events for the dropdown
   useEffect(() => {
@@ -59,7 +61,21 @@ export default function FindTicketPage() {
   }, []);
 
   const handleStudentNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setStudentNumber(normalizeStudentNumber(e.target.value));
+    const rawVal = e.target.value;
+    const normalized = normalizeStudentNumber(rawVal);
+    setStudentNumber(normalized);
+
+    if (normalized.trim() !== '') {
+      let emailUserPart = normalized.toLowerCase();
+      if (!emailUserPart.startsWith('s')) {
+        emailUserPart = 's' + emailUserPart;
+      }
+      setUniversityEmail(`${emailUserPart}@${STUDENT_EMAIL_DOMAIN}`);
+      setIsEmailEdited(false);
+    } else {
+      setUniversityEmail('');
+      setIsEmailEdited(false);
+    }
   };
 
   const handleSearchSubmit = async (e: React.FormEvent) => {
@@ -200,12 +216,20 @@ export default function FindTicketPage() {
                 id="universityEmail"
                 type="email"
                 className="form-input"
-                placeholder="例：s23a123@ge.osaka-sandai.ac.jp"
+                placeholder={`例：s23a123@${STUDENT_EMAIL_DOMAIN}`}
                 value={universityEmail}
-                onChange={(e) => setUniversityEmail(e.target.value)}
+                onChange={(e) => {
+                  setUniversityEmail(e.target.value);
+                  setIsEmailEdited(true);
+                }}
                 disabled={searching}
                 required
               />
+              {!isEmailEdited && studentNumber && (
+                <span className="form-hint" style={{ color: 'var(--color-success)', display: 'block', marginTop: '6px' }}>
+                  💡 学籍番号から自動入力しています。違う場合は修正してください。
+                </span>
+              )}
             </div>
 
             <div style={{ marginTop: '30px' }}>

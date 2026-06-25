@@ -76,7 +76,7 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
 
         // To get remaining seats securely, we can run get_public_events RPC and filter by ID
         const { data: publicEvents } = await supabase.rpc('get_public_events');
-        const matched = publicEvents?.find((e: any) => e.id === id);
+        const matched = publicEvents?.find((e: { id: string }) => e.id === id);
 
         setEvent({
           ...data,
@@ -101,12 +101,16 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
     setStudentNumber(normalized);
 
     // Auto-generate email s[student_number_lowercase]@[STUDENT_EMAIL_DOMAIN]
-    if (!isEmailEdited) {
-      if (normalized.trim() !== '') {
-        setUniversityEmail(`s${normalized.toLowerCase()}@${STUDENT_EMAIL_DOMAIN}`);
-      } else {
-        setUniversityEmail('');
+    if (normalized.trim() !== '') {
+      let emailUserPart = normalized.toLowerCase();
+      if (!emailUserPart.startsWith('s')) {
+        emailUserPart = 's' + emailUserPart;
       }
+      setUniversityEmail(`${emailUserPart}@${STUDENT_EMAIL_DOMAIN}`);
+      setIsEmailEdited(false);
+    } else {
+      setUniversityEmail('');
+      setIsEmailEdited(false);
     }
   };
 
@@ -165,7 +169,7 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
         setError('予期しないデータが返されました。');
         setBooking(false);
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error reserving ticket:', err);
       setError('予約処理中にエラーが発生しました。時間をおいてやり直してください。');
       setBooking(false);
