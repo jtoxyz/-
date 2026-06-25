@@ -4,6 +4,7 @@ import MyTicketsList from '@/components/MyTicketsList';
 
 // Opt out of static caching so reservation numbers are always real-time
 export const revalidate = 0;
+export const runtime = 'edge';
 
 interface PublicEvent {
   id: string;
