@@ -110,6 +110,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS unique_active_reservation_slot_university_emai
 -- 8. RPCs
 -- =====================
 
+-- Drop functions whose signatures/return types are changing to prevent return type errors
+DROP FUNCTION IF EXISTS get_public_events();
+DROP FUNCTION IF EXISTS get_ticket(text);
+DROP FUNCTION IF EXISTS create_reservation(uuid, text, text, text);
+
 -- 8-1. create_reservation (updated: now requires p_event_slot_id)
 CREATE OR REPLACE FUNCTION create_reservation(
   p_event_id uuid,
