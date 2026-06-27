@@ -111,6 +111,9 @@ DECLARE
 BEGIN
   -- Normalize inputs
   v_normalized_student_number := upper(trim(p_student_number));
+  IF v_normalized_student_number LIKE 'S%' THEN
+    v_normalized_student_number := substring(v_normalized_student_number from 2);
+  END IF;
   v_normalized_email := lower(trim(p_university_email));
 
   -- Validate empty values
@@ -122,6 +125,16 @@ BEGIN
   END IF;
   IF v_normalized_email = '' THEN
     RAISE EXCEPTION 'メールアドレスを入力してください。';
+  END IF;
+
+  -- Validate student number format (2 digits + 1 letter + 3 digits)
+  IF NOT (v_normalized_student_number ~ '^\d{2}[A-Z]\d{3}$') THEN
+    RAISE EXCEPTION '学籍番号は「数字2桁 + 英字1文字 + 数字3桁」の形式で入力してください。(例: 24B123)';
+  END IF;
+
+  -- Verify email matches s + student number + @ge.osaka-sandai.ac.jp
+  IF v_normalized_email != 's' || lower(v_normalized_student_number) || '@ge.osaka-sandai.ac.jp' THEN
+    RAISE EXCEPTION 'メールアドレスが学籍番号と一致しないか、無効なドメインです。（例：s24b123@ge.osaka-sandai.ac.jp）';
   END IF;
 
   -- Fetch and lock event row to prevent race conditions
@@ -363,13 +376,23 @@ SET search_path = public
 AS $$
 DECLARE
   v_public_token text;
+  v_normalized_student_number text;
+  v_normalized_email text;
 BEGIN
+  -- Normalize student number
+  v_normalized_student_number := upper(trim(p_student_number));
+  IF v_normalized_student_number LIKE 'S%' THEN
+    v_normalized_student_number := substring(v_normalized_student_number from 2);
+  END IF;
+  
+  v_normalized_email := lower(trim(p_university_email));
+
   SELECT public_token INTO v_public_token
   FROM reservations
   WHERE event_id = p_event_id
     AND student_name = trim(p_student_name)
-    AND student_number = upper(trim(p_student_number))
-    AND university_email = lower(trim(p_university_email))
+    AND student_number = v_normalized_student_number
+    AND university_email = v_normalized_email
     AND status != 'cancelled'
   LIMIT 1;
 

@@ -19,7 +19,12 @@ function normalizeStudentNumber(val: string): string {
   // Remove all whitespace
   normalized = normalized.replace(/\s+/g, '');
   // Capitalize English characters
-  return normalized.toUpperCase();
+  normalized = normalized.toUpperCase();
+  // Strip leading 'S' if present
+  if (normalized.startsWith('S')) {
+    normalized = normalized.slice(1);
+  }
+  return normalized;
 }
 
 export default function FindTicketPage() {
@@ -60,16 +65,19 @@ export default function FindTicketPage() {
     fetchPublicEvents();
   }, []);
 
+  // Handle student number change (remove whitespace, no capitalization during typing to prevent IME duplication)
   const handleStudentNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const rawVal = e.target.value;
-    const normalized = normalizeStudentNumber(rawVal);
-    setStudentNumber(normalized);
+    let rawVal = e.target.value;
+    
+    // Remove all whitespace
+    rawVal = rawVal.replace(/\s+/g, '');
+    
+    setStudentNumber(rawVal);
 
+    // Auto-generate email based on normalized student number
+    const normalized = normalizeStudentNumber(rawVal);
     if (normalized.trim() !== '') {
-      let emailUserPart = normalized.toLowerCase();
-      if (!emailUserPart.startsWith('s')) {
-        emailUserPart = 's' + emailUserPart;
-      }
+      const emailUserPart = 's' + normalized.toLowerCase();
       setUniversityEmail(`${emailUserPart}@${STUDENT_EMAIL_DOMAIN}`);
       setIsEmailEdited(false);
     } else {
@@ -78,17 +86,39 @@ export default function FindTicketPage() {
     }
   };
 
+  const handleStudentNumberBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    const rawVal = e.target.value;
+    const normalized = normalizeStudentNumber(rawVal);
+    setStudentNumber(normalized);
+  };
+
   const handleSearchSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSearching(true);
 
     const cleanName = studentName.trim();
-    const cleanNumber = studentNumber.trim();
+    const normalizedNumber = normalizeStudentNumber(studentNumber);
     const cleanEmail = universityEmail.trim().toLowerCase();
 
-    if (!eventId || !cleanName || !cleanNumber || !cleanEmail) {
+    if (!eventId || !cleanName || !normalizedNumber || !cleanEmail) {
       setError('すべての項目を入力してください。');
+      setSearching(false);
+      return;
+    }
+
+    const studentNumberRegex = /^\d{2}[A-Z]\d{3}$/;
+    if (!studentNumberRegex.test(normalizedNumber)) {
+      setError('学籍番号は「数字2桁 + 英字1文字 + 数字3桁」の形式で入力してください。(例: 24B123)');
+      setSearching(false);
+      return;
+    }
+
+    // Verify email matches student number
+    const expectedEmailLocalPart = 's' + normalizedNumber.toLowerCase();
+    const actualEmailLocalPart = cleanEmail.split('@')[0];
+    if (actualEmailLocalPart !== expectedEmailLocalPart) {
+      setError('メールアドレスのユーザー名（@の左側）が学籍番号と一致しません。');
       setSearching(false);
       return;
     }
@@ -98,7 +128,7 @@ export default function FindTicketPage() {
       const { data: publicToken, error: rpcError } = await supabase.rpc('find_ticket', {
         p_event_id: eventId,
         p_student_name: cleanName,
-        p_student_number: cleanNumber,
+        p_student_number: normalizedNumber,
         p_university_email: cleanEmail,
       });
 
@@ -199,14 +229,20 @@ export default function FindTicketPage() {
                 id="studentNumber"
                 type="text"
                 className="form-input"
-                placeholder="例：23A123"
+                placeholder="例：24B123（先頭の s は入力しない）"
                 value={studentNumber}
                 onChange={handleStudentNumberChange}
+                onBlur={handleStudentNumberBlur}
                 disabled={searching}
                 required
+                style={{ textTransform: 'uppercase' }}
+                autoCorrect="off"
+                spellCheck={false}
+                autoCapitalize="characters"
+                maxLength={7}
               />
               <span className="form-hint" style={{ color: 'var(--color-warning)' }}>
-                ※先頭の s はつけずに入力してください
+                例：24B123（先頭の s は入力しない）
               </span>
             </div>
 

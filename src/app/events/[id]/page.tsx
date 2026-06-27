@@ -30,7 +30,12 @@ function normalizeStudentNumber(val: string): string {
   // Remove all whitespace
   normalized = normalized.replace(/\s+/g, '');
   // Capitalize English characters
-  return normalized.toUpperCase();
+  normalized = normalized.toUpperCase();
+  // Strip leading 'S' if present
+  if (normalized.startsWith('S')) {
+    normalized = normalized.slice(1);
+  }
+  return normalized;
 }
 
 function formatDateTime(dateStr: string | null): string {
@@ -95,25 +100,31 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
     fetchEventDetails();
   }, [id]);
 
-  // Handle student number change (uppercase + full-to-half-width conversion + auto email generation)
+  // Handle student number change (remove whitespace, no capitalization during typing to prevent IME duplication)
   const handleStudentNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const rawVal = e.target.value;
-    const normalized = normalizeStudentNumber(rawVal);
+    let rawVal = e.target.value;
     
-    setStudentNumber(normalized);
+    // Remove all whitespace
+    rawVal = rawVal.replace(/\s+/g, '');
+    
+    setStudentNumber(rawVal);
 
-    // Auto-generate email s[student_number_lowercase]@[STUDENT_EMAIL_DOMAIN]
+    // Auto-generate email based on normalized student number
+    const normalized = normalizeStudentNumber(rawVal);
     if (normalized.trim() !== '') {
-      let emailUserPart = normalized.toLowerCase();
-      if (!emailUserPart.startsWith('s')) {
-        emailUserPart = 's' + emailUserPart;
-      }
+      const emailUserPart = 's' + normalized.toLowerCase();
       setUniversityEmail(`${emailUserPart}@${STUDENT_EMAIL_DOMAIN}`);
       setIsEmailEdited(false);
     } else {
       setUniversityEmail('');
       setIsEmailEdited(false);
     }
+  };
+
+  const handleStudentNumberBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    const rawVal = e.target.value;
+    const normalized = normalizeStudentNumber(rawVal);
+    setStudentNumber(normalized);
   };
 
   // Handle email changes (mark as manually modified)
@@ -128,12 +139,29 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
     setBooking(true);
 
     const cleanName = studentName.trim();
-    const cleanNumber = studentNumber.trim();
+    const normalizedNumber = normalizeStudentNumber(studentNumber);
     const cleanEmail = universityEmail.trim().toLowerCase();
 
     // Validations
-    if (!cleanName || !cleanNumber || !cleanEmail) {
+    if (!cleanName || !normalizedNumber || !cleanEmail) {
       setError('すべての項目を入力してください。');
+      setBooking(false);
+      return;
+    }
+
+    // Student number regex validation
+    const studentNumberRegex = /^\d{2}[A-Z]\d{3}$/;
+    if (!studentNumberRegex.test(normalizedNumber)) {
+      setError('学籍番号は「数字2桁 + 英字1文字 + 数字3桁」の形式で入力してください。(例: 24B123)');
+      setBooking(false);
+      return;
+    }
+
+    // Verify email matches student number
+    const expectedEmailLocalPart = 's' + normalizedNumber.toLowerCase();
+    const actualEmailLocalPart = cleanEmail.split('@')[0];
+    if (actualEmailLocalPart !== expectedEmailLocalPart) {
+      setError('メールアドレスのユーザー名（@の左側）が学籍番号と一致しません。');
       setBooking(false);
       return;
     }
@@ -151,7 +179,7 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
       const { data, error: rpcError } = await supabase.rpc('create_reservation', {
         p_event_id: id,
         p_student_name: cleanName,
-        p_student_number: cleanNumber,
+        p_student_number: normalizedNumber,
         p_university_email: cleanEmail,
       });
 
@@ -284,14 +312,20 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
                 id="studentNumber"
                 type="text"
                 className="form-input"
-                placeholder="例：23A123"
+                placeholder="例：24B123（先頭の s は入力しない）"
                 required
                 value={studentNumber}
                 onChange={handleStudentNumberChange}
+                onBlur={handleStudentNumberBlur}
                 disabled={booking}
+                style={{ textTransform: 'uppercase' }}
+                autoCorrect="off"
+                spellCheck={false}
+                autoCapitalize="characters"
+                maxLength={7}
               />
               <span className="form-hint" style={{ color: 'var(--color-warning)' }}>
-                ※先頭の s はつけずに入力してください（自動変換されます）
+                例：24B123（先頭の s は入力しない）
               </span>
             </div>
 
