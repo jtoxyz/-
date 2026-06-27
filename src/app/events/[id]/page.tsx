@@ -9,6 +9,17 @@ import { supabase } from '@/lib/supabase';
 import { saveToken } from '@/lib/ticketCache';
 import { ALLOWED_EMAIL_DOMAINS, STUDENT_EMAIL_DOMAIN } from '@/lib/config';
 
+interface EventSlot {
+  id: string;
+  label: string;
+  starts_at: string | null;
+  ends_at: string | null;
+  capacity: number;
+  is_enabled: boolean;
+  sort_order: number;
+  remaining_slots: number;
+}
+
 interface EventDetails {
   id: string;
   title: string;
@@ -20,6 +31,7 @@ interface EventDetails {
   reservation_ends_at: string | null;
   reservation_enabled: boolean;
   remaining_slots: number;
+  slot_selection_mode: 'single' | 'multiple';
 }
 
 function normalizeStudentNumber(val: string): string {
@@ -57,6 +69,9 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
   const [loading, setLoading] = useState(true);
   const [booking, setBooking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [slots, setSlots] = useState<EventSlot[]>([]);
+  const [selectedSlotIds, setSelectedSlotIds] = useState<string[]>([]);
+  const [bookingResults, setBookingResults] = useState<Array<{slot_label: string; public_token: string}> | null>(null);
 
   // Form states
   const [studentName, setStudentName] = useState('');
@@ -89,6 +104,12 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
           ...data,
           remaining_slots: matched ? matched.remaining_slots : data.capacity,
         });
+
+        // Fetch event slots
+        const { data: slotsData } = await supabase.rpc('get_event_slots', { p_event_id: id });
+        if (slotsData && Array.isArray(slotsData)) {
+          setSlots(slotsData);
+        }
       } catch (err) {
         console.error('Error fetching event details:', err);
         setError('データの取得に失敗しました。');
@@ -133,6 +154,19 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
     setIsEmailEdited(true);
   };
 
+  const handleSlotToggle = (slotId: string) => {
+    if (!event) return;
+    if (event.slot_selection_mode === 'single') {
+      setSelectedSlotIds([slotId]);
+    } else {
+      setSelectedSlotIds((prev) =>
+        prev.includes(slotId)
+          ? prev.filter((s) => s !== slotId)
+          : [...prev, slotId]
+      );
+    }
+  };
+
   const handleBookingSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -145,6 +179,13 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
     // Validations
     if (!cleanName || !normalizedNumber || !cleanEmail) {
       setError('すべての項目を入力してください。');
+      setBooking(false);
+      return;
+    }
+
+    // Validate at least one slot is selected
+    if (selectedSlotIds.length === 0) {
+      setError('参加する枠を選択してください。');
       setBooking(false);
       return;
     }
@@ -175,29 +216,59 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
     }
 
     try {
-      // Execute booking via create_reservation RPC
-      const { data, error: rpcError } = await supabase.rpc('create_reservation', {
-        p_event_id: id,
-        p_student_name: cleanName,
-        p_student_number: normalizedNumber,
-        p_university_email: cleanEmail,
-      });
+      if (event?.slot_selection_mode === 'multiple' && selectedSlotIds.length > 1) {
+        // Bulk reservation for multiple slots
+        const { data, error: rpcError } = await supabase.rpc('create_reservations_bulk', {
+          p_event_id: id,
+          p_event_slot_ids: selectedSlotIds,
+          p_student_name: cleanName,
+          p_student_number: normalizedNumber,
+          p_university_email: cleanEmail,
+        });
 
-      if (rpcError) {
-        setError(rpcError.message || '予約の作成に失敗しました。');
-        setBooking(false);
-        return;
-      }
+        if (rpcError) {
+          setError(rpcError.message || '予約の作成に失敗しました。');
+          setBooking(false);
+          return;
+        }
 
-      // Success: Save token to localStorage & cookie cache
-      const parsedData = typeof data === 'string' ? JSON.parse(data) : data;
-      if (parsedData && parsedData.public_token) {
-        saveToken(parsedData.public_token);
-        // Redirect to ticket page
-        router.push(`/tickets/${parsedData.public_token}`);
+        const parsedData: Array<{slot_label: string; public_token: string}> = typeof data === 'string' ? JSON.parse(data) : data;
+        if (parsedData && Array.isArray(parsedData)) {
+          for (const result of parsedData) {
+            saveToken(result.public_token);
+          }
+          setBookingResults(parsedData);
+          setBooking(false);
+        } else {
+          setError('予期しないデータが返されました。');
+          setBooking(false);
+        }
       } else {
-        setError('予期しないデータが返されました。');
-        setBooking(false);
+        // Single slot reservation
+        const { data, error: rpcError } = await supabase.rpc('create_reservation', {
+          p_event_id: id,
+          p_event_slot_id: selectedSlotIds[0],
+          p_student_name: cleanName,
+          p_student_number: normalizedNumber,
+          p_university_email: cleanEmail,
+        });
+
+        if (rpcError) {
+          setError(rpcError.message || '予約の作成に失敗しました。');
+          setBooking(false);
+          return;
+        }
+
+        // Success: Save token to localStorage & cookie cache
+        const parsedData = typeof data === 'string' ? JSON.parse(data) : data;
+        if (parsedData && parsedData.public_token) {
+          saveToken(parsedData.public_token);
+          // Redirect to ticket page
+          router.push(`/tickets/${parsedData.public_token}`);
+        } else {
+          setError('予期しないデータが返されました。');
+          setBooking(false);
+        }
       }
     } catch (err) {
       console.error('Error reserving ticket:', err);
@@ -233,12 +304,60 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
 
   if (!event) return null;
 
+  // Show completion screen for bulk booking results
+  if (bookingResults) {
+    return (
+      <div>
+        <div className="glass-card" style={{ borderTop: '4px solid var(--color-success)' }}>
+          <h2 style={{ fontSize: '1.5rem', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px', color: '#ffffff' }}>
+            <span>🎉</span> 予約が完了しました
+          </h2>
+          <p style={{ color: 'var(--text-secondary)', marginBottom: '24px' }}>
+            以下の枠に予約が確定しました。各チケットのリンクから詳細を確認できます。
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {bookingResults.map((result) => (
+              <Link
+                key={result.public_token}
+                href={`/tickets/${result.public_token}`}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '14px 18px',
+                  background: 'rgba(255,255,255,0.05)',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid var(--card-border)',
+                  color: '#ffffff',
+                  textDecoration: 'none',
+                  transition: 'background 0.2s',
+                }}
+              >
+                <span style={{ fontWeight: 600 }}>🎫 {result.slot_label}</span>
+                <span style={{ fontSize: '0.85rem', color: 'var(--color-primary)' }}>チケットを表示 →</span>
+              </Link>
+            ))}
+          </div>
+          <div style={{ marginTop: '30px' }}>
+            <Link href="/">
+              <button className="btn btn-secondary">企画一覧へ戻る</button>
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Calculate if booking is active
   const now = new Date();
+  const totalRemainingSlots = slots.length > 0
+    ? slots.reduce((sum, s) => sum + s.remaining_slots, 0)
+    : event.remaining_slots;
   const isReservationOpen = event.reservation_enabled &&
     (!event.reservation_starts_at || new Date(event.reservation_starts_at) <= now) &&
     (!event.reservation_ends_at || new Date(event.reservation_ends_at) >= now) &&
-    event.remaining_slots > 0;
+    totalRemainingSlots > 0 &&
+    slots.length > 0;
 
   return (
     <div>
@@ -268,10 +387,95 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
 
           <div className="info-label">定員状況</div>
           <div className="info-value">
-            定員 {event.capacity} 名 / 残り <span style={{ color: event.remaining_slots > 0 ? 'var(--color-success)' : 'var(--color-danger)', fontWeight: 700 }}>{event.remaining_slots}</span> 席
+            定員 {event.capacity} 名 / 残り <span style={{ color: totalRemainingSlots > 0 ? 'var(--color-success)' : 'var(--color-danger)', fontWeight: 700 }}>{totalRemainingSlots}</span> 席
           </div>
         </div>
       </div>
+
+      {/* Slot selection UI */}
+      {slots.length > 0 && (
+        <div className="glass-card">
+          <h2 style={{ fontSize: '1.25rem', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span>🕐</span> 参加枠を選択{event.slot_selection_mode === 'multiple' ? '（複数選択可）' : ''}
+          </h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {slots.map((slot) => {
+              const isDisabled = !slot.is_enabled;
+              const isFull = slot.remaining_slots <= 0;
+              const isSelectable = !isDisabled && !isFull;
+              const isSelected = selectedSlotIds.includes(slot.id);
+
+              return (
+                <label
+                  key={slot.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    padding: '14px 16px',
+                    background: isSelected
+                      ? 'rgba(99, 102, 241, 0.15)'
+                      : isSelectable
+                        ? 'rgba(255,255,255,0.04)'
+                        : 'rgba(255,255,255,0.02)',
+                    borderRadius: 'var(--radius-md)',
+                    border: isSelected
+                      ? '2px solid var(--color-primary)'
+                      : '1px solid var(--card-border)',
+                    cursor: isSelectable ? 'pointer' : 'not-allowed',
+                    opacity: isSelectable ? 1 : 0.5,
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  <input
+                    type={event.slot_selection_mode === 'single' ? 'radio' : 'checkbox'}
+                    name="event-slot"
+                    checked={isSelected}
+                    disabled={!isSelectable}
+                    onChange={() => handleSlotToggle(slot.id)}
+                    style={{ accentColor: 'var(--color-primary)', width: '18px', height: '18px', flexShrink: 0 }}
+                  />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <span style={{ fontWeight: 600, color: '#ffffff', fontSize: '0.95rem' }}>{slot.label}</span>
+                      {isDisabled && (
+                        <span style={{
+                          fontSize: '0.7rem',
+                          padding: '2px 8px',
+                          borderRadius: '9999px',
+                          background: 'rgba(156, 163, 175, 0.3)',
+                          color: 'var(--text-secondary)',
+                          fontWeight: 600,
+                        }}>受付停止</span>
+                      )}
+                      {!isDisabled && isFull && (
+                        <span style={{
+                          fontSize: '0.7rem',
+                          padding: '2px 8px',
+                          borderRadius: '9999px',
+                          background: 'rgba(239, 68, 68, 0.2)',
+                          color: 'var(--color-danger)',
+                          fontWeight: 600,
+                        }}>満席</span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '4px', display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
+                      {(slot.starts_at || slot.ends_at) && (
+                        <span>
+                          {formatDateTime(slot.starts_at)} 〜 {formatDateTime(slot.ends_at)}
+                        </span>
+                      )}
+                      <span>
+                        残り <span style={{ color: slot.remaining_slots > 0 ? 'var(--color-success)' : 'var(--color-danger)', fontWeight: 600 }}>{slot.remaining_slots}</span> / {slot.capacity} 席
+                      </span>
+                    </div>
+                  </div>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="glass-card" style={{ borderTop: '4px solid var(--color-primary)' }}>
         <h2 style={{ fontSize: '1.25rem', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>

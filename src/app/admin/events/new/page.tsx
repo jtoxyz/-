@@ -7,6 +7,14 @@ import { useAdminAuth } from '@/hooks/useAdminAuth';
 import AdminNav from '@/components/AdminNav';
 import { supabase } from '@/lib/supabase';
 
+interface SlotFormRow {
+  id: string; // temp client-side ID
+  label: string;
+  startsAt: string;
+  endsAt: string;
+  capacity: number;
+}
+
 function isValidUrl(url: string | null | undefined): boolean {
   if (!url) return true; // Empty is valid since it is optional
   try {
@@ -27,15 +35,18 @@ export default function AdminNewEventPage() {
   // Form states
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [capacity, setCapacity] = useState(50);
   
   // Date/Time strings (empty string represents null)
-  const [startsAt, setStartsAt] = useState('');
-  const [endsAt, setEndsAt] = useState('');
   const [reservationStartsAt, setReservationStartsAt] = useState('');
   const [reservationEndsAt, setReservationEndsAt] = useState('');
   const [useStartsAt, setUseStartsAt] = useState('');
   const [useEndsAt, setUseEndsAt] = useState('');
+
+  // Slot selection mode
+  const [slotSelectionMode, setSlotSelectionMode] = useState<'single' | 'multiple'>('single');
+
+  // Dynamic slot rows
+  const [slotRows, setSlotRows] = useState<SlotFormRow[]>([{ id: crypto.randomUUID(), label: '', startsAt: '', endsAt: '', capacity: 50 }]);
 
   // Toggles
   const [isPublic, setIsPublic] = useState(false);
@@ -59,14 +70,34 @@ export default function AdminNewEventPage() {
     'ご参加ありがとうございました。今後の企画改善のため、アンケートにご協力ください。'
   );
 
+  // Slot row helpers
+  const updateSlotRow = (slotId: string, field: keyof SlotFormRow, value: string | number) => {
+    setSlotRows((prev) => prev.map((row) => row.id === slotId ? { ...row, [field]: value } : row));
+  };
+
+  const addSlotRow = () => {
+    setSlotRows((prev) => [...prev, { id: crypto.randomUUID(), label: '', startsAt: '', endsAt: '', capacity: 50 }]);
+  };
+
+  const removeSlotRow = (slotId: string) => {
+    setSlotRows((prev) => prev.length <= 1 ? prev : prev.filter((row) => row.id !== slotId));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSaving(true);
 
     // Basic validation
-    if (!title.trim() || capacity <= 0) {
-      setError('企画名を入力し、定員には1以上の数字を入力してください。');
+    if (!title.trim()) {
+      setError('企画名を入力してください。');
+      setSaving(false);
+      return;
+    }
+
+    // Slot validation: at least 1 row with a label
+    if (slotRows.length === 0 || !slotRows.some((row) => row.label.trim())) {
+      setError('開催枠を少なくとも1つ入力し、枠名を設定してください。');
       setSaving(false);
       return;
     }
@@ -99,13 +130,16 @@ export default function AdminNewEventPage() {
       return;
     }
 
+    // Backward compat: use first slot's values for event-level fields
+    const firstSlot = slotRows[0];
+
     // Prepare data
     const eventData = {
       title: title.trim(),
       description: description.trim() || null,
-      capacity,
-      starts_at: startsAt ? new Date(startsAt).toISOString() : null,
-      ends_at: endsAt ? new Date(endsAt).toISOString() : null,
+      capacity: firstSlot.capacity,
+      starts_at: firstSlot.startsAt ? new Date(firstSlot.startsAt).toISOString() : null,
+      ends_at: firstSlot.endsAt ? new Date(firstSlot.endsAt).toISOString() : null,
       reservation_starts_at: reservationStartsAt ? new Date(reservationStartsAt).toISOString() : null,
       reservation_ends_at: reservationEndsAt ? new Date(reservationEndsAt).toISOString() : null,
       use_starts_at: useStartsAt ? new Date(useStartsAt).toISOString() : null,
@@ -115,6 +149,7 @@ export default function AdminNewEventPage() {
       ticket_enabled: ticketEnabled,
       use_button_enabled: useButtonEnabled,
       allowed_email_domains: domainsArray,
+      slot_selection_mode: slotSelectionMode,
       survey_after_reservation_enabled: surveyAfterReservationEnabled,
       survey_after_reservation_url: surveyAfterReservationUrl.trim() || null,
       survey_after_reservation_message: surveyAfterReservationMessage.trim() || null,
@@ -134,6 +169,24 @@ export default function AdminNewEventPage() {
         setError(insertError.message || '企画の作成に失敗しました。');
         setSaving(false);
         return;
+      }
+
+      // Insert slot rows into event_slots
+      const { error: slotsError } = await supabase
+        .from('event_slots')
+        .insert(slotRows.map((row, i) => ({
+          event_id: data.id,
+          label: row.label,
+          starts_at: row.startsAt ? new Date(row.startsAt).toISOString() : null,
+          ends_at: row.endsAt ? new Date(row.endsAt).toISOString() : null,
+          capacity: row.capacity,
+          sort_order: i,
+        })));
+
+      if (slotsError) {
+        console.error('Error inserting event_slots:', slotsError);
+        // Event was created but slots failed — still redirect but warn
+        setError('企画は作成されましたが、開催枠の保存に失敗しました。編集画面から再設定してください。');
       }
 
       // Success: Redirect to dashboard
@@ -209,19 +262,7 @@ export default function AdminNewEventPage() {
               />
             </div>
 
-            <div className="form-group">
-              <label className="form-label" htmlFor="capacity">定員 (予約上限数)</label>
-              <input
-                id="capacity"
-                type="number"
-                className="form-input"
-                min={1}
-                required
-                value={capacity}
-                onChange={(e) => setCapacity(parseInt(e.target.value) || 0)}
-                disabled={saving}
-              />
-            </div>
+
 
             <div className="form-group">
               <label className="form-label" htmlFor="allowedDomains">許可する大学メールのドメイン (カンマ区切り)</label>
@@ -238,37 +279,12 @@ export default function AdminNewEventPage() {
             </div>
           </div>
 
-          {/* Section: Timings */}
+          {/* Section: Timings & Slots */}
           <div style={{ borderBottom: '1px solid var(--card-border)', paddingBottom: '16px', marginBottom: '24px' }}>
             <h3 style={{ fontSize: '1.1rem', marginBottom: '16px', color: 'var(--color-primary)' }}>
               2. 日程・受付時間設定
             </h3>
             
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-              <div className="form-group">
-                <label className="form-label" htmlFor="startsAt">開催日時（開始）</label>
-                <input
-                  id="startsAt"
-                  type="datetime-local"
-                  className="form-input"
-                  value={startsAt}
-                  onChange={(e) => setStartsAt(e.target.value)}
-                  disabled={saving}
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label" htmlFor="endsAt">開催日時（終了）</label>
-                <input
-                  id="endsAt"
-                  type="datetime-local"
-                  className="form-input"
-                  value={endsAt}
-                  onChange={(e) => setEndsAt(e.target.value)}
-                  disabled={saving}
-                />
-              </div>
-            </div>
-
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <div className="form-group">
                 <label className="form-label" htmlFor="reservationStartsAt">予約受付開始日時</label>
@@ -294,6 +310,127 @@ export default function AdminNewEventPage() {
                 />
                 <span className="form-hint">空欄の場合は、期限なしとみなされます。</span>
               </div>
+            </div>
+
+            {/* Slot selection mode */}
+            <div className="form-group" style={{ marginTop: '16px' }}>
+              <label className="form-label">枠選択モード</label>
+              <div style={{ display: 'flex', gap: '24px', marginTop: '4px' }}>
+                <label className="form-checkbox-label">
+                  <input
+                    type="radio"
+                    name="slotSelectionMode"
+                    className="form-checkbox"
+                    checked={slotSelectionMode === 'single'}
+                    onChange={() => setSlotSelectionMode('single')}
+                    disabled={saving}
+                  />
+                  1つだけ選択（単一枠）
+                </label>
+                <label className="form-checkbox-label">
+                  <input
+                    type="radio"
+                    name="slotSelectionMode"
+                    className="form-checkbox"
+                    checked={slotSelectionMode === 'multiple'}
+                    onChange={() => setSlotSelectionMode('multiple')}
+                    disabled={saving}
+                  />
+                  複数選択可能
+                </label>
+              </div>
+              <span className="form-hint">ユーザーが予約時に選択できる開催枠の数を制限します。</span>
+            </div>
+
+            {/* Slot management */}
+            <div style={{ marginTop: '20px', background: 'rgba(255,255,255,0.01)', padding: '16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--card-border)' }}>
+              <h4 style={{ fontSize: '0.95rem', marginBottom: '12px', color: '#fff' }}>開催枠の管理</h4>
+              <span className="form-hint" style={{ display: 'block', marginBottom: '12px' }}>各開催枠に、枠名・開催日時・定員を設定できます。少なくとも1つの枠が必要です。</span>
+
+              {slotRows.map((row, index) => (
+                <div key={row.id} style={{ display: 'flex', gap: '8px', alignItems: 'flex-end', marginBottom: '8px', padding: '12px', background: 'rgba(255,255,255,0.02)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--card-border)' }}>
+                  <div style={{ flex: 2 }}>
+                    {index === 0 && <label className="form-label" style={{ fontSize: '0.75rem' }}>枠名</label>}
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="例：午前の部"
+                      value={row.label}
+                      onChange={(e) => updateSlotRow(row.id, 'label', e.target.value)}
+                      disabled={saving}
+                    />
+                  </div>
+                  <div style={{ flex: 2 }}>
+                    {index === 0 && <label className="form-label" style={{ fontSize: '0.75rem' }}>開始日時</label>}
+                    <input
+                      type="datetime-local"
+                      className="form-input"
+                      value={row.startsAt}
+                      onChange={(e) => updateSlotRow(row.id, 'startsAt', e.target.value)}
+                      disabled={saving}
+                    />
+                  </div>
+                  <div style={{ flex: 2 }}>
+                    {index === 0 && <label className="form-label" style={{ fontSize: '0.75rem' }}>終了日時</label>}
+                    <input
+                      type="datetime-local"
+                      className="form-input"
+                      value={row.endsAt}
+                      onChange={(e) => updateSlotRow(row.id, 'endsAt', e.target.value)}
+                      disabled={saving}
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    {index === 0 && <label className="form-label" style={{ fontSize: '0.75rem' }}>定員</label>}
+                    <input
+                      type="number"
+                      className="form-input"
+                      min={1}
+                      value={row.capacity}
+                      onChange={(e) => updateSlotRow(row.id, 'capacity', parseInt(e.target.value) || 0)}
+                      disabled={saving}
+                    />
+                  </div>
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => removeSlotRow(row.id)}
+                      disabled={saving || slotRows.length <= 1}
+                      style={{
+                        background: 'transparent',
+                        border: '1px solid var(--color-danger-border)',
+                        color: 'var(--color-danger)',
+                        borderRadius: 'var(--radius-sm)',
+                        padding: '8px 12px',
+                        cursor: slotRows.length <= 1 ? 'not-allowed' : 'pointer',
+                        opacity: slotRows.length <= 1 ? 0.3 : 1,
+                        fontSize: '1rem',
+                      }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              <button
+                type="button"
+                onClick={addSlotRow}
+                disabled={saving}
+                style={{
+                  background: 'transparent',
+                  border: '1px dashed var(--card-border)',
+                  color: 'var(--color-primary)',
+                  borderRadius: 'var(--radius-sm)',
+                  padding: '8px 16px',
+                  cursor: 'pointer',
+                  fontSize: '0.85rem',
+                  marginTop: '4px',
+                  width: '100%',
+                }}
+              >
+                + 枠を追加
+              </button>
             </div>
           </div>
 

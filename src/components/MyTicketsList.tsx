@@ -13,6 +13,7 @@ interface CachedTicket {
   ticket_code: string;
   public_token: string;
   event_title: string;
+  slot_label?: string | null;
 }
 
 export default function MyTicketsList() {
@@ -109,6 +110,11 @@ export default function MyTicketsList() {
                 <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#fff', marginBottom: '2px' }}>
                   {ticket.event_title}
                 </div>
+                {ticket.slot_label && (
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: '1px' }}>
+                    📅 {ticket.slot_label}
+                  </div>
+                )}
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
                   氏名: {ticket.student_name} / 学籍番号: {ticket.student_number}
                 </div>

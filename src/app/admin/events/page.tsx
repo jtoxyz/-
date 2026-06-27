@@ -15,6 +15,7 @@ interface EventAdminItem {
   ticket_enabled: boolean;
   starts_at: string | null;
   reservations: { id: string; status: string }[];
+  event_slots?: { id: string; capacity: number }[];
 }
 
 function formatDateTime(dateStr: string | null): string {
@@ -38,10 +39,10 @@ export default function AdminEventsPage() {
 
   const fetchEvents = async () => {
     try {
-      // Fetch all events along with their reservations to count active bookings
+      // Fetch all events along with their reservations and slots
       const { data, error: fetchError } = await supabase
         .from('events')
-        .select('*, reservations(id, status)')
+        .select('*, reservations(id, status), event_slots(id, capacity)')
         .order('created_at', { ascending: false });
 
       if (fetchError) {
@@ -128,6 +129,10 @@ export default function AdminEventsPage() {
                   (r) => r.status !== 'cancelled'
                 ).length;
                 
+                const totalCapacity = event.event_slots && event.event_slots.length > 0
+                  ? event.event_slots.reduce((sum, s) => sum + s.capacity, 0)
+                  : event.capacity;
+
                 return (
                   <tr key={event.id}>
                     <td style={{ fontWeight: 700, color: '#fff' }}>{event.title}</td>
@@ -154,10 +159,10 @@ export default function AdminEventsPage() {
                       )}
                     </td>
                     <td>
-                      <span style={{ fontWeight: 700, color: activeReservationsCount >= event.capacity ? 'var(--color-danger)' : 'var(--color-success)' }}>
+                      <span style={{ fontWeight: 700, color: activeReservationsCount >= totalCapacity ? 'var(--color-danger)' : 'var(--color-success)' }}>
                         {activeReservationsCount}
                       </span>
-                      <span style={{ color: 'var(--text-muted)' }}> / {event.capacity}</span>
+                      <span style={{ color: 'var(--text-muted)' }}> / {totalCapacity}</span>
                     </td>
                     <td>
                       <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>

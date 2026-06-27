@@ -46,15 +46,26 @@ export default function AdminEditEventPage({ params }: { params: Promise<{ id: s
   // Form states
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [capacity, setCapacity] = useState(50);
   
   // Date/Time strings (empty string represents null)
-  const [startsAt, setStartsAt] = useState('');
-  const [endsAt, setEndsAt] = useState('');
   const [reservationStartsAt, setReservationStartsAt] = useState('');
   const [reservationEndsAt, setReservationEndsAt] = useState('');
   const [useStartsAt, setUseStartsAt] = useState('');
   const [useEndsAt, setUseEndsAt] = useState('');
+
+  // Slot states
+  const [slotSelectionMode, setSlotSelectionMode] = useState<'single' | 'multiple'>('single');
+  interface SlotFormRow {
+    id: string; // database UUID or client temp randomUUID
+    label: string;
+    startsAt: string;
+    endsAt: string;
+    capacity: number;
+    isNew?: boolean;
+  }
+  const [slotRows, setSlotRows] = useState<SlotFormRow[]>([]);
+  const [initialSlotIds, setInitialSlotIds] = useState<string[]>([]);
+  const [slotReservationCounts, setSlotReservationCounts] = useState<Record<string, number>>({});
 
   // Toggles
   const [isPublic, setIsPublic] = useState(false);
@@ -92,9 +103,6 @@ export default function AdminEditEventPage({ params }: { params: Promise<{ id: s
         // Prepopulate states
         setTitle(data.title || '');
         setDescription(data.description || '');
-        setCapacity(data.capacity || 50);
-        setStartsAt(formatIsoToLocalString(data.starts_at));
-        setEndsAt(formatIsoToLocalString(data.ends_at));
         setReservationStartsAt(formatIsoToLocalString(data.reservation_starts_at));
         setReservationEndsAt(formatIsoToLocalString(data.reservation_ends_at));
         setUseStartsAt(formatIsoToLocalString(data.use_starts_at));
@@ -104,6 +112,7 @@ export default function AdminEditEventPage({ params }: { params: Promise<{ id: s
         setTicketEnabled(data.ticket_enabled ?? false);
         setUseButtonEnabled(data.use_button_enabled ?? false);
         setAllowedDomains(Array.isArray(data.allowed_email_domains) ? data.allowed_email_domains.join(', ') : 'ge.osaka-sandai.ac.jp');
+        setSlotSelectionMode(data.slot_selection_mode === 'multiple' ? 'multiple' : 'single');
         
         setSurveyAfterReservationEnabled(data.survey_after_reservation_enabled ?? false);
         setSurveyAfterReservationUrl(data.survey_after_reservation_url || '');
@@ -112,6 +121,43 @@ export default function AdminEditEventPage({ params }: { params: Promise<{ id: s
         setSurveyAfterUseEnabled(data.survey_after_use_enabled ?? false);
         setSurveyAfterUseUrl(data.survey_after_use_url || '');
         setSurveyAfterUseMessage(data.survey_after_use_message || 'ご参加ありがとうございました。今後の企画改善のため、アンケートにご協力ください。');
+
+        // Fetch slots
+        const { data: slotsData, error: slotsError } = await supabase
+          .from('event_slots')
+          .select('*')
+          .eq('event_id', id)
+          .order('sort_order', { ascending: true });
+
+        if (!slotsError && slotsData) {
+          const loadedRows: SlotFormRow[] = slotsData.map((s) => ({
+            id: s.id,
+            label: s.label,
+            startsAt: formatIsoToLocalString(s.starts_at),
+            endsAt: formatIsoToLocalString(s.ends_at),
+            capacity: s.capacity,
+          }));
+          setSlotRows(loadedRows);
+          setInitialSlotIds(slotsData.map((s) => s.id));
+        }
+
+        // Fetch reservations to calculate active booking counts per slot
+        const { data: resData, error: resError } = await supabase
+          .from('reservations')
+          .select('event_slot_id')
+          .eq('event_id', id)
+          .neq('status', 'cancelled');
+
+        if (!resError && resData) {
+          const counts: Record<string, number> = {};
+          resData.forEach((r) => {
+            if (r.event_slot_id) {
+              counts[r.event_slot_id] = (counts[r.event_slot_id] || 0) + 1;
+            }
+          });
+          setSlotReservationCounts(counts);
+        }
+
       } catch (err) {
         console.error('Failed to load event details:', err);
         setError('データの取得に失敗しました。');
@@ -125,14 +171,39 @@ export default function AdminEditEventPage({ params }: { params: Promise<{ id: s
     }
   }, [id, authLoading, user]);
 
+  // Slot row helpers
+  const updateSlotRow = (slotId: string, field: keyof SlotFormRow, value: string | number) => {
+    setSlotRows((prev) => prev.map((row) => row.id === slotId ? { ...row, [field]: value } : row));
+  };
+
+  const addSlotRow = () => {
+    setSlotRows((prev) => [...prev, { id: crypto.randomUUID(), label: '', startsAt: '', endsAt: '', capacity: 50, isNew: true }]);
+  };
+
+  const removeSlotRow = (slotId: string) => {
+    const reservationCount = slotReservationCounts[slotId] || 0;
+    if (reservationCount > 0) {
+      alert('この枠には既に予約が入っているため削除できません。');
+      return;
+    }
+    setSlotRows((prev) => prev.filter((row) => row.id !== slotId));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSaving(true);
 
     // Basic validation
-    if (!title.trim() || capacity <= 0) {
-      setError('企画名を入力し、定員には1以上の数字を入力してください。');
+    if (!title.trim()) {
+      setError('企画名を入力してください。');
+      setSaving(false);
+      return;
+    }
+
+    // Slot validation
+    if (slotRows.length === 0 || !slotRows.some((row) => row.label.trim())) {
+      setError('開催枠を少なくとも1つ入力し、枠名を設定してください。');
       setSaving(false);
       return;
     }
@@ -165,13 +236,15 @@ export default function AdminEditEventPage({ params }: { params: Promise<{ id: s
       return;
     }
 
+    const firstSlot = slotRows[0];
+
     // Prepare data
     const eventData = {
       title: title.trim(),
       description: description.trim() || null,
-      capacity,
-      starts_at: startsAt ? new Date(startsAt).toISOString() : null,
-      ends_at: endsAt ? new Date(endsAt).toISOString() : null,
+      capacity: firstSlot.capacity,
+      starts_at: firstSlot.startsAt ? new Date(firstSlot.startsAt).toISOString() : null,
+      ends_at: firstSlot.endsAt ? new Date(firstSlot.endsAt).toISOString() : null,
       reservation_starts_at: reservationStartsAt ? new Date(reservationStartsAt).toISOString() : null,
       reservation_ends_at: reservationEndsAt ? new Date(reservationEndsAt).toISOString() : null,
       use_starts_at: useStartsAt ? new Date(useStartsAt).toISOString() : null,
@@ -181,6 +254,7 @@ export default function AdminEditEventPage({ params }: { params: Promise<{ id: s
       ticket_enabled: ticketEnabled,
       use_button_enabled: useButtonEnabled,
       allowed_email_domains: domainsArray,
+      slot_selection_mode: slotSelectionMode,
       survey_after_reservation_enabled: surveyAfterReservationEnabled,
       survey_after_reservation_url: surveyAfterReservationUrl.trim() || null,
       survey_after_reservation_message: surveyAfterReservationMessage.trim() || null,
@@ -198,6 +272,47 @@ export default function AdminEditEventPage({ params }: { params: Promise<{ id: s
 
       if (updateError) {
         setError(updateError.message || '企画の更新に失敗しました。');
+        setSaving(false);
+        return;
+      }
+
+      // 1. Delete removed slots
+      const currentSlotIds = slotRows.map((r) => r.id);
+      const removedSlotIds = initialSlotIds.filter((id) => !currentSlotIds.includes(id));
+      if (removedSlotIds.length > 0) {
+        const { error: deleteError } = await supabase
+          .from('event_slots')
+          .delete()
+          .in('id', removedSlotIds);
+        if (deleteError) {
+          console.error('Error deleting slots:', deleteError);
+        }
+      }
+
+      // 2. Upsert current slots
+      const slotsToUpsert = slotRows.map((row, i) => {
+        const isNew = !initialSlotIds.includes(row.id) || row.isNew;
+        const item: any = {
+          label: row.label.trim(),
+          starts_at: row.startsAt ? new Date(row.startsAt).toISOString() : null,
+          ends_at: row.endsAt ? new Date(row.endsAt).toISOString() : null,
+          capacity: row.capacity,
+          sort_order: i,
+        };
+        if (!isNew) {
+          item.id = row.id;
+        } else {
+          item.event_id = id;
+        }
+        return item;
+      });
+
+      const { error: upsertError } = await supabase
+        .from('event_slots')
+        .upsert(slotsToUpsert);
+      if (upsertError) {
+        console.error('Error upserting slots:', upsertError);
+        setError('企画設定は更新されましたが、開催枠の保存に失敗しました。');
         setSaving(false);
         return;
       }
@@ -274,20 +389,6 @@ export default function AdminEditEventPage({ params }: { params: Promise<{ id: s
             </div>
 
             <div className="form-group">
-              <label className="form-label" htmlFor="capacity">定員 (予約上限数)</label>
-              <input
-                id="capacity"
-                type="number"
-                className="form-input"
-                min={1}
-                required
-                value={capacity}
-                onChange={(e) => setCapacity(parseInt(e.target.value) || 0)}
-                disabled={saving}
-              />
-            </div>
-
-            <div className="form-group">
               <label className="form-label" htmlFor="allowedDomains">許可する大学メールのドメイン (カンマ区切り)</label>
               <input
                 id="allowedDomains"
@@ -302,37 +403,12 @@ export default function AdminEditEventPage({ params }: { params: Promise<{ id: s
             </div>
           </div>
 
-          {/* Section: Timings */}
+          {/* Section: Timings & Slots */}
           <div style={{ borderBottom: '1px solid var(--card-border)', paddingBottom: '16px', marginBottom: '24px' }}>
             <h3 style={{ fontSize: '1.1rem', marginBottom: '16px', color: 'var(--color-primary)' }}>
               2. 日程・受付時間設定
             </h3>
             
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-              <div className="form-group">
-                <label className="form-label" htmlFor="startsAt">開催日時（開始）</label>
-                <input
-                  id="startsAt"
-                  type="datetime-local"
-                  className="form-input"
-                  value={startsAt}
-                  onChange={(e) => setStartsAt(e.target.value)}
-                  disabled={saving}
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label" htmlFor="endsAt">開催日時（終了）</label>
-                <input
-                  id="endsAt"
-                  type="datetime-local"
-                  className="form-input"
-                  value={endsAt}
-                  onChange={(e) => setEndsAt(e.target.value)}
-                  disabled={saving}
-                />
-              </div>
-            </div>
-
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <div className="form-group">
                 <label className="form-label" htmlFor="reservationStartsAt">予約受付開始日時</label>
@@ -344,6 +420,7 @@ export default function AdminEditEventPage({ params }: { params: Promise<{ id: s
                   onChange={(e) => setReservationStartsAt(e.target.value)}
                   disabled={saving}
                 />
+                <span className="form-hint">空欄の場合は、即時受付可能とみなされます。</span>
               </div>
               <div className="form-group">
                 <label className="form-label" htmlFor="reservationEndsAt">予約受付終了日時</label>
@@ -355,7 +432,135 @@ export default function AdminEditEventPage({ params }: { params: Promise<{ id: s
                   onChange={(e) => setReservationEndsAt(e.target.value)}
                   disabled={saving}
                 />
+                <span className="form-hint">空欄の場合は、期限なしとみなされます。</span>
               </div>
+            </div>
+
+            {/* Slot selection mode */}
+            <div className="form-group" style={{ marginTop: '16px' }}>
+              <label className="form-label">枠選択モード</label>
+              <div style={{ display: 'flex', gap: '24px', marginTop: '4px' }}>
+                <label className="form-checkbox-label">
+                  <input
+                    type="radio"
+                    name="slotSelectionMode"
+                    className="form-checkbox"
+                    checked={slotSelectionMode === 'single'}
+                    onChange={() => setSlotSelectionMode('single')}
+                    disabled={saving}
+                  />
+                  1つだけ選択（単一枠）
+                </label>
+                <label className="form-checkbox-label">
+                  <input
+                    type="radio"
+                    name="slotSelectionMode"
+                    className="form-checkbox"
+                    checked={slotSelectionMode === 'multiple'}
+                    onChange={() => setSlotSelectionMode('multiple')}
+                    disabled={saving}
+                  />
+                  複数選択可能
+                </label>
+              </div>
+              <span className="form-hint">ユーザーが予約時に選択できる開催枠の数を制限します。</span>
+            </div>
+
+            {/* Slot management */}
+            <div style={{ marginTop: '20px', background: 'rgba(255,255,255,0.01)', padding: '16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--card-border)' }}>
+              <h4 style={{ fontSize: '0.95rem', marginBottom: '12px', color: '#fff' }}>開催枠の管理</h4>
+              <span className="form-hint" style={{ display: 'block', marginBottom: '12px' }}>各開催枠に、枠名・開催日時・定員を設定できます。少なくとも1つの枠が必要です。</span>
+
+              {slotRows.map((row, index) => {
+                const resCount = slotReservationCounts[row.id] || 0;
+                const hasReservations = resCount > 0;
+
+                return (
+                  <div key={row.id} style={{ display: 'flex', gap: '8px', alignItems: 'flex-end', marginBottom: '8px', padding: '12px', background: 'rgba(255, 255, 255, 0.02)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--card-border)' }}>
+                    <div style={{ flex: 2 }}>
+                      {index === 0 && <label className="form-label" style={{ fontSize: '0.75rem' }}>枠名</label>}
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="例：午前の部"
+                        value={row.label}
+                        onChange={(e) => updateSlotRow(row.id, 'label', e.target.value)}
+                        disabled={saving}
+                      />
+                    </div>
+                    <div style={{ flex: 2 }}>
+                      {index === 0 && <label className="form-label" style={{ fontSize: '0.75rem' }}>開始日時</label>}
+                      <input
+                        type="datetime-local"
+                        className="form-input"
+                        value={row.startsAt}
+                        onChange={(e) => updateSlotRow(row.id, 'startsAt', e.target.value)}
+                        disabled={saving}
+                      />
+                    </div>
+                    <div style={{ flex: 2 }}>
+                      {index === 0 && <label className="form-label" style={{ fontSize: '0.75rem' }}>終了日時</label>}
+                      <input
+                        type="datetime-local"
+                        className="form-input"
+                        value={row.endsAt}
+                        onChange={(e) => updateSlotRow(row.id, 'endsAt', e.target.value)}
+                        disabled={saving}
+                      />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      {index === 0 && <label className="form-label" style={{ fontSize: '0.75rem' }}>定員</label>}
+                      <input
+                        type="number"
+                        className="form-input"
+                        min={1}
+                        value={row.capacity}
+                        onChange={(e) => updateSlotRow(row.id, 'capacity', parseInt(e.target.value) || 0)}
+                        disabled={saving}
+                      />
+                    </div>
+                    <div>
+                      <button
+                        type="button"
+                        onClick={() => removeSlotRow(row.id)}
+                        disabled={saving || slotRows.length <= 1 || hasReservations}
+                        style={{
+                          background: 'transparent',
+                          border: '1px solid var(--color-danger-border)',
+                          color: 'var(--color-danger)',
+                          borderRadius: 'var(--radius-sm)',
+                          padding: '8px 12px',
+                          cursor: (slotRows.length <= 1 || hasReservations) ? 'not-allowed' : 'pointer',
+                          opacity: (slotRows.length <= 1 || hasReservations) ? 0.3 : 1,
+                          fontSize: '1rem',
+                        }}
+                        title={hasReservations ? `予約あり (${resCount}件) のため削除不可` : ''}
+                      >
+                        {hasReservations ? '予約あり' : '×'}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+
+              <button
+                type="button"
+                onClick={addSlotRow}
+                disabled={saving}
+                style={{
+                  background: 'transparent',
+                  border: '1px dashed var(--card-border)',
+                  color: 'var(--color-primary)',
+                  borderRadius: 'var(--radius-sm)',
+                  padding: '8px 16px',
+                  cursor: 'pointer',
+                  fontSize: '0.85rem',
+                  marginTop: '4px',
+                  width: '100%',
+                }}
+              >
+                + 枠を追加
+              </button>
             </div>
           </div>
 

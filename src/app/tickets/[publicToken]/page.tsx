@@ -23,6 +23,10 @@ interface TicketDetails {
   event_ends_at: string | null;
   use_starts_at: string | null;
   use_ends_at: string | null;
+  slot_id: string | null;
+  slot_label: string | null;
+  slot_starts_at: string | null;
+  slot_ends_at: string | null;
   ticket_enabled: boolean;
   use_button_enabled: boolean;
   survey_after_reservation_enabled: boolean;
@@ -253,6 +257,16 @@ export default function TicketPage({ params }: { params: Promise<{ publicToken: 
               {ticket.event_title}
             </h2>
           </div>
+
+          {ticket.slot_label && (
+            <div style={{ textAlign: 'center', marginBottom: '16px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>開催枠</span>
+              <div style={{ color: '#fff', marginTop: '2px' }}>{ticket.slot_label}</div>
+              <div style={{ fontSize: '0.75rem', marginTop: '2px' }}>
+                {formatDateTime(ticket.slot_starts_at)} 〜 {formatDateTime(ticket.slot_ends_at)}
+              </div>
+            </div>
+          )}
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', margin: '20px 0', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '16px' }}>
             <div>

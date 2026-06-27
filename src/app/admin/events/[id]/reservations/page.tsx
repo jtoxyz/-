@@ -18,6 +18,7 @@ interface ReservationItem {
   used_at: string | null;
   cancelled_at: string | null;
   created_at: string;
+  event_slots: { label: string } | null;
 }
 
 function formatDateTime(dateStr: string | null): string {
@@ -63,10 +64,10 @@ export default function AdminReservationsPage({ params }: { params: Promise<{ id
       }
       setEventTitle(eventData.title);
 
-      // 2. Fetch Reservations
+      // 2. Fetch Reservations with slot label
       const { data: resData, error: resError } = await supabase
         .from('reservations')
-        .select('*')
+        .select('*, event_slots(label)')
         .eq('event_id', id)
         .order('created_at', { ascending: false });
 
@@ -76,7 +77,7 @@ export default function AdminReservationsPage({ params }: { params: Promise<{ id
         return;
       }
 
-      setReservations(resData as ReservationItem[] || []);
+      setReservations(resData as unknown as ReservationItem[] || []);
     } catch (err) {
       console.error('Error loading reservation logs:', err);
       setError('データの読み込み中にエラーが発生しました。');
@@ -160,6 +161,7 @@ export default function AdminReservationsPage({ params }: { params: Promise<{ id
       '予約日時',
       '氏名',
       '学籍番号',
+      '開催枠',
       '大学メール',
       '予約状態',
       '使用状況',
@@ -175,6 +177,7 @@ export default function AdminReservationsPage({ params }: { params: Promise<{ id
         formatDateTime(res.created_at),
         res.student_name,
         res.student_number,
+        res.event_slots?.label || '-',
         res.university_email,
         statusLabel,
         res.status === 'used' ? '使用済み' : '未使用',
@@ -247,7 +250,7 @@ export default function AdminReservationsPage({ params }: { params: Promise<{ id
           </div>
           <div style={{ background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--card-border)' }}>
             <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>キャンセル数</span>
-            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-danger)' }}>{cancelledBookings}</div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--color-danger)' }}>{cancelledBookings}</div>
           </div>
           <div style={{ background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--card-border)' }}>
             <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>総ログ件数</span>
@@ -295,6 +298,7 @@ export default function AdminReservationsPage({ params }: { params: Promise<{ id
                 <th>予約日時</th>
                 <th>氏名</th>
                 <th>学籍番号</th>
+                <th>開催枠</th>
                 <th>大学メールアドレス</th>
                 <th>チケット状態</th>
                 <th>使用時刻</th>
@@ -312,6 +316,7 @@ export default function AdminReservationsPage({ params }: { params: Promise<{ id
                     <td>{formatDateTime(res.created_at)}</td>
                     <td style={{ fontWeight: 700, color: '#fff' }}>{res.student_name}</td>
                     <td>{res.student_number}</td>
+                    <td>{res.event_slots?.label || '-'}</td>
                     <td style={{ fontSize: '0.8rem', fontFamily: 'monospace' }}>{res.university_email}</td>
                     <td>
                       {isItemReserved && <span className="badge badge-success">有効</span>}
