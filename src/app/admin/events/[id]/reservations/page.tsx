@@ -14,6 +14,7 @@ interface ReservationItem {
   student_number: string;
   university_email: string;
   status: 'reserved' | 'used' | 'cancelled';
+  ticket_type: 'reservation' | 'walkin';
   ticket_code: string;
   used_at: string | null;
   cancelled_at: string | null;
@@ -159,6 +160,7 @@ export default function AdminReservationsPage({ params }: { params: Promise<{ id
 
     const headers = [
       '予約日時',
+      '券種',
       '氏名',
       '学籍番号',
       '開催枠',
@@ -175,6 +177,7 @@ export default function AdminReservationsPage({ params }: { params: Promise<{ id
 
       return [
         formatDateTime(res.created_at),
+        res.ticket_type === 'walkin' ? '当日券' : '予約券',
         res.student_name,
         res.student_number,
         res.event_slots?.label || '-',
@@ -296,6 +299,7 @@ export default function AdminReservationsPage({ params }: { params: Promise<{ id
             <thead>
               <tr>
                 <th>予約日時</th>
+                <th>券種</th>
                 <th>氏名</th>
                 <th>学籍番号</th>
                 <th>開催枠</th>
@@ -314,6 +318,13 @@ export default function AdminReservationsPage({ params }: { params: Promise<{ id
                 return (
                   <tr key={res.id} style={{ opacity: isItemCancelled ? 0.4 : 1 }}>
                     <td>{formatDateTime(res.created_at)}</td>
+                    <td>
+                      {res.ticket_type === 'walkin' ? (
+                        <span className="badge" style={{ backgroundColor: 'var(--color-warning-bg)', color: 'var(--color-warning)', borderColor: 'var(--color-warning-border)' }}>当日券</span>
+                      ) : (
+                        <span className="badge" style={{ backgroundColor: 'var(--color-primary-glow)', color: 'var(--color-primary)', borderColor: 'var(--card-border-hover)' }}>予約券</span>
+                      )}
+                    </td>
                     <td style={{ fontWeight: 700, color: '#fff' }}>{res.student_name}</td>
                     <td>{res.student_number}</td>
                     <td>{res.event_slots?.label || '-'}</td>

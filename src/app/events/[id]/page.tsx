@@ -14,10 +14,19 @@ interface EventSlot {
   label: string;
   starts_at: string | null;
   ends_at: string | null;
-  capacity: number;
+  total_capacity: number;
+  reservation_capacity: number;
+  reserved_count: number;
+  walkin_count: number;
+  remaining_reservation_slots: number;
+  remaining_walkin_slots: number;
   is_enabled: boolean;
   sort_order: number;
   remaining_slots: number;
+  reservation_use_starts_at: string | null;
+  reservation_use_ends_at: string | null;
+  walkin_use_starts_at: string | null;
+  walkin_use_ends_at: string | null;
 }
 
 interface EventDetails {
@@ -277,6 +286,86 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
     }
   };
 
+  const handleWalkinSubmit = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    setError(null);
+    setBooking(true);
+
+    const cleanName = studentName.trim();
+    const normalizedNumber = normalizeStudentNumber(studentNumber);
+    const cleanEmail = universityEmail.trim().toLowerCase();
+
+    // Validations
+    if (!cleanName || !normalizedNumber || !cleanEmail) {
+      setError('すべての項目を入力してください。');
+      setBooking(false);
+      return;
+    }
+
+    // Validate exactly one slot is selected
+    if (selectedSlotIds.length !== 1) {
+      setError('当日券を取得する枠を1つだけ選択してください。');
+      setBooking(false);
+      return;
+    }
+
+    // Student number regex validation
+    const studentNumberRegex = /^\d{2}[A-Z]\d{3}$/;
+    if (!studentNumberRegex.test(normalizedNumber)) {
+      setError('学籍番号は「数字2桁 + 英字1文字 + 数字3桁」の形式で入力してください。(例: 24B123)');
+      setBooking(false);
+      return;
+    }
+
+    // Verify email matches student number
+    const expectedEmailLocalPart = 's' + normalizedNumber.toLowerCase();
+    const actualEmailLocalPart = cleanEmail.split('@')[0];
+    if (actualEmailLocalPart !== expectedEmailLocalPart) {
+      setError('メールアドレスのユーザー名（@の左側）が学籍番号と一致しません。');
+      setBooking(false);
+      return;
+    }
+
+    // Domain validation on frontend
+    const domain = cleanEmail.split('@')[1];
+    if (!domain || !ALLOWED_EMAIL_DOMAINS.includes(domain)) {
+      setError(`許可されている大学のメールアドレスを入力してください。(${ALLOWED_EMAIL_DOMAINS.join(', ')})`);
+      setBooking(false);
+      return;
+    }
+
+    try {
+      const { data, error: rpcError } = await supabase.rpc('create_walkin_reservation', {
+        p_event_id: id,
+        p_event_slot_id: selectedSlotIds[0],
+        p_student_name: cleanName,
+        p_student_number: normalizedNumber,
+        p_university_email: cleanEmail,
+      });
+
+      if (rpcError) {
+        setError(rpcError.message || '当日券の取得に失敗しました。');
+        setBooking(false);
+        return;
+      }
+
+      // Success: Save token to localStorage & cookie cache
+      const parsedData = typeof data === 'string' ? JSON.parse(data) : data;
+      if (parsedData && parsedData.public_token) {
+        saveToken(parsedData.public_token);
+        // Redirect to ticket page
+        router.push(`/tickets/${parsedData.public_token}`);
+      } else {
+        setError('予期しないデータが返されました。');
+        setBooking(false);
+      }
+    } catch (err) {
+      console.error('Error reserving walkin ticket:', err);
+      setError('当日券取得処理中にエラーが発生しました。時間をおいてやり直してください。');
+      setBooking(false);
+    }
+  };
+
   if (loading) {
     return (
       <div style={{ textAlign: 'center', padding: '60px 0' }}>
@@ -350,14 +439,72 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
 
   // Calculate if booking is active
   const now = new Date();
-  const totalRemainingSlots = slots.length > 0
-    ? slots.reduce((sum, s) => sum + s.remaining_slots, 0)
-    : event.remaining_slots;
-  const isReservationOpen = event.reservation_enabled &&
+  
+  const isReservationPeriod = event.reservation_enabled &&
     (!event.reservation_starts_at || new Date(event.reservation_starts_at) <= now) &&
-    (!event.reservation_ends_at || new Date(event.reservation_ends_at) >= now) &&
-    totalRemainingSlots > 0 &&
-    slots.length > 0;
+    (!event.reservation_ends_at || new Date(event.reservation_ends_at) >= now);
+
+  const hasAnyReservationSlots = slots.length > 0 && slots.some((s) => s.remaining_reservation_slots > 0 && s.is_enabled);
+  const isReservationOpen = isReservationPeriod && hasAnyReservationSlots;
+
+  const hasAnyWalkinOpenOrUpcoming = slots.length > 0 && slots.some((s) => {
+    if (!s.is_enabled) return false;
+    if (s.remaining_walkin_slots <= 0) return false;
+    const ends = s.walkin_use_ends_at ? new Date(s.walkin_use_ends_at) : null;
+    return !ends || now <= ends;
+  });
+
+  const shouldShowForm = slots.length > 0 && (isReservationOpen || hasAnyWalkinOpenOrUpcoming);
+
+  const selectedSlot = selectedSlotIds.length === 1
+    ? slots.find((s) => s.id === selectedSlotIds[0])
+    : null;
+
+  const walkinButtonText = (() => {
+    if (selectedSlotIds.length === 0) return '当日券を取得する（開催枠を選択してください）';
+    if (selectedSlotIds.length > 1) return '当日券を取得する（開催枠を1つだけ選択してください）';
+    
+    if (!selectedSlot) return '当日券を取得する';
+    if (!selectedSlot.is_enabled) return '当日券受付停止中';
+    if (selectedSlot.remaining_walkin_slots <= 0) return '当日券満員（定員到達）';
+    
+    const starts = selectedSlot.walkin_use_starts_at ? new Date(selectedSlot.walkin_use_starts_at) : null;
+    const ends = selectedSlot.walkin_use_ends_at ? new Date(selectedSlot.walkin_use_ends_at) : null;
+    
+    if (starts && now < starts) {
+      const dateStr = starts.toLocaleDateString('ja-JP', { month: '2-digit', day: '2-digit' });
+      const timeStr = starts.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', hour12: false });
+      return `当日券受付前（${dateStr} ${timeStr} 受付開始）`;
+    }
+    if (ends && now > ends) return '当日券受付終了';
+    
+    return '当日券を取得する';
+  })();
+
+  const isReservationButtonEnabled = (() => {
+    if (booking) return false;
+    if (!isReservationPeriod) return false;
+    if (selectedSlotIds.length === 0) return false;
+    return selectedSlotIds.every((id) => {
+      const s = slots.find((slot) => slot.id === id);
+      return s && s.is_enabled && s.remaining_reservation_slots > 0;
+    });
+  })();
+
+  const isWalkinButtonEnabled = (() => {
+    if (booking) return false;
+    if (selectedSlotIds.length !== 1) return false;
+    if (!selectedSlot) return false;
+    if (!selectedSlot.is_enabled) return false;
+    if (selectedSlot.remaining_walkin_slots <= 0) return false;
+    
+    const starts = selectedSlot.walkin_use_starts_at ? new Date(selectedSlot.walkin_use_starts_at) : null;
+    const ends = selectedSlot.walkin_use_ends_at ? new Date(selectedSlot.walkin_use_ends_at) : null;
+    return (!starts || now >= starts) && (!ends || now <= ends);
+  })();
+
+  const totalRemainingRes = slots.reduce((sum, s) => sum + s.remaining_reservation_slots, 0);
+  const totalRemainingWalkin = slots.reduce((sum, s) => sum + s.remaining_walkin_slots, 0);
 
   return (
     <div>
@@ -387,7 +534,8 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
 
           <div className="info-label">定員状況</div>
           <div className="info-value">
-            定員 {event.capacity} 名 / 残り <span style={{ color: totalRemainingSlots > 0 ? 'var(--color-success)' : 'var(--color-danger)', fontWeight: 700 }}>{totalRemainingSlots}</span> 席
+            予約券残り: <span style={{ color: totalRemainingRes > 0 ? 'var(--color-success)' : 'var(--color-danger)', fontWeight: 700 }}>{totalRemainingRes}</span> 席 / 
+            当日券残り: <span style={{ color: totalRemainingWalkin > 0 ? 'var(--color-warning)' : 'var(--color-danger)', fontWeight: 700 }}>{totalRemainingWalkin}</span> 席
           </div>
         </div>
       </div>
@@ -401,8 +549,9 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {slots.map((slot) => {
               const isDisabled = !slot.is_enabled;
-              const isFull = slot.remaining_slots <= 0;
-              const isSelectable = !isDisabled && !isFull;
+              const isReservationFull = slot.remaining_reservation_slots <= 0;
+              const isWalkinFull = slot.remaining_walkin_slots <= 0;
+              const isSelectable = !isDisabled && (!isReservationFull || !isWalkinFull);
               const isSelected = selectedSlotIds.includes(slot.id);
 
               return (
@@ -448,7 +597,7 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
                           fontWeight: 600,
                         }}>受付停止</span>
                       )}
-                      {!isDisabled && isFull && (
+                      {!isDisabled && isReservationFull && isWalkinFull && (
                         <span style={{
                           fontSize: '0.7rem',
                           padding: '2px 8px',
@@ -466,9 +615,17 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
                         </span>
                       )}
                       <span>
-                        残り <span style={{ color: slot.remaining_slots > 0 ? 'var(--color-success)' : 'var(--color-danger)', fontWeight: 600 }}>{slot.remaining_slots}</span> / {slot.capacity} 席
+                        予約券残り: <span style={{ color: slot.remaining_reservation_slots > 0 ? 'var(--color-success)' : 'var(--color-danger)', fontWeight: 600 }}>{slot.remaining_reservation_slots}</span> / {slot.reservation_capacity} 席
+                      </span>
+                      <span>
+                        当日券残り: <span style={{ color: slot.remaining_walkin_slots > 0 ? 'var(--color-warning)' : 'var(--color-danger)', fontWeight: 600 }}>{slot.remaining_walkin_slots}</span> 席
                       </span>
                     </div>
+                    {(slot.walkin_use_starts_at || slot.walkin_use_ends_at) && (
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                        当日券受付: {slot.walkin_use_starts_at ? formatDateTime(slot.walkin_use_starts_at) : '制限なし'} 〜 {slot.walkin_use_ends_at ? formatDateTime(slot.walkin_use_ends_at) : '制限なし'}
+                      </div>
+                    )}
                   </div>
                 </label>
               );
@@ -482,10 +639,14 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
           <span>📝</span> 参加予約フォーム
         </h2>
 
-        {!isReservationOpen ? (
+        {!shouldShowForm ? (
           <div className="error-banner" style={{ margin: 0 }}>
             <span>⚠️</span>
-            <div>現在この企画は予約できません。(受付期間外または定員に達しています)</div>
+            <div>
+              {slots.length === 0
+                ? '現在この企画は予約できません。（開催枠が設定されていません）'
+                : '現在この企画は予約できません。(すべての受付期間が終了しているか定員に達しています)'}
+            </div>
           </div>
         ) : (
           <form onSubmit={handleBookingSubmit}>
@@ -552,13 +713,45 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
               )}
             </div>
 
-            <div style={{ marginTop: '30px' }}>
+            <div style={{
+              margin: '20px 0',
+              padding: '12px 16px',
+              borderRadius: 'var(--radius-sm)',
+              background: 'rgba(245, 158, 11, 0.05)',
+              border: '1px solid var(--color-warning-border)',
+              fontSize: '0.85rem',
+              color: 'var(--text-secondary)',
+              lineHeight: '1.5'
+            }}>
+              <strong style={{ color: 'var(--color-warning)', display: 'block', marginBottom: '4px' }}>💡 当日券に関する注意事項</strong>
+              • 当日券は先着順です。<br />
+              • 同じ日の予約券を取得済みの場合、その日の当日券は取得できません。<br />
+              • 同じ企画でも別日であれば、予約していない日の当日券は取得できます。
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '20px' }}>
               <button
                 type="submit"
                 className="btn btn-primary"
-                disabled={booking}
+                disabled={booking || !isReservationButtonEnabled}
+                style={{ flex: 1, minWidth: '200px', opacity: isReservationButtonEnabled ? 1 : 0.5 }}
               >
-                {booking ? '予約処理中...' : 'この内容で予約を確定する'}
+                {booking ? '予約処理中...' : '予約券を取得する'}
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={handleWalkinSubmit}
+                disabled={booking || !isWalkinButtonEnabled}
+                style={{
+                  flex: 1,
+                  minWidth: '200px',
+                  borderColor: isWalkinButtonEnabled ? 'var(--color-warning-border)' : 'var(--card-border)',
+                  color: isWalkinButtonEnabled ? 'var(--color-warning)' : 'var(--text-muted)',
+                  opacity: isWalkinButtonEnabled ? 1 : 0.5
+                }}
+              >
+                {booking ? '当日券処理中...' : walkinButtonText}
               </button>
             </div>
           </form>

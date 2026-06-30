@@ -40,7 +40,10 @@ export default function RootLayout({
 
           <footer className="footer">
             <p>© {new Date().getFullYear()} 大学委員会 企画予約システム</p>
-            <p style={{ fontSize: '0.75rem', marginTop: '6px', opacity: 0.7 }}>
+            <p style={{ fontSize: '0.8rem', marginTop: '6px' }}>
+              製作：<a href="https://osu-denken.github.io/" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text-secondary)', textDecoration: 'underline' }}>電子計算研究部</a>
+            </p>
+            <p style={{ fontSize: '0.75rem', marginTop: '6px', opacity: 0.5 }}>
               Cloudflare Pages + Supabase
             </p>
           </footer>

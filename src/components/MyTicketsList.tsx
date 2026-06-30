@@ -10,6 +10,7 @@ interface CachedTicket {
   student_name: string;
   student_number: string;
   status: 'reserved' | 'used' | 'cancelled';
+  ticket_type: 'reservation' | 'walkin';
   ticket_code: string;
   public_token: string;
   event_title: string;
@@ -122,8 +123,10 @@ export default function MyTicketsList() {
               <div>
                 {ticket.status === 'used' ? (
                   <span className="badge badge-warning" style={{ fontSize: '0.7rem' }}>使用済み</span>
+                ) : ticket.ticket_type === 'walkin' ? (
+                  <span className="badge" style={{ fontSize: '0.7rem', backgroundColor: 'var(--color-warning-bg)', color: 'var(--color-warning)', borderColor: 'var(--color-warning-border)' }}>当日券</span>
                 ) : (
-                  <span className="badge badge-success" style={{ fontSize: '0.7rem' }}>予約完了</span>
+                  <span className="badge" style={{ fontSize: '0.7rem', backgroundColor: 'var(--color-primary-glow)', color: 'var(--color-primary)', borderColor: 'var(--card-border-hover)' }}>予約券</span>
                 )}
               </div>
             </div>

@@ -15,7 +15,7 @@ interface EventAdminItem {
   ticket_enabled: boolean;
   starts_at: string | null;
   reservations: { id: string; status: string }[];
-  event_slots?: { id: string; capacity: number }[];
+  event_slots?: { id: string; total_capacity: number }[];
 }
 
 function formatDateTime(dateStr: string | null): string {
@@ -42,7 +42,7 @@ export default function AdminEventsPage() {
       // Fetch all events along with their reservations and slots
       const { data, error: fetchError } = await supabase
         .from('events')
-        .select('*, reservations(id, status), event_slots(id, capacity)')
+        .select('*, reservations(id, status), event_slots(id, total_capacity)')
         .order('created_at', { ascending: false });
 
       if (fetchError) {
@@ -130,12 +130,21 @@ export default function AdminEventsPage() {
                 ).length;
                 
                 const totalCapacity = event.event_slots && event.event_slots.length > 0
-                  ? event.event_slots.reduce((sum, s) => sum + s.capacity, 0)
+                  ? event.event_slots.reduce((sum, s) => sum + (s.total_capacity ?? 0), 0)
                   : event.capacity;
+
+                const hasSlots = event.event_slots && event.event_slots.length > 0;
 
                 return (
                   <tr key={event.id}>
-                    <td style={{ fontWeight: 700, color: '#fff' }}>{event.title}</td>
+                    <td style={{ fontWeight: 700, color: '#fff' }}>
+                      {event.title}
+                      {!hasSlots && (
+                        <span className="badge badge-danger" style={{ marginLeft: '8px', background: 'var(--color-danger)', color: '#fff' }}>
+                          ⚠️ 開催枠なし
+                        </span>
+                      )}
+                    </td>
                     <td>{formatDateTime(event.starts_at)}</td>
                     <td>
                       {event.is_public ? (

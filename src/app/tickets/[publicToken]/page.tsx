@@ -11,6 +11,7 @@ interface TicketDetails {
   student_name: string;
   student_number: string;
   status: 'reserved' | 'used' | 'cancelled';
+  ticket_type: 'reservation' | 'walkin';
   ticket_code: string;
   public_token: string;
   used_at: string | null;
@@ -27,6 +28,10 @@ interface TicketDetails {
   slot_label: string | null;
   slot_starts_at: string | null;
   slot_ends_at: string | null;
+  slot_reservation_use_starts_at: string | null;
+  slot_reservation_use_ends_at: string | null;
+  slot_walkin_use_starts_at: string | null;
+  slot_walkin_use_ends_at: string | null;
   ticket_enabled: boolean;
   use_button_enabled: boolean;
   survey_after_reservation_enabled: boolean;
@@ -232,18 +237,24 @@ export default function TicketPage({ params }: { params: Promise<{ publicToken: 
       <div style={{ width: '100%', marginBottom: '24px' }}>
         {/* Banner */}
         {isReserved && (
-          <div className="ticket-status-banner unused">
-            未使用 (予約完了)
-          </div>
+          ticket.ticket_type === 'walkin' ? (
+            <div className="ticket-status-banner unused" style={{ background: 'linear-gradient(135deg, var(--color-warning) 0%, #d97706 100%)', boxShadow: '0 4px 20px rgba(245, 158, 11, 0.3)' }}>
+              当日券 (未使用)
+            </div>
+          ) : (
+            <div className="ticket-status-banner unused">
+              予約券 (未使用)
+            </div>
+          )
         )}
         {isUsed && (
           <div className="ticket-status-banner used">
-            使用済み
+            使用済み ({ticket.ticket_type === 'walkin' ? '当日券' : '予約券'})
           </div>
         )}
         {isCancelled && (
           <div className="ticket-status-banner cancelled">
-            キャンセル済み
+            キャンセル済み ({ticket.ticket_type === 'walkin' ? '当日券' : '予約券'})
           </div>
         )}
 
@@ -267,6 +278,38 @@ export default function TicketPage({ params }: { params: Promise<{ publicToken: 
               </div>
             </div>
           )}
+
+          {/* Use window info */}
+          {ticket.ticket_enabled && isReserved && (() => {
+            // Determine effective use window: slot-level only (no event-level fallback)
+            const isWalkin = ticket.ticket_type === 'walkin';
+            const effectiveStart = isWalkin
+              ? ticket.slot_walkin_use_starts_at
+              : ticket.slot_reservation_use_starts_at;
+            const effectiveEnd = isWalkin
+              ? ticket.slot_walkin_use_ends_at
+              : ticket.slot_reservation_use_ends_at;
+
+            if (!effectiveStart && !effectiveEnd) return null;
+
+            return (
+              <div style={{
+                textAlign: 'center',
+                marginBottom: '16px',
+                padding: '10px 12px',
+                borderRadius: 'var(--radius-sm)',
+                background: 'rgba(99, 102, 241, 0.08)',
+                border: '1px solid rgba(99, 102, 241, 0.2)',
+              }}>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                  {isWalkin ? '当日券 使用可能時間' : '予約券 使用可能時間'}
+                </span>
+                <div style={{ color: '#c7d2fe', marginTop: '4px', fontSize: '0.9rem', fontWeight: 600 }}>
+                  {formatDateTime(effectiveStart)} 〜 {formatDateTime(effectiveEnd)}
+                </div>
+              </div>
+            );
+          })()}
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', margin: '20px 0', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '16px' }}>
             <div>
