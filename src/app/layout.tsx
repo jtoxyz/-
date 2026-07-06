@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import Link from 'next/link';
+import ThemeSwitcher from '@/components/ThemeSwitcher';
 
 export const metadata: Metadata = {
   title: '大学委員会 参加型企画予約システム',
@@ -14,7 +15,29 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ja">
+    <html lang="ja" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  var theme = localStorage.getItem('theme');
+                  var validThemes = ['white', 'dark', 'blue', 'green', 'pink'];
+                  if (theme && validThemes.indexOf(theme) !== -1) {
+                    document.documentElement.setAttribute('data-theme', theme);
+                  } else {
+                    document.documentElement.setAttribute('data-theme', 'white');
+                    localStorage.setItem('theme', 'white');
+                  }
+                } catch (e) {
+                  document.documentElement.setAttribute('data-theme', 'white');
+                }
+              })();
+            `
+          }}
+        />
+      </head>
       <body>
         <div className="app-container">
           <header className="header">
@@ -22,7 +45,7 @@ export default function RootLayout({
               <Link href="/" className="header-logo">
                 🎫 委員会企画予約
               </Link>
-              <nav style={{ display: 'flex', gap: '12px', fontSize: '0.85rem' }}>
+              <nav style={{ display: 'flex', gap: '12px', alignItems: 'center', fontSize: '0.85rem' }}>
                 <Link href="/tickets/find" style={{ color: 'var(--text-secondary)' }}>
                   チケットを探す
                 </Link>
@@ -30,6 +53,8 @@ export default function RootLayout({
                 <Link href="/admin" style={{ color: 'var(--text-secondary)' }}>
                   管理画面
                 </Link>
+                <span style={{ color: 'var(--card-border)' }}>|</span>
+                <ThemeSwitcher />
               </nav>
             </div>
           </header>

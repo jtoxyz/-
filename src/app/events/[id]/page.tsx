@@ -404,7 +404,7 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
     return (
       <div>
         <div className="glass-card" style={{ borderTop: '4px solid var(--color-success)' }}>
-          <h2 style={{ fontSize: '1.5rem', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px', color: '#ffffff' }}>
+          <h2 style={{ fontSize: '1.5rem', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-primary)' }}>
             <span>🎉</span> 予約が完了しました
           </h2>
           <p style={{ color: 'var(--text-secondary)', marginBottom: '24px' }}>
@@ -420,10 +420,10 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   padding: '14px 18px',
-                  background: 'rgba(255,255,255,0.05)',
+                  background: 'var(--card-bg)',
                   borderRadius: 'var(--radius-md)',
                   border: '1px solid var(--card-border)',
-                  color: '#ffffff',
+                  color: 'var(--text-primary)',
                   textDecoration: 'none',
                   transition: 'background 0.2s',
                 }}
@@ -527,14 +527,14 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
         {/* Info column */}
         <div>
           <div className="glass-card">
-        <h1 style={{ fontSize: '1.75rem', marginBottom: '12px', color: '#ffffff' }}>{event.title}</h1>
+        <h1 style={{ fontSize: '1.75rem', marginBottom: '12px', color: 'var(--text-primary)' }}>{event.title}</h1>
         {event.description && (
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', marginBottom: '24px', whiteSpace: 'pre-wrap' }}>
             {event.description}
           </p>
         )}
 
-        <div className="event-info-grid" style={{ background: 'rgba(255,255,255,0.02)', padding: '16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--card-border)' }}>
+        <div className="event-info-grid" style={{ background: 'var(--card-bg)', padding: '16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--card-border)' }}>
           <div className="info-label">開催日時</div>
           <div className="info-value" style={{ fontWeight: 600 }}>{formatDateTime(event.starts_at)}</div>
 
@@ -581,8 +581,8 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
                     background: isSelected
                       ? 'rgba(99, 102, 241, 0.15)'
                       : isSelectable
-                        ? 'rgba(255,255,255,0.04)'
-                        : 'rgba(255,255,255,0.02)',
+                        ? 'var(--card-bg)'
+                        : 'var(--card-bg)',
                     borderRadius: 'var(--radius-md)',
                     border: isSelected
                       ? '2px solid var(--color-primary)'
@@ -602,7 +602,7 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
                   />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                      <span style={{ fontWeight: 600, color: '#ffffff', fontSize: '0.95rem' }}>{slot.label}</span>
+                      <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.95rem' }}>{slot.label}</span>
                       {isDisabled && (
                         <span style={{
                           fontSize: '0.7rem',

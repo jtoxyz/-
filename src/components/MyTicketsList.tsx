@@ -88,7 +88,7 @@ export default function MyTicketsList() {
           >
             <div
               style={{
-                background: 'rgba(255, 255, 255, 0.02)',
+                background: 'var(--card-bg)',
                 border: '1px solid var(--card-border)',
                 borderRadius: 'var(--radius-md)',
                 padding: '12px 16px',
@@ -100,15 +100,15 @@ export default function MyTicketsList() {
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.borderColor = 'var(--color-primary)';
-                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+                e.currentTarget.style.background = 'var(--card-bg)';
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.borderColor = 'var(--card-border)';
-                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.02)';
+                e.currentTarget.style.background = 'var(--card-bg)';
               }}
             >
               <div>
-                <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#fff', marginBottom: '2px' }}>
+                <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-primary)', marginBottom: '2px' }}>
                   {ticket.event_title}
                 </div>
                 {ticket.slot_label && (

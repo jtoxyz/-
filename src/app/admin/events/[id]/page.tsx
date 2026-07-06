@@ -631,7 +631,7 @@ export default function AdminEditEventPage({ params }: { params: Promise<{ id: s
       </div>
 
       <div className="glass-card">
-        <h1 style={{ fontSize: '1.5rem', marginBottom: '24px', color: '#ffffff' }}>
+        <h1 style={{ fontSize: '1.5rem', marginBottom: '24px', color: 'var(--text-primary)' }}>
           企画設定の編集
         </h1>
 
@@ -753,8 +753,8 @@ export default function AdminEditEventPage({ params }: { params: Promise<{ id: s
             </div>
 
             {/* Slot management */}
-            <div style={{ marginTop: '20px', background: 'rgba(255,255,255,0.01)', padding: '16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--card-border)' }}>
-              <h4 style={{ fontSize: '0.95rem', marginBottom: '12px', color: '#fff' }}>開催枠の管理</h4>
+            <div style={{ marginTop: '20px', background: 'var(--card-bg)', padding: '16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--card-border)' }}>
+              <h4 style={{ fontSize: '0.95rem', marginBottom: '12px', color: 'var(--text-primary)' }}>開催枠の管理</h4>
               <span className="form-hint" style={{ display: 'block', marginBottom: '12px' }}>各開催枠に、枠名・開催日時・定員を設定できます。少なくとも1つの枠が必要です。</span>
 
               {slotRows.map((row) => {
@@ -767,7 +767,7 @@ export default function AdminEditEventPage({ params }: { params: Promise<{ id: s
                     style={{
                       marginBottom: '12px',
                       padding: '16px',
-                      background: 'rgba(255, 255, 255, 0.02)',
+                      background: 'var(--card-bg)',
                       borderRadius: 'var(--radius-sm)',
                       border: '1px solid var(--card-border)',
                     }}
@@ -837,12 +837,12 @@ export default function AdminEditEventPage({ params }: { params: Promise<{ id: s
                       gap: '16px',
                       marginBottom: '16px',
                       padding: '16px',
-                      border: '1px solid rgba(255,255,255,0.05)',
+                      border: '1px solid var(--card-border)',
                       borderRadius: 'var(--radius-sm)',
-                      background: 'rgba(255,255,255,0.01)'
+                      background: 'var(--card-bg)'
                     }}>
                       {/* 1. 通常予約受付期間 */}
-                      <div style={{ paddingBottom: '12px', borderBottom: '1px dashed rgba(255,255,255,0.04)' }}>
+                      <div style={{ paddingBottom: '12px', borderBottom: '1px dashed var(--card-border)' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                           <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-primary)' }}>通常予約受付期間</span>
                           <label className="form-checkbox-label" style={{ fontSize: '0.75rem' }}>
@@ -884,7 +884,7 @@ export default function AdminEditEventPage({ params }: { params: Promise<{ id: s
                       </div>
 
                       {/* 2. チケット使用可能期間 */}
-                      <div style={{ paddingBottom: '12px', borderBottom: '1px dashed rgba(255,255,255,0.04)' }}>
+                      <div style={{ paddingBottom: '12px', borderBottom: '1px dashed var(--card-border)' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                           <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-success)' }}>チケット使用可能期間</span>
                           <label className="form-checkbox-label" style={{ fontSize: '0.75rem' }}>
@@ -1134,7 +1134,7 @@ export default function AdminEditEventPage({ params }: { params: Promise<{ id: s
             </h3>
 
             {/* Reservation survey */}
-            <div style={{ marginBottom: '20px', background: 'rgba(255,255,255,0.01)', padding: '16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--card-border)' }}>
+            <div style={{ marginBottom: '20px', background: 'var(--card-bg)', padding: '16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--card-border)' }}>
               <div className="form-group">
                 <label className="form-checkbox-label">
                   <input
@@ -1180,7 +1180,7 @@ export default function AdminEditEventPage({ params }: { params: Promise<{ id: s
 
             {/* Ticket use survey */}
             {ticketEnabled && useButtonEnabled && (
-              <div style={{ background: 'rgba(255,255,255,0.01)', padding: '16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--card-border)' }}>
+              <div style={{ background: 'var(--card-bg)', padding: '16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--card-border)' }}>
                 <div className="form-group">
                   <label className="form-checkbox-label">
                     <input

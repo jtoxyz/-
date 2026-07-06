@@ -163,7 +163,7 @@ export default function FindTicketPage() {
       </div>
 
       <div className="glass-card" style={{ maxWidth: '480px', margin: '0 auto' }}>
-        <h1 style={{ fontSize: '1.5rem', marginBottom: '8px', color: '#ffffff', textAlign: 'center' }}>
+        <h1 style={{ fontSize: '1.5rem', marginBottom: '8px', color: 'var(--text-primary)', textAlign: 'center' }}>
           チケットの再表示・検索
         </h1>
         <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', textAlign: 'center', marginBottom: '24px' }}>

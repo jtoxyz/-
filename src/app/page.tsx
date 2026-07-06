@@ -190,7 +190,7 @@ export default async function Home() {
                   </div>
                 </div>
 
-                <h3 style={{ fontSize: '1.25rem', marginBottom: '8px', color: '#ffffff' }}>
+                <h3 style={{ fontSize: '1.25rem', marginBottom: '8px', color: 'var(--text-primary)' }}>
                   {event.title}
                 </h3>
                 

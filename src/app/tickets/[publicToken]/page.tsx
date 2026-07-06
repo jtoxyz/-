@@ -248,7 +248,7 @@ export default function TicketPage({ params }: { params: Promise<{ publicToken: 
         {/* Banner */}
         {isReserved && (
           ticket.ticket_type === 'walkin' ? (
-            <div className="ticket-status-banner unused" style={{ background: 'linear-gradient(135deg, var(--color-warning) 0%, #d97706 100%)', boxShadow: '0 4px 20px rgba(245, 158, 11, 0.3)' }}>
+            <div className="ticket-status-banner unused" style={{ background: 'linear-gradient(135deg, var(--color-warning) 0%, var(--color-warning) 100%)', boxShadow: '0 4px 20px rgba(245, 158, 11, 0.3)' }}>
               当日券 (未使用)
             </div>
           ) : (
@@ -277,7 +277,7 @@ export default function TicketPage({ params }: { params: Promise<{ publicToken: 
             <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               企画名
             </span>
-            <h2 style={{ fontSize: '1.4rem', color: '#fff', marginTop: '4px' }}>
+            <h2 style={{ fontSize: '1.4rem', color: 'var(--text-primary)', marginTop: '4px' }}>
               {ticket.event_title}
             </h2>
           </div>
@@ -285,21 +285,21 @@ export default function TicketPage({ params }: { params: Promise<{ publicToken: 
           {ticket.slot_label && (
             <div style={{ textAlign: 'center', marginBottom: '16px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>開催枠</span>
-              <div style={{ color: '#fff', marginTop: '2px' }}>{ticket.slot_label}</div>
+              <div style={{ color: 'var(--text-primary)', marginTop: '2px' }}>{ticket.slot_label}</div>
               <div style={{ fontSize: '0.75rem', marginTop: '2px' }}>
                 {formatDateTime(ticket.slot_starts_at)} 〜 {formatDateTime(ticket.slot_ends_at)}
               </div>
             </div>
           )}
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', margin: '20px 0', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', margin: '20px 0', borderBottom: '1px solid var(--card-border)', paddingBottom: '16px' }}>
             <div>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>氏名</span>
-              <div style={{ fontWeight: 700, fontSize: '1rem', color: '#fff', marginTop: '2px' }}>{ticket.student_name}</div>
+              <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text-primary)', marginTop: '2px' }}>{ticket.student_name}</div>
             </div>
             <div>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>学籍番号</span>
-              <div style={{ fontWeight: 700, fontSize: '1rem', color: '#fff', marginTop: '2px' }}>{ticket.student_number}</div>
+              <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text-primary)', marginTop: '2px' }}>{ticket.student_number}</div>
             </div>
           </div>
         </div>
@@ -336,7 +336,7 @@ export default function TicketPage({ params }: { params: Promise<{ publicToken: 
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
                   {isWalkin ? '当日券' : '予約券'} 使用可能時間
                 </span>
-                <div style={{ color: '#c7d2fe', marginTop: '4px', fontSize: '0.9rem', fontWeight: 600 }}>
+                <div style={{ color: 'var(--color-primary)', marginTop: '4px', fontSize: '0.9rem', fontWeight: 600 }}>
                   {formatDateTime(effectiveStart)} 〜 {formatDateTime(effectiveEnd)}
                 </div>
                 {!isEnabled && (
@@ -374,7 +374,7 @@ export default function TicketPage({ params }: { params: Promise<{ publicToken: 
               <div style={{ fontSize: '0.8rem', color: 'var(--color-danger)', fontWeight: 700 }}>
                 使用済み処理時刻
               </div>
-              <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#fff', marginTop: '4px' }}>
+              <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-primary)', marginTop: '4px' }}>
                 {formatDateTime(ticket.used_at)}
               </div>
             </div>
@@ -401,7 +401,7 @@ export default function TicketPage({ params }: { params: Promise<{ publicToken: 
             <div style={{ marginTop: '24px' }}>
               <button
                 className="btn btn-primary"
-                style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', boxShadow: '0 4px 14px rgba(16, 185, 129, 0.4)' }}
+                style={{ background: 'linear-gradient(135deg, var(--color-success) 0%, #059669 100%)', boxShadow: '0 4px 14px rgba(16, 185, 129, 0.4)' }}
                 onClick={() => setShowConfirmModal(true)}
                 disabled={updating}
               >
@@ -412,7 +412,7 @@ export default function TicketPage({ params }: { params: Promise<{ publicToken: 
 
           {/* Instructions */}
           {isReserved && ticket.ticket_enabled && (
-            <div style={{ marginTop: '20px', padding: '12px', borderRadius: 'var(--radius-sm)', background: 'rgba(255,255,255,0.02)', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+            <div style={{ marginTop: '20px', padding: '12px', borderRadius: 'var(--radius-sm)', background: 'var(--card-bg)', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
               <strong style={{ color: 'var(--color-warning)', display: 'block', marginBottom: '4px' }}>⚠️ 注意事項</strong>
               • チケット引換の際は、スタッフが指示するまで「使用する」ボタンを押さないでください。<br />
               • スクリーンショットでは入場・引換できません（画面上の時計が動いている必要があります）。
@@ -452,7 +452,7 @@ export default function TicketPage({ params }: { params: Promise<{ publicToken: 
             target="_blank"
             rel="noopener noreferrer"
             className="btn btn-primary btn-sm"
-            style={{ background: 'linear-gradient(135deg, var(--color-success) 0%, #059669 100%)', width: 'auto' }}
+            style={{ background: 'linear-gradient(135deg, var(--color-success) 0%, var(--color-success) 100%)', width: 'auto' }}
           >
             アンケートに回答する (外部サイト)
           </a>

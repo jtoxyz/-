@@ -83,7 +83,7 @@ export default function AdminEventsPage() {
       <div className="glass-card" style={{ marginBottom: '24px' }}>
         <div className="flex-between" style={{ flexWrap: 'wrap', gap: '12px' }}>
           <div>
-            <h1 style={{ fontSize: '1.5rem', color: '#fff' }}>企画一覧・管理</h1>
+            <h1 style={{ fontSize: '1.5rem', color: 'var(--text-primary)' }}>企画一覧・管理</h1>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: '4px' }}>
               委員会で実施する企画の作成、公開設定、予約状況の確認ができます。
             </p>
@@ -139,10 +139,10 @@ export default function AdminEventsPage() {
 
                 return (
                   <tr key={event.id}>
-                    <td style={{ fontWeight: 700, color: '#fff' }}>
+                    <td style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
                       {event.title}
                       {!hasSlots && (
-                        <span className="badge badge-danger" style={{ marginLeft: '8px', background: 'var(--color-danger)', color: '#fff' }}>
+                        <span className="badge badge-danger" style={{ marginLeft: '8px', background: 'var(--color-danger)', color: 'var(--text-primary)' }}>
                           ⚠️ 開催枠なし
                         </span>
                       )}

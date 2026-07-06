@@ -77,7 +77,7 @@ export default function AdminLoginPage() {
       </div>
 
       <div className="glass-card" style={{ maxWidth: '400px', margin: '40px auto 0 auto', borderTop: '4px solid var(--color-danger)' }}>
-        <h1 style={{ fontSize: '1.5rem', marginBottom: '8px', color: '#ffffff', textAlign: 'center' }}>
+        <h1 style={{ fontSize: '1.5rem', marginBottom: '8px', color: 'var(--text-primary)', textAlign: 'center' }}>
           管理者ログイン
         </h1>
         <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', textAlign: 'center', marginBottom: '24px' }}>

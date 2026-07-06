@@ -276,28 +276,28 @@ export default function AdminReservationsPage({ params }: { params: Promise<{ id
       </div>
 
       <div className="glass-card" style={{ borderLeft: '4px solid var(--color-primary)' }}>
-        <h1 style={{ fontSize: '1.4rem', color: '#fff' }}>{eventTitle}</h1>
+        <h1 style={{ fontSize: '1.4rem', color: 'var(--text-primary)' }}>{eventTitle}</h1>
         <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: '4px' }}>
           予約者一覧と利用実績データの確認・エクスポートが行えます。
         </p>
 
         {/* Status Blocks */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '12px', marginTop: '20px' }}>
-          <div style={{ background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--card-border)' }}>
+          <div style={{ background: 'var(--card-bg)', padding: '12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--card-border)' }}>
             <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>有効予約数</span>
             <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--color-primary)' }}>{activeBookings}</div>
           </div>
-          <div style={{ background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--card-border)' }}>
+          <div style={{ background: 'var(--card-bg)', padding: '12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--card-border)' }}>
             <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>使用済み数</span>
             <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--color-success)' }}>{usedTickets}</div>
           </div>
-          <div style={{ background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--card-border)' }}>
+          <div style={{ background: 'var(--card-bg)', padding: '12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--card-border)' }}>
             <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>キャンセル数</span>
             <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--color-danger)' }}>{cancelledBookings}</div>
           </div>
-          <div style={{ background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--card-border)' }}>
+          <div style={{ background: 'var(--card-bg)', padding: '12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--card-border)' }}>
             <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>総ログ件数</span>
-            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#fff' }}>{totalBookings}</div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-primary)' }}>{totalBookings}</div>
           </div>
         </div>
 
@@ -324,7 +324,7 @@ export default function AdminReservationsPage({ params }: { params: Promise<{ id
       {/* Slots Breakdown Table */}
       {slots.length > 0 && (
         <div className="glass-card" style={{ marginTop: '20px' }}>
-          <h2 style={{ fontSize: '1.1rem', color: '#fff', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <h2 style={{ fontSize: '1.1rem', color: 'var(--text-primary)', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
             <span>📊</span> 開催枠ごとの内訳
           </h2>
           <div className="admin-table-container" style={{ margin: 0 }}>
@@ -345,7 +345,7 @@ export default function AdminReservationsPage({ params }: { params: Promise<{ id
               <tbody>
                 {slots.map((s) => (
                   <tr key={s.id}>
-                    <td style={{ fontWeight: 700, color: '#fff' }}>{s.label}</td>
+                    <td style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{s.label}</td>
                     <td style={{ fontSize: '0.8rem' }}>
                       {s.starts_at ? formatDateTime(s.starts_at).slice(5) : '-'} 〜 {s.ends_at ? formatDateTime(s.ends_at).slice(11) : '-'}
                     </td>
@@ -363,7 +363,7 @@ export default function AdminReservationsPage({ params }: { params: Promise<{ id
                     <td style={{ textAlign: 'center' }}>
                       {s.walkin_limit !== null ? s.walkin_limit : '制限なし'}
                     </td>
-                    <td style={{ textAlign: 'center', color: '#fff', fontWeight: 600 }}>
+                    <td style={{ textAlign: 'center', color: 'var(--text-primary)', fontWeight: 600 }}>
                       {s.reserved_count + s.walkin_count}
                     </td>
                     <td style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
@@ -439,7 +439,7 @@ export default function AdminReservationsPage({ params }: { params: Promise<{ id
                         <span className="badge" style={{ backgroundColor: 'var(--color-primary-glow)', color: 'var(--color-primary)', borderColor: 'var(--card-border-hover)' }}>予約券</span>
                       )}
                     </td>
-                    <td style={{ fontWeight: 700, color: '#fff' }}>{res.student_name}</td>
+                    <td style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{res.student_name}</td>
                     <td>{res.student_number}</td>
                     <td>{res.event_slots?.label || '-'}</td>
                     <td style={{ fontSize: '0.8rem', fontFamily: 'monospace' }}>{res.university_email}</td>
@@ -491,7 +491,7 @@ export default function AdminReservationsPage({ params }: { params: Promise<{ id
                   </div>
                   <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{formatDateTime(res.created_at)}</span>
                 </div>
-                <div style={{ fontWeight: 700, color: '#fff', fontSize: '0.95rem' }}>{res.student_name}</div>
+                <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.95rem' }}>{res.student_name}</div>
                 <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
                   学籍番号: {res.student_number} / 枠: {res.event_slots?.label || '-'}
                 </div>
