@@ -16,10 +16,16 @@ interface PublicEventSlot {
   is_enabled: boolean;
   remaining_reservation_slots: number;
   remaining_walkin_slots: number;
-  reservation_use_starts_at: string | null;
-  reservation_use_ends_at: string | null;
-  walkin_use_starts_at: string | null;
-  walkin_use_ends_at: string | null;
+  reservation_starts_at: string | null;
+  reservation_ends_at: string | null;
+  ticket_use_starts_at: string | null;
+  ticket_use_ends_at: string | null;
+  walkin_starts_at: string | null;
+  walkin_ends_at: string | null;
+  is_reservation_enabled: boolean;
+  is_ticket_use_enabled: boolean;
+  is_walkin_enabled: boolean;
+  walkin_limit: number | null;
 }
 
 interface PublicEvent {
@@ -65,48 +71,51 @@ export default async function Home() {
       return { label: '準備中', buttonText: '準備中', active: false, badge: 'badge-secondary' };
     }
 
-    const isReservationPeriod = event.reservation_enabled &&
-      (!event.reservation_starts_at || new Date(event.reservation_starts_at) <= now) &&
-      (!event.reservation_ends_at || new Date(event.reservation_ends_at) >= now);
-
-    const isReservationUpcoming = event.reservation_enabled &&
-      event.reservation_starts_at && new Date(event.reservation_starts_at) > now;
-
-    const hasReservationSlots = event.remaining_reservation_slots > 0;
-    const hasWalkinSlots = event.remaining_walkin_slots > 0;
-
     const enabledSlots = event.slots?.filter(s => s.is_enabled) || [];
 
-    const hasWalkinActive = enabledSlots.some(s => {
-      if (s.remaining_walkin_slots <= 0) return false;
-      const starts = s.walkin_use_starts_at ? new Date(s.walkin_use_starts_at) : null;
-      const ends = s.walkin_use_ends_at ? new Date(s.walkin_use_ends_at) : null;
+    // 1. 予約受付中かつ予約枠あり → 予約優先表示
+    const hasReservationActive = enabledSlots.some(s => {
+      if (!s.is_reservation_enabled || s.remaining_reservation_slots <= 0) return false;
+      const starts = s.reservation_starts_at ? new Date(s.reservation_starts_at) : null;
+      const ends = s.reservation_ends_at ? new Date(s.reservation_ends_at) : null;
       return (!starts || now >= starts) && (!ends || now <= ends);
     });
 
-    const hasWalkinUpcoming = !hasWalkinActive && enabledSlots.some(s => {
-      if (s.remaining_walkin_slots <= 0) return false;
-      const starts = s.walkin_use_starts_at ? new Date(s.walkin_use_starts_at) : null;
-      return starts && now < starts;
-    });
-
-    // 1. 予約受付中かつ予約枠あり → 予約優先表示
-    if (isReservationPeriod && hasReservationSlots) {
+    if (hasReservationActive) {
       return { label: '予約受付中', buttonText: '予約フォームへ進む ➔', active: true, badge: 'badge-success' };
     }
 
     // 2. 予約受付前かつ予約枠あり
-    if (isReservationUpcoming && hasReservationSlots) {
+    const hasReservationUpcoming = enabledSlots.some(s => {
+      if (!s.is_reservation_enabled || s.remaining_reservation_slots <= 0) return false;
+      const starts = s.reservation_starts_at ? new Date(s.reservation_starts_at) : null;
+      return starts && now < starts;
+    });
+
+    if (hasReservationUpcoming) {
       return { label: '予約受付前', buttonText: '詳細を見る ➔', active: true, badge: 'badge-secondary' };
     }
 
     // 3. 当日券受付中かつ当日券残あり
-    if (hasWalkinActive && hasWalkinSlots) {
+    const hasWalkinActive = enabledSlots.some(s => {
+      if (!s.is_walkin_enabled || s.remaining_walkin_slots <= 0) return false;
+      const starts = s.walkin_starts_at ? new Date(s.walkin_starts_at) : null;
+      const ends = s.walkin_ends_at ? new Date(s.walkin_ends_at) : null;
+      return (!starts || now >= starts) && (!ends || now <= ends);
+    });
+
+    if (hasWalkinActive) {
       return { label: '当日券受付中', buttonText: '当日券を取得する ➔', active: true, badge: 'badge-warning' };
     }
 
     // 4. 当日券受付前だが当日券残あり
-    if (hasWalkinUpcoming && hasWalkinSlots) {
+    const hasWalkinUpcoming = enabledSlots.some(s => {
+      if (!s.is_walkin_enabled || s.remaining_walkin_slots <= 0) return false;
+      const starts = s.walkin_starts_at ? new Date(s.walkin_starts_at) : null;
+      return starts && now < starts;
+    });
+
+    if (hasWalkinUpcoming) {
       return { label: '当日券受付前', buttonText: '詳細を見る ➔', active: true, badge: 'badge-warning' };
     }
 
@@ -155,15 +164,15 @@ export default async function Home() {
             const enabledSlots = event.slots?.filter(s => s.is_enabled) || [];
 
             const hasWalkinActive = enabledSlots.some(s => {
-              if (s.remaining_walkin_slots <= 0) return false;
-              const starts = s.walkin_use_starts_at ? new Date(s.walkin_use_starts_at) : null;
-              const ends = s.walkin_use_ends_at ? new Date(s.walkin_use_ends_at) : null;
+              if (!s.is_walkin_enabled || s.remaining_walkin_slots <= 0) return false;
+              const starts = s.walkin_starts_at ? new Date(s.walkin_starts_at) : null;
+              const ends = s.walkin_ends_at ? new Date(s.walkin_ends_at) : null;
               return (!starts || now >= starts) && (!ends || now <= ends);
             });
 
             const hasWalkinUpcoming = !hasWalkinActive && enabledSlots.some(s => {
-              if (s.remaining_walkin_slots <= 0) return false;
-              const starts = s.walkin_use_starts_at ? new Date(s.walkin_use_starts_at) : null;
+              if (!s.is_walkin_enabled || s.remaining_walkin_slots <= 0) return false;
+              const starts = s.walkin_starts_at ? new Date(s.walkin_starts_at) : null;
               return starts && now < starts;
             });
 
@@ -208,7 +217,7 @@ export default async function Home() {
                       : hasWalkinUpcoming
                         ? <span style={{ color: 'var(--text-secondary)' }}>受付前（詳細画面で確認）</span>
                         : (() => {
-                            const hasConfig = enabledSlots.some(s => s.walkin_use_starts_at || s.walkin_use_ends_at);
+                            const hasConfig = enabledSlots.some(s => s.is_walkin_enabled && (s.walkin_starts_at || s.walkin_ends_at));
                             if (hasConfig) {
                               return <span style={{ color: 'var(--color-danger)' }}>受付終了</span>;
                             }

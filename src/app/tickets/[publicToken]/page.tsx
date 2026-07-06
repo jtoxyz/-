@@ -28,6 +28,16 @@ interface TicketDetails {
   slot_label: string | null;
   slot_starts_at: string | null;
   slot_ends_at: string | null;
+  slot_reservation_starts_at: string | null;
+  slot_reservation_ends_at: string | null;
+  slot_ticket_use_starts_at: string | null;
+  slot_ticket_use_ends_at: string | null;
+  slot_walkin_starts_at: string | null;
+  slot_walkin_ends_at: string | null;
+  slot_is_reservation_enabled: boolean;
+  slot_is_ticket_use_enabled: boolean;
+  slot_is_walkin_enabled: boolean;
+  // Backwards compat aliases
   slot_reservation_use_starts_at: string | null;
   slot_reservation_use_ends_at: string | null;
   slot_walkin_use_starts_at: string | null;
@@ -279,18 +289,19 @@ export default function TicketPage({ params }: { params: Promise<{ publicToken: 
             </div>
           )}
 
-          {/* Use window info */}
+          {/* Use window info - uses unified slot_ticket_use_starts_at/ends_at for both reservation and walkin */}
           {ticket.ticket_enabled && isReserved && (() => {
-            // Determine effective use window: slot-level only (no event-level fallback)
-            const isWalkin = ticket.ticket_type === 'walkin';
-            const effectiveStart = isWalkin
-              ? ticket.slot_walkin_use_starts_at
-              : ticket.slot_reservation_use_starts_at;
-            const effectiveEnd = isWalkin
-              ? ticket.slot_walkin_use_ends_at
-              : ticket.slot_reservation_use_ends_at;
+            // Both reservation tickets and walkin tickets use the same slot-level ticket_use window
+            const effectiveStart = ticket.slot_ticket_use_starts_at;
+            const effectiveEnd = ticket.slot_ticket_use_ends_at;
+            const isEnabled = ticket.slot_is_ticket_use_enabled !== false;
 
             if (!effectiveStart && !effectiveEnd) return null;
+
+            const now = new Date();
+            const beforeWindow = effectiveStart && now < new Date(effectiveStart);
+            const afterWindow = effectiveEnd && now > new Date(effectiveEnd);
+            const isWalkin = ticket.ticket_type === 'walkin';
 
             return (
               <div style={{
@@ -298,15 +309,34 @@ export default function TicketPage({ params }: { params: Promise<{ publicToken: 
                 marginBottom: '16px',
                 padding: '10px 12px',
                 borderRadius: 'var(--radius-sm)',
-                background: 'rgba(99, 102, 241, 0.08)',
-                border: '1px solid rgba(99, 102, 241, 0.2)',
+                background: !isEnabled || beforeWindow || afterWindow
+                  ? 'rgba(239, 68, 68, 0.08)'
+                  : 'rgba(99, 102, 241, 0.08)',
+                border: !isEnabled || beforeWindow || afterWindow
+                  ? '1px solid rgba(239, 68, 68, 0.2)'
+                  : '1px solid rgba(99, 102, 241, 0.2)',
               }}>
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                  {isWalkin ? '当日券 使用可能時間' : '予約券 使用可能時間'}
+                  {isWalkin ? '当日券' : '予約券'} 使用可能時間
                 </span>
                 <div style={{ color: '#c7d2fe', marginTop: '4px', fontSize: '0.9rem', fontWeight: 600 }}>
                   {formatDateTime(effectiveStart)} 〜 {formatDateTime(effectiveEnd)}
                 </div>
+                {!isEnabled && (
+                  <div style={{ color: 'var(--color-danger)', fontSize: '0.78rem', marginTop: '4px' }}>
+                    チケット使用は現在無効に設定されています。
+                  </div>
+                )}
+                {isEnabled && beforeWindow && (
+                  <div style={{ color: 'var(--color-warning)', fontSize: '0.78rem', marginTop: '4px' }}>
+                    このチケットは企画当日の指定時間のみ使用できます。
+                  </div>
+                )}
+                {isEnabled && afterWindow && (
+                  <div style={{ color: 'var(--color-danger)', fontSize: '0.78rem', marginTop: '4px' }}>
+                    使用可能時間は終了しました。
+                  </div>
+                )}
               </div>
             );
           })()}

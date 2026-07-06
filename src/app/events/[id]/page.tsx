@@ -23,10 +23,16 @@ interface EventSlot {
   is_enabled: boolean;
   sort_order: number;
   remaining_slots: number;
-  reservation_use_starts_at: string | null;
-  reservation_use_ends_at: string | null;
-  walkin_use_starts_at: string | null;
-  walkin_use_ends_at: string | null;
+  reservation_starts_at: string | null;
+  reservation_ends_at: string | null;
+  ticket_use_starts_at: string | null;
+  ticket_use_ends_at: string | null;
+  walkin_starts_at: string | null;
+  walkin_ends_at: string | null;
+  is_reservation_enabled: boolean;
+  is_ticket_use_enabled: boolean;
+  is_walkin_enabled: boolean;
+  walkin_limit: number | null;
 }
 
 interface EventDetails {
@@ -439,22 +445,21 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
 
   // Calculate if booking is active
   const now = new Date();
-  
-  const isReservationPeriod = event.reservation_enabled &&
-    (!event.reservation_starts_at || new Date(event.reservation_starts_at) <= now) &&
-    (!event.reservation_ends_at || new Date(event.reservation_ends_at) >= now);
 
-  const hasAnyReservationSlots = slots.length > 0 && slots.some((s) => s.remaining_reservation_slots > 0 && s.is_enabled);
-  const isReservationOpen = isReservationPeriod && hasAnyReservationSlots;
-
-  const hasAnyWalkinOpenOrUpcoming = slots.length > 0 && slots.some((s) => {
+  // Form is shown if there are any slots where reservation or walk-in is active or upcoming
+  const shouldShowForm = slots.length > 0 && slots.some((s) => {
     if (!s.is_enabled) return false;
-    if (s.remaining_walkin_slots <= 0) return false;
-    const ends = s.walkin_use_ends_at ? new Date(s.walkin_use_ends_at) : null;
-    return !ends || now <= ends;
-  });
+    
+    // Check if reservation is active or upcoming
+    const resEnds = s.reservation_ends_at ? new Date(s.reservation_ends_at) : null;
+    const resActiveOrUpcoming = s.is_reservation_enabled && s.remaining_reservation_slots > 0 && (!resEnds || now <= resEnds);
 
-  const shouldShowForm = slots.length > 0 && (isReservationOpen || hasAnyWalkinOpenOrUpcoming);
+    // Check if walk-in is active or upcoming
+    const walkEnds = s.walkin_ends_at ? new Date(s.walkin_ends_at) : null;
+    const walkActiveOrUpcoming = s.is_walkin_enabled && s.remaining_walkin_slots > 0 && (!walkEnds || now <= walkEnds);
+
+    return resActiveOrUpcoming || walkActiveOrUpcoming;
+  });
 
   const selectedSlot = selectedSlotIds.length === 1
     ? slots.find((s) => s.id === selectedSlotIds[0])
@@ -465,11 +470,11 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
     if (selectedSlotIds.length > 1) return '当日券を取得する（開催枠を1つだけ選択してください）';
     
     if (!selectedSlot) return '当日券を取得する';
-    if (!selectedSlot.is_enabled) return '当日券受付停止中';
+    if (!selectedSlot.is_enabled || !selectedSlot.is_walkin_enabled) return '当日券受付停止中';
     if (selectedSlot.remaining_walkin_slots <= 0) return '当日券満員（定員到達）';
     
-    const starts = selectedSlot.walkin_use_starts_at ? new Date(selectedSlot.walkin_use_starts_at) : null;
-    const ends = selectedSlot.walkin_use_ends_at ? new Date(selectedSlot.walkin_use_ends_at) : null;
+    const starts = selectedSlot.walkin_starts_at ? new Date(selectedSlot.walkin_starts_at) : null;
+    const ends = selectedSlot.walkin_ends_at ? new Date(selectedSlot.walkin_ends_at) : null;
     
     if (starts && now < starts) {
       const dateStr = starts.toLocaleDateString('ja-JP', { month: '2-digit', day: '2-digit' });
@@ -483,11 +488,15 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
 
   const isReservationButtonEnabled = (() => {
     if (booking) return false;
-    if (!isReservationPeriod) return false;
     if (selectedSlotIds.length === 0) return false;
     return selectedSlotIds.every((id) => {
       const s = slots.find((slot) => slot.id === id);
-      return s && s.is_enabled && s.remaining_reservation_slots > 0;
+      if (!s || !s.is_enabled || !s.is_reservation_enabled) return false;
+      if (s.remaining_reservation_slots <= 0) return false;
+      
+      const starts = s.reservation_starts_at ? new Date(s.reservation_starts_at) : null;
+      const ends = s.reservation_ends_at ? new Date(s.reservation_ends_at) : null;
+      return (!starts || now >= starts) && (!ends || now <= ends);
     });
   })();
 
@@ -495,11 +504,11 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
     if (booking) return false;
     if (selectedSlotIds.length !== 1) return false;
     if (!selectedSlot) return false;
-    if (!selectedSlot.is_enabled) return false;
+    if (!selectedSlot.is_enabled || !selectedSlot.is_walkin_enabled) return false;
     if (selectedSlot.remaining_walkin_slots <= 0) return false;
     
-    const starts = selectedSlot.walkin_use_starts_at ? new Date(selectedSlot.walkin_use_starts_at) : null;
-    const ends = selectedSlot.walkin_use_ends_at ? new Date(selectedSlot.walkin_use_ends_at) : null;
+    const starts = selectedSlot.walkin_starts_at ? new Date(selectedSlot.walkin_starts_at) : null;
+    const ends = selectedSlot.walkin_ends_at ? new Date(selectedSlot.walkin_ends_at) : null;
     return (!starts || now >= starts) && (!ends || now <= ends);
   })();
 
@@ -621,9 +630,14 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
                         当日券残り: <span style={{ color: slot.remaining_walkin_slots > 0 ? 'var(--color-warning)' : 'var(--color-danger)', fontWeight: 600 }}>{slot.remaining_walkin_slots}</span> 席
                       </span>
                     </div>
-                    {(slot.walkin_use_starts_at || slot.walkin_use_ends_at) && (
+                    {slot.is_reservation_enabled && (slot.reservation_starts_at || slot.reservation_ends_at) && (
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                        予約受付期間: {slot.reservation_starts_at ? formatDateTime(slot.reservation_starts_at) : '制限なし'} 〜 {slot.reservation_ends_at ? formatDateTime(slot.reservation_ends_at) : '制限なし'}
+                      </div>
+                    )}
+                    {slot.is_walkin_enabled && (slot.walkin_starts_at || slot.walkin_ends_at) && (
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                        当日券受付: {slot.walkin_use_starts_at ? formatDateTime(slot.walkin_use_starts_at) : '制限なし'} 〜 {slot.walkin_use_ends_at ? formatDateTime(slot.walkin_use_ends_at) : '制限なし'}
+                        当日券発行期間: {slot.walkin_starts_at ? formatDateTime(slot.walkin_starts_at) : '制限なし'} 〜 {slot.walkin_ends_at ? formatDateTime(slot.walkin_ends_at) : '制限なし'}
                       </div>
                     )}
                   </div>

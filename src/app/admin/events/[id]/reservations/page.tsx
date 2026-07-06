@@ -35,12 +35,37 @@ function formatDateTime(dateStr: string | null): string {
   });
 }
 
+interface AdminEventSlot {
+  id: string;
+  label: string;
+  starts_at: string | null;
+  ends_at: string | null;
+  is_enabled: boolean;
+  total_capacity: number;
+  reservation_capacity: number;
+  reserved_count: number;
+  walkin_count: number;
+  remaining_reservation_slots: number;
+  remaining_walkin_slots: number;
+  reservation_starts_at: string | null;
+  reservation_ends_at: string | null;
+  ticket_use_starts_at: string | null;
+  ticket_use_ends_at: string | null;
+  walkin_starts_at: string | null;
+  walkin_ends_at: string | null;
+  is_reservation_enabled: boolean;
+  is_ticket_use_enabled: boolean;
+  is_walkin_enabled: boolean;
+  walkin_limit: number | null;
+}
+
 export default function AdminReservationsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { loading: authLoading, user } = useAdminAuth();
 
   const [eventTitle, setEventTitle] = useState('');
   const [reservations, setReservations] = useState<ReservationItem[]>([]);
+  const [slots, setSlots] = useState<AdminEventSlot[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
@@ -79,6 +104,18 @@ export default function AdminReservationsPage({ params }: { params: Promise<{ id
       }
 
       setReservations(resData as unknown as ReservationItem[] || []);
+
+      // 3. Fetch Event Slots for breakdown statistics
+      const { data: slotsData, error: slotsError } = await supabase.rpc('get_event_slots', {
+        p_event_id: id,
+      });
+
+      if (slotsError) {
+        console.error('Error fetching event slots:', slotsError);
+      } else {
+        setSlots(slotsData as AdminEventSlot[] || []);
+      }
+
     } catch (err) {
       console.error('Error loading reservation logs:', err);
       setError('データの読み込み中にエラーが発生しました。');
@@ -219,9 +256,9 @@ export default function AdminReservationsPage({ params }: { params: Promise<{ id
     );
   }
 
-  // Statistics
+  // Statistics: only count capacity-consuming/valid statuses (reserved, used)
   const totalBookings = reservations.length;
-  const activeBookings = reservations.filter((r) => r.status !== 'cancelled').length;
+  const activeBookings = reservations.filter((r) => r.status === 'reserved' || r.status === 'used').length;
   const usedTickets = reservations.filter((r) => r.status === 'used').length;
   const cancelledBookings = reservations.filter((r) => r.status === 'cancelled').length;
 
@@ -280,6 +317,79 @@ export default function AdminReservationsPage({ params }: { params: Promise<{ id
           </button>
         </div>
       </div>
+
+      {/* Slots Breakdown Table */}
+      {slots.length > 0 && (
+        <div className="glass-card" style={{ marginTop: '20px' }}>
+          <h2 style={{ fontSize: '1.1rem', color: '#fff', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span>📊</span> 開催枠ごとの内訳
+          </h2>
+          <div className="admin-table-container" style={{ margin: 0 }}>
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>枠名</th>
+                  <th>開催日時</th>
+                  <th style={{ textAlign: 'center' }}>定員</th>
+                  <th style={{ textAlign: 'center' }}>予約券残席 / 発行数</th>
+                  <th style={{ textAlign: 'center' }}>当日券残席 / 発行数</th>
+                  <th style={{ textAlign: 'center' }}>当日券上限</th>
+                  <th style={{ textAlign: 'center' }}>有効発行数</th>
+                  <th>事前予約受付期間</th>
+                  <th>当日券発行期間</th>
+                </tr>
+              </thead>
+              <tbody>
+                {slots.map((s) => (
+                  <tr key={s.id}>
+                    <td style={{ fontWeight: 700, color: '#fff' }}>{s.label}</td>
+                    <td style={{ fontSize: '0.8rem' }}>
+                      {s.starts_at ? formatDateTime(s.starts_at).slice(5) : '-'} 〜 {s.ends_at ? formatDateTime(s.ends_at).slice(11) : '-'}
+                    </td>
+                    <td style={{ textAlign: 'center' }}>{s.total_capacity}</td>
+                    <td style={{ textAlign: 'center' }}>
+                      <span style={{ color: s.remaining_reservation_slots > 0 ? 'var(--color-success)' : 'var(--color-danger)', fontWeight: 700 }}>
+                        {s.remaining_reservation_slots}
+                      </span> / {s.reserved_count}
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      <span style={{ color: s.remaining_walkin_slots > 0 ? 'var(--color-warning)' : 'var(--color-danger)', fontWeight: 700 }}>
+                        {s.remaining_walkin_slots}
+                      </span> / {s.walkin_count}
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      {s.walkin_limit !== null ? s.walkin_limit : '制限なし'}
+                    </td>
+                    <td style={{ textAlign: 'center', color: '#fff', fontWeight: 600 }}>
+                      {s.reserved_count + s.walkin_count}
+                    </td>
+                    <td style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                      {s.is_reservation_enabled ? (
+                        <>
+                          {s.reservation_starts_at ? formatDateTime(s.reservation_starts_at).slice(5) : '制限なし'} 〜 <br />
+                          {s.reservation_ends_at ? formatDateTime(s.reservation_ends_at).slice(5) : '制限なし'}
+                        </>
+                      ) : (
+                        <span style={{ color: 'var(--color-danger)' }}>無効</span>
+                      )}
+                    </td>
+                    <td style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                      {s.is_walkin_enabled ? (
+                        <>
+                          {s.walkin_starts_at ? formatDateTime(s.walkin_starts_at).slice(5) : '制限なし'} 〜 <br />
+                          {s.walkin_ends_at ? formatDateTime(s.walkin_ends_at).slice(5) : '制限なし'}
+                        </>
+                      ) : (
+                        <span style={{ color: 'var(--color-danger)' }}>無効</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {error && (
         <div className="error-banner">
