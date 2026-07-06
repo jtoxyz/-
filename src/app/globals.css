@@ -296,8 +296,8 @@ a:hover {
 }
 
 /* Admin uses wide width */
-.admin-mode .main-content {
-  max-width: 1200px;
+.main-content:has(.admin-mode) {
+  max-width: 1400px;
 }
 
 /* Glassmorphism card */
@@ -896,8 +896,8 @@ a:hover {
   }
 
   /* Admin gets full width */
-  .admin-mode .main-content {
-    max-width: 1200px;
+  .main-content:has(.admin-mode) {
+    max-width: 1400px;
   }
 
   /* Event cards: 2 columns */
@@ -1000,7 +1000,7 @@ a:hover {
   }
 
   /* Admin gets even wider */
-  .admin-mode .main-content {
+  .main-content:has(.admin-mode) {
     max-width: 1400px;
   }
 
@@ -1012,14 +1012,14 @@ a:hover {
 
   /* Form max-width for readability */
   .form-container-responsive {
-    max-width: 800px;
+    max-width: 1040px;
   }
 
   /* Admin sidebar layout */
   .admin-layout-sidebar {
     display: grid;
-    grid-template-columns: 220px 1fr;
-    gap: 32px;
+    grid-template-columns: 240px 1fr;
+    gap: 40px;
     align-items: start;
   }
 

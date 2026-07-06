@@ -422,7 +422,7 @@ export default function AdminNewEventPage() {
         </Link>
       </div>
 
-      <div className="glass-card">
+      <div>
         <h1 style={{ fontSize: '1.5rem', marginBottom: '24px', color: 'var(--text-primary)' }}>
           新規企画の作成
         </h1>
@@ -436,7 +436,7 @@ export default function AdminNewEventPage() {
 
         <form onSubmit={handleSubmit}>
           {/* Section: Basic details */}
-          <div style={{ borderBottom: '1px solid var(--card-border)', paddingBottom: '16px', marginBottom: '24px' }}>
+          <div className="glass-card" style={{ marginBottom: '24px' }}>
             <h3 style={{ fontSize: '1.1rem', marginBottom: '16px', color: 'var(--color-primary)' }}>
               1. 企画基本情報
             </h3>
@@ -486,12 +486,12 @@ export default function AdminNewEventPage() {
           </div>
 
           {/* Section: Timings & Slots */}
-          <div style={{ borderBottom: '1px solid var(--card-border)', paddingBottom: '16px', marginBottom: '24px' }}>
+          <div className="glass-card" style={{ marginBottom: '24px' }}>
             <h3 style={{ fontSize: '1.1rem', marginBottom: '16px', color: 'var(--color-primary)' }}>
               2. 日程・受付時間設定
             </h3>
             
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
               <div className="form-group">
                 <label className="form-label" htmlFor="reservationStartsAt">予約受付開始日時</label>
                 <input
@@ -874,7 +874,7 @@ export default function AdminNewEventPage() {
           </div>
 
           {/* Section: Ticket features */}
-          <div style={{ borderBottom: '1px solid var(--card-border)', paddingBottom: '16px', marginBottom: '24px' }}>
+          <div className="glass-card" style={{ marginBottom: '24px' }}>
             <h3 style={{ fontSize: '1.1rem', marginBottom: '16px', color: 'var(--color-primary)' }}>
               3. 電子チケット・使用ボタン設定
             </h3>
@@ -920,7 +920,7 @@ export default function AdminNewEventPage() {
           </div>
 
           {/* Section: Surveys */}
-          <div style={{ borderBottom: '1px solid var(--card-border)', paddingBottom: '16px', marginBottom: '24px' }}>
+          <div className="glass-card" style={{ marginBottom: '24px' }}>
             <h3 style={{ fontSize: '1.1rem', marginBottom: '16px', color: 'var(--color-primary)' }}>
               4. 外部アンケート連携 (Googleフォーム等)
             </h3>
