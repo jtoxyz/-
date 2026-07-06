@@ -270,7 +270,10 @@ export default function TicketPage({ params }: { params: Promise<{ publicToken: 
 
         {/* Body */}
         <div className="ticket-body">
-          <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+          <div className="ticket-detail-layout">
+            {/* Info Column */}
+            <div className="ticket-info-section">
+              <div style={{ textAlign: 'center', marginBottom: '20px' }}>
             <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               企画名
             </span>
@@ -289,6 +292,20 @@ export default function TicketPage({ params }: { params: Promise<{ publicToken: 
             </div>
           )}
 
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', margin: '20px 0', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '16px' }}>
+            <div>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>氏名</span>
+              <div style={{ fontWeight: 700, fontSize: '1rem', color: '#fff', marginTop: '2px' }}>{ticket.student_name}</div>
+            </div>
+            <div>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>学籍番号</span>
+              <div style={{ fontWeight: 700, fontSize: '1rem', color: '#fff', marginTop: '2px' }}>{ticket.student_number}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Action/Operation Column */}
+        <div className="ticket-action-section">
           {/* Use window info - uses unified slot_ticket_use_starts_at/ends_at for both reservation and walkin */}
           {ticket.ticket_enabled && isReserved && (() => {
             // Both reservation tickets and walkin tickets use the same slot-level ticket_use window
@@ -341,16 +358,7 @@ export default function TicketPage({ params }: { params: Promise<{ publicToken: 
             );
           })()}
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', margin: '20px 0', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '16px' }}>
-            <div>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>氏名</span>
-              <div style={{ fontWeight: 700, fontSize: '1rem', color: '#fff', marginTop: '2px' }}>{ticket.student_name}</div>
-            </div>
-            <div>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>学籍番号</span>
-              <div style={{ fontWeight: 700, fontSize: '1rem', color: '#fff', marginTop: '2px' }}>{ticket.student_number}</div>
-            </div>
-          </div>
+
 
           {/* Ticket code displaying if ticket feature is enabled */}
           {ticket.ticket_enabled && (
@@ -410,6 +418,8 @@ export default function TicketPage({ params }: { params: Promise<{ publicToken: 
               • スクリーンショットでは入場・引換できません（画面上の時計が動いている必要があります）。
             </div>
           )}
+            </div>
+          </div>
         </div>
       </div>
 

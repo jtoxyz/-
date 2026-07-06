@@ -663,8 +663,204 @@ a:hover {
   gap: 20px;
 }
 
+/* Mobile-first layouts */
+.btn-group-responsive {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.btn-group-responsive > .btn {
+  width: 100%;
+}
+
+.event-detail-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.ticket-detail-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* =====================================================
+   RESPONSIVE DESIGN — Tablet (768px+) & Desktop (1024px+)
+   ===================================================== */
+
+/* ── Tablet breakpoint (≥ 768px) ── */
 @media (min-width: 768px) {
+  /* Wider content area */
+  .main-content {
+    max-width: 720px;
+    padding: 32px 24px 80px 24px;
+  }
+
+  /* Admin gets full width */
+  .admin-mode .main-content {
+    max-width: 1200px;
+  }
+
+  /* Event cards: 2 columns */
   .events-grid {
     grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  }
+
+  /* Glass cards get more padding on larger screens */
+  .glass-card {
+    padding: 28px;
+  }
+
+  /* Buttons: allow side-by-side instead of stacked */
+  .btn {
+    width: auto;
+  }
+
+  /* Button groups: horizontal */
+  .btn-group-responsive {
+    flex-direction: row !important;
+  }
+  .btn-group-responsive > * {
+    min-width: 0 !important;
+  }
+
+  /* Form containers capped */
+  .form-container-responsive {
+    max-width: 700px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  /* Ticket page: wider container for side-by-side info */
+  .ticket-container {
+    max-width: 600px;
+  }
+
+  /* Ticket page two-column info section */
+  .ticket-detail-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    align-items: start;
+  }
+  .ticket-detail-layout > .ticket-info-section {
+    min-width: 0;
+  }
+  .ticket-detail-layout > .ticket-action-section {
+    min-width: 0;
+  }
+
+  /* Event detail page: info + form side by side */
+  .event-detail-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    align-items: start;
+  }
+  .event-detail-layout > * {
+    min-width: 0;
+  }
+
+  /* Admin nav: horizontal with more spacing */
+  .admin-navbar {
+    gap: 8px;
+  }
+
+  /* Admin table: ensure readable sizing */
+  .admin-table th,
+  .admin-table td {
+    padding: 14px 16px;
+  }
+
+  /* Reservations: show table on tablet+ via utility classes */
+  .reservations-table-desktop {
+    display: block;
+  }
+  .reservations-cards-mobile {
+    display: none;
+  }
+
+  /* Modal widens slightly */
+  .modal-content {
+    max-width: 480px;
+    padding: 36px 32px;
+  }
+
+  /* Page title scales up */
+  .page-title {
+    font-size: 2.5rem;
+  }
+}
+
+/* ── Desktop breakpoint (≥ 1024px) ── */
+@media (min-width: 1024px) {
+  /* Wide content area for general pages */
+  .main-content {
+    max-width: 960px;
+    padding: 40px 32px 80px 32px;
+  }
+
+  /* Admin gets even wider */
+  .admin-mode .main-content {
+    max-width: 1400px;
+  }
+
+  /* Event cards: up to 3 columns */
+  .events-grid {
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 24px;
+  }
+
+  /* Form max-width for readability */
+  .form-container-responsive {
+    max-width: 800px;
+  }
+
+  /* Admin sidebar layout */
+  .admin-layout-sidebar {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: 32px;
+    align-items: start;
+  }
+
+  /* Admin navbar vertical style when inside sidebar */
+  .admin-layout-sidebar .admin-navbar {
+    flex-direction: column;
+    border-bottom: none;
+    border-right: 1px solid var(--card-border);
+    padding-bottom: 0;
+    padding-right: 16px;
+    margin-bottom: 0;
+    position: sticky;
+    top: 80px;
+    align-self: start;
+  }
+
+  .admin-layout-sidebar .admin-navbar .admin-nav-link {
+    width: 100%;
+    text-align: left;
+    padding: 10px 14px;
+  }
+
+  /* Ticket container wider on desktop */
+  .ticket-container {
+    max-width: 700px;
+  }
+
+  /* Page title scales further */
+  .page-title {
+    font-size: 2.8rem;
+  }
+
+  /* Glass card hover effects more pronounced */
+  .glass-card.interactive:hover {
+    transform: translateY(-3px);
+  }
+
+  /* Header container wider */
+  .header-container {
+    max-width: 1400px;
   }
 }

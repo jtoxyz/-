@@ -619,7 +619,10 @@ export default function AdminEditEventPage({ params }: { params: Promise<{ id: s
 
   return (
     <div className="admin-mode">
+      <div className="admin-layout-sidebar">
       <AdminNav />
+
+      <div className="form-container-responsive">
 
       <div style={{ marginBottom: '20px' }}>
         <Link href="/admin/events" style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
@@ -1289,6 +1292,8 @@ export default function AdminEditEventPage({ params }: { params: Promise<{ id: s
             {deleting ? '削除処理中...' : '🗑️ 企画を完全に削除する'}
           </button>
         </div>
+      </div>
+      </div>
       </div>
     </div>
   );

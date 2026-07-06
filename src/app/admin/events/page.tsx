@@ -76,8 +76,10 @@ export default function AdminEventsPage() {
 
   return (
     <div className="admin-mode">
+      <div className="admin-layout-sidebar">
       <AdminNav />
 
+      <div>
       <div className="glass-card" style={{ marginBottom: '24px' }}>
         <div className="flex-between" style={{ flexWrap: 'wrap', gap: '12px' }}>
           <div>
@@ -194,6 +196,8 @@ export default function AdminEventsPage() {
           </table>
         </div>
       )}
+      </div>
+      </div>
     </div>
   );
 }

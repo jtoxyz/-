@@ -264,7 +264,10 @@ export default function AdminReservationsPage({ params }: { params: Promise<{ id
 
   return (
     <div className="admin-mode">
+      <div className="admin-layout-sidebar">
       <AdminNav />
+
+      <div>
 
       <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Link href="/admin/events" style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
@@ -404,7 +407,8 @@ export default function AdminReservationsPage({ params }: { params: Promise<{ id
           <p style={{ fontSize: '0.875rem' }}>現在この企画には予約されたチケットはありません。</p>
         </div>
       ) : (
-        <div className="admin-table-container">
+        <>
+        <div className="admin-table-container reservations-table-desktop">
           <table className="admin-table">
             <thead>
               <tr>
@@ -465,6 +469,57 @@ export default function AdminReservationsPage({ params }: { params: Promise<{ id
             </tbody>
           </table>
         </div>
+
+        {/* Mobile card view */}
+        <div className="reservations-cards-mobile" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {reservations.map((res) => {
+            const isItemCancelled = res.status === 'cancelled';
+            const isItemUsed = res.status === 'used';
+            const isItemReserved = res.status === 'reserved';
+            return (
+              <div key={res.id} className="glass-card" style={{ padding: '16px', opacity: isItemCancelled ? 0.5 : 1, marginBottom: 0 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                    {res.ticket_type === 'walkin' ? (
+                      <span className="badge" style={{ backgroundColor: 'var(--color-warning-bg)', color: 'var(--color-warning)', borderColor: 'var(--color-warning-border)', fontSize: '0.65rem' }}>当日券</span>
+                    ) : (
+                      <span className="badge" style={{ backgroundColor: 'var(--color-primary-glow)', color: 'var(--color-primary)', borderColor: 'var(--card-border-hover)', fontSize: '0.65rem' }}>予約券</span>
+                    )}
+                    {isItemReserved && <span className="badge badge-success" style={{ fontSize: '0.65rem' }}>有効</span>}
+                    {isItemUsed && <span className="badge badge-warning" style={{ fontSize: '0.65rem' }}>使用済み</span>}
+                    {isItemCancelled && <span className="badge badge-danger" style={{ fontSize: '0.65rem' }}>キャンセル</span>}
+                  </div>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{formatDateTime(res.created_at)}</span>
+                </div>
+                <div style={{ fontWeight: 700, color: '#fff', fontSize: '0.95rem' }}>{res.student_name}</div>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                  学籍番号: {res.student_number} / 枠: {res.event_slots?.label || '-'}
+                </div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px', fontFamily: 'monospace' }}>
+                  {res.university_email}
+                </div>
+                {res.used_at && (
+                  <div style={{ fontSize: '0.75rem', color: 'var(--color-warning)', marginTop: '4px' }}>
+                    使用: {formatDateTime(res.used_at)}
+                  </div>
+                )}
+                {!isItemCancelled && (
+                  <div style={{ marginTop: '8px', textAlign: 'right' }}>
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      style={{ padding: '4px 8px', fontSize: '0.7rem', borderColor: 'var(--color-danger-border)', color: 'var(--color-danger)' }}
+                      onClick={() => handleCancelReservation(res.id)}
+                      disabled={cancellingId === res.id}
+                    >
+                      {cancellingId === res.id ? 'キャンセル中...' : '❌ 取消'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        </>
       )}
 
       {/* Wipe confirmation modal */}
@@ -500,6 +555,8 @@ export default function AdminReservationsPage({ params }: { params: Promise<{ id
           </div>
         </div>
       )}
+      </div>
+      </div>
     </div>
   );
 }

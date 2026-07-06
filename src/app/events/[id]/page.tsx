@@ -523,7 +523,10 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
         </Link>
       </div>
 
-      <div className="glass-card">
+      <div className="event-detail-layout">
+        {/* Info column */}
+        <div>
+          <div className="glass-card">
         <h1 style={{ fontSize: '1.75rem', marginBottom: '12px', color: '#ffffff' }}>{event.title}</h1>
         {event.description && (
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', marginBottom: '24px', whiteSpace: 'pre-wrap' }}>
@@ -547,7 +550,11 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
             当日券残り: <span style={{ color: totalRemainingWalkin > 0 ? 'var(--color-warning)' : 'var(--color-danger)', fontWeight: 700 }}>{totalRemainingWalkin}</span> 席
           </div>
         </div>
-      </div>
+          </div>
+        </div>
+
+        {/* Operation column */}
+        <div>
 
       {/* Slot selection UI */}
       {slots.length > 0 && (
@@ -743,12 +750,12 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
               • 同じ企画でも別日であれば、予約していない日の当日券は取得できます。
             </div>
 
-            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '20px' }}>
+            <div className="btn-group-responsive" style={{ marginTop: '20px' }}>
               <button
                 type="submit"
                 className="btn btn-primary"
                 disabled={booking || !isReservationButtonEnabled}
-                style={{ flex: 1, minWidth: '200px', opacity: isReservationButtonEnabled ? 1 : 0.5 }}
+                style={{ opacity: isReservationButtonEnabled ? 1 : 0.5 }}
               >
                 {booking ? '予約処理中...' : '予約券を取得する'}
               </button>
@@ -758,8 +765,6 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
                 onClick={handleWalkinSubmit}
                 disabled={booking || !isWalkinButtonEnabled}
                 style={{
-                  flex: 1,
-                  minWidth: '200px',
                   borderColor: isWalkinButtonEnabled ? 'var(--color-warning-border)' : 'var(--card-border)',
                   color: isWalkinButtonEnabled ? 'var(--color-warning)' : 'var(--text-muted)',
                   opacity: isWalkinButtonEnabled ? 1 : 0.5
@@ -770,6 +775,8 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
             </div>
           </form>
         )}
+      </div>
+      </div>
       </div>
     </div>
   );

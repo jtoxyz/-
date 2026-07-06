@@ -411,7 +411,10 @@ export default function AdminNewEventPage() {
 
   return (
     <div className="admin-mode">
+      <div className="admin-layout-sidebar">
       <AdminNav />
+
+      <div className="form-container-responsive">
 
       <div style={{ marginBottom: '20px' }}>
         <Link href="/admin/events" style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
@@ -1062,6 +1065,8 @@ export default function AdminNewEventPage() {
             </button>
           </div>
         </form>
+      </div>
+      </div>
       </div>
     </div>
   );
