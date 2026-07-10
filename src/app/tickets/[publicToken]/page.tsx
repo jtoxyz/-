@@ -5,6 +5,9 @@ export const runtime = 'edge';
 import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { marked } from 'marked';
+import DOMPurify from 'isomorphic-dompurify';
+import { parseShortcodes } from '@/lib/parseShortcodes';
 
 interface TicketDetails {
   reservation_id: string;
@@ -50,6 +53,9 @@ interface TicketDetails {
   survey_after_use_enabled: boolean;
   survey_after_use_url: string | null;
   survey_after_use_message: string | null;
+  post_reservation_notes: string | null;
+  is_ticket_use_suspended: boolean;
+  auto_suspend_at: string | null;
 }
 
 function formatDateTime(dateStr: string | null): string {
@@ -82,6 +88,12 @@ export default function TicketPage({ params }: { params: Promise<{ publicToken: 
 
   // Modal flow
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [confirmChecked, setConfirmChecked] = useState(false);
+
+  const handleOpenConfirm = () => {
+    setConfirmChecked(false);
+    setShowConfirmModal(true);
+  };
 
   // Live clock
   const [currentTime, setCurrentTime] = useState<string>('');
@@ -215,6 +227,7 @@ export default function TicketPage({ params }: { params: Promise<{ publicToken: 
   const isCancelled = ticket.status === 'cancelled';
 
   // Determine if Use Button should be shown
+  const isSuspended = ticket.is_ticket_use_suspended || (ticket.auto_suspend_at && new Date() >= new Date(ticket.auto_suspend_at));
   const showUseButton = isReserved && ticket.ticket_enabled && ticket.use_button_enabled;
 
   // Survey variables
@@ -282,6 +295,17 @@ export default function TicketPage({ params }: { params: Promise<{ publicToken: 
             </h2>
           </div>
 
+          {ticket.post_reservation_notes && isReserved && (
+            <div className="glass-card" style={{ marginBottom: '24px', padding: '20px', borderLeft: '4px solid var(--color-warning)' }}>
+              <h3 style={{ fontSize: '1.1rem', marginBottom: '16px', color: 'var(--text-primary)' }}>予約完了後の注意事項</h3>
+              <div
+                className="prose prose-sm max-w-none"
+                style={{ color: 'var(--text-secondary)' }}
+                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(marked.parse(parseShortcodes(ticket.post_reservation_notes), { breaks: true }) as string, { ADD_ATTR: ['style'] }) }}
+              />
+            </div>
+          )}
+
           {ticket.slot_label && (
             <div style={{ textAlign: 'center', marginBottom: '16px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>開催枠</span>
@@ -319,6 +343,23 @@ export default function TicketPage({ params }: { params: Promise<{ publicToken: 
             const beforeWindow = effectiveStart && now < new Date(effectiveStart);
             const afterWindow = effectiveEnd && now > new Date(effectiveEnd);
             const isWalkin = ticket.ticket_type === 'walkin';
+
+            if (isSuspended) {
+              return (
+                <div style={{
+                  textAlign: 'center',
+                  marginBottom: '16px',
+                  padding: '10px 12px',
+                  borderRadius: 'var(--radius-sm)',
+                  background: 'rgba(239, 68, 68, 0.08)',
+                  border: '1px solid rgba(239, 68, 68, 0.2)',
+                }}>
+                  <div style={{ color: 'var(--color-danger)', fontSize: '0.9rem', fontWeight: 600 }}>
+                    現在、チケットの利用は停止されています。
+                  </div>
+                </div>
+              );
+            }
 
             return (
               <div style={{
@@ -396,13 +437,12 @@ export default function TicketPage({ params }: { params: Promise<{ publicToken: 
             </div>
           )}
 
-          {/* Action buttons */}
-          {showUseButton && (
+          {showUseButton && !isSuspended && (
             <div style={{ marginTop: '24px' }}>
               <button
                 className="btn btn-primary"
                 style={{ background: 'linear-gradient(135deg, var(--color-success) 0%, #059669 100%)', boxShadow: '0 4px 14px rgba(16, 185, 129, 0.4)' }}
-                onClick={() => setShowConfirmModal(true)}
+                onClick={handleOpenConfirm}
                 disabled={updating}
               >
                 {updating ? '処理中...' : '使用する (スタッフの前で押してください)'}
@@ -469,7 +509,17 @@ export default function TicketPage({ params }: { params: Promise<{ publicToken: 
             <div className="modal-body">
               <strong>店員・スタッフの目の前で使用してください。</strong>
               <br /><br />
-              一度使用済みに変更すると、元に戻すことはできません。よろしいですか？
+              一度使用済みに変更すると、元に戻すことはできません。
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '16px', background: 'var(--card-bg)', padding: '12px', borderRadius: '8px', border: '1px solid var(--card-border)', cursor: 'pointer' }}>
+                <input 
+                  type="checkbox" 
+                  checked={confirmChecked}
+                  onChange={(e) => setConfirmChecked(e.target.checked)}
+                  style={{ width: '18px', height: '18px', accentColor: 'var(--color-danger)' }}
+                />
+                <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)' }}>スタッフの指示でボタンを押しています</span>
+              </label>
             </div>
             <div className="modal-actions">
               <button
@@ -482,7 +532,8 @@ export default function TicketPage({ params }: { params: Promise<{ publicToken: 
               <button
                 className="btn btn-danger"
                 onClick={handleUseTicket}
-                disabled={updating}
+                disabled={updating || !confirmChecked}
+                style={{ opacity: confirmChecked ? 1 : 0.5 }}
               >
                 はい、使用します
               </button>

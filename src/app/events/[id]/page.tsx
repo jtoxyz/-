@@ -8,21 +8,17 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { saveToken } from '@/lib/ticketCache';
 import { ALLOWED_EMAIL_DOMAINS, STUDENT_EMAIL_DOMAIN } from '@/lib/config';
+import { marked } from 'marked';
+import DOMPurify from 'isomorphic-dompurify';
+import { parseShortcodes } from '@/lib/parseShortcodes';
 
 interface EventSlot {
   id: string;
   label: string;
   starts_at: string | null;
   ends_at: string | null;
-  total_capacity: number;
-  reservation_capacity: number;
-  reserved_count: number;
-  walkin_count: number;
-  remaining_reservation_slots: number;
-  remaining_walkin_slots: number;
-  is_enabled: boolean;
-  sort_order: number;
-  remaining_slots: number;
+  reservation_status: string;
+  walkin_status: string;
   reservation_starts_at: string | null;
   reservation_ends_at: string | null;
   ticket_use_starts_at: string | null;
@@ -32,7 +28,7 @@ interface EventSlot {
   is_reservation_enabled: boolean;
   is_ticket_use_enabled: boolean;
   is_walkin_enabled: boolean;
-  walkin_limit: number | null;
+  is_enabled: boolean;
 }
 
 interface EventDetails {
@@ -449,15 +445,8 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
   // Form is shown if there are any slots where reservation or walk-in is active or upcoming
   const shouldShowForm = slots.length > 0 && slots.some((s) => {
     if (!s.is_enabled) return false;
-    
-    // Check if reservation is active or upcoming
-    const resEnds = s.reservation_ends_at ? new Date(s.reservation_ends_at) : null;
-    const resActiveOrUpcoming = s.is_reservation_enabled && s.remaining_reservation_slots > 0 && (!resEnds || now <= resEnds);
-
-    // Check if walk-in is active or upcoming
-    const walkEnds = s.walkin_ends_at ? new Date(s.walkin_ends_at) : null;
-    const walkActiveOrUpcoming = s.is_walkin_enabled && s.remaining_walkin_slots > 0 && (!walkEnds || now <= walkEnds);
-
+    const resActiveOrUpcoming = s.reservation_status === 'available' || s.reservation_status === 'low_remaining' || s.reservation_status === 'before_open';
+    const walkActiveOrUpcoming = s.walkin_status === 'walkin_available' || s.walkin_status === 'walkin_low_remaining' || s.walkin_status === 'walkin_upcoming';
     return resActiveOrUpcoming || walkActiveOrUpcoming;
   });
 
@@ -471,7 +460,7 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
     
     if (!selectedSlot) return '当日券を取得する';
     if (!selectedSlot.is_enabled || !selectedSlot.is_walkin_enabled) return '当日券受付停止中';
-    if (selectedSlot.remaining_walkin_slots <= 0) return '当日券満員（定員到達）';
+    if (selectedSlot.walkin_status === 'full') return '当日券満員（定員到達）';
     
     const starts = selectedSlot.walkin_starts_at ? new Date(selectedSlot.walkin_starts_at) : null;
     const ends = selectedSlot.walkin_ends_at ? new Date(selectedSlot.walkin_ends_at) : null;
@@ -492,11 +481,7 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
     return selectedSlotIds.every((id) => {
       const s = slots.find((slot) => slot.id === id);
       if (!s || !s.is_enabled || !s.is_reservation_enabled) return false;
-      if (s.remaining_reservation_slots <= 0) return false;
-      
-      const starts = s.reservation_starts_at ? new Date(s.reservation_starts_at) : null;
-      const ends = s.reservation_ends_at ? new Date(s.reservation_ends_at) : null;
-      return (!starts || now >= starts) && (!ends || now <= ends);
+      return s.reservation_status === 'available' || s.reservation_status === 'low_remaining';
     });
   })();
 
@@ -505,15 +490,31 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
     if (selectedSlotIds.length !== 1) return false;
     if (!selectedSlot) return false;
     if (!selectedSlot.is_enabled || !selectedSlot.is_walkin_enabled) return false;
-    if (selectedSlot.remaining_walkin_slots <= 0) return false;
-    
-    const starts = selectedSlot.walkin_starts_at ? new Date(selectedSlot.walkin_starts_at) : null;
-    const ends = selectedSlot.walkin_ends_at ? new Date(selectedSlot.walkin_ends_at) : null;
-    return (!starts || now >= starts) && (!ends || now <= ends);
+    return selectedSlot.walkin_status === 'walkin_available' || selectedSlot.walkin_status === 'walkin_low_remaining';
   })();
 
-  const totalRemainingRes = slots.reduce((sum, s) => sum + s.remaining_reservation_slots, 0);
-  const totalRemainingWalkin = slots.reduce((sum, s) => sum + s.remaining_walkin_slots, 0);
+  const getStatusLabel = (status: string) => {
+    switch(status) {
+      case 'available':
+      case 'walkin_available':
+        return { text: '余裕あり', color: 'var(--color-success)' };
+      case 'low_remaining':
+      case 'walkin_low_remaining':
+        return { text: '残りわずか', color: 'var(--color-warning)' };
+      case 'full':
+      case 'walkin_full':
+        return { text: '満席', color: 'var(--color-danger)' };
+      case 'before_open':
+      case 'walkin_upcoming':
+        return { text: '受付前', color: 'var(--text-secondary)' };
+      case 'suspended':
+        return { text: '停止中', color: 'var(--color-danger)' };
+      case 'closed':
+      case 'walkin_closed':
+      default:
+        return { text: '受付終了', color: 'var(--text-muted)' };
+    }
+  };
 
   return (
     <div>
@@ -529,9 +530,11 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
           <div className="glass-card">
         <h1 style={{ fontSize: '1.75rem', marginBottom: '12px', color: 'var(--text-primary)' }}>{event.title}</h1>
         {event.description && (
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', marginBottom: '24px', whiteSpace: 'pre-wrap' }}>
-            {event.description}
-          </p>
+          <div 
+            style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', marginBottom: '24px' }}
+            className="prose prose-sm max-w-none"
+            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(marked.parse(parseShortcodes(event.description), { breaks: true }) as string, { ADD_ATTR: ['style'] }) }}
+          />
         )}
 
         <div className="event-info-grid" style={{ background: 'var(--card-bg)', padding: '16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--card-border)' }}>
@@ -542,12 +545,6 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
           <div className="info-value">
             {event.reservation_starts_at ? formatDateTime(event.reservation_starts_at) : '制限なし'} 〜 <br />
             {event.reservation_ends_at ? formatDateTime(event.reservation_ends_at) : '制限なし'}
-          </div>
-
-          <div className="info-label">定員状況</div>
-          <div className="info-value">
-            予約券残り: <span style={{ color: totalRemainingRes > 0 ? 'var(--color-success)' : 'var(--color-danger)', fontWeight: 700 }}>{totalRemainingRes}</span> 席 / 
-            当日券残り: <span style={{ color: totalRemainingWalkin > 0 ? 'var(--color-warning)' : 'var(--color-danger)', fontWeight: 700 }}>{totalRemainingWalkin}</span> 席
           </div>
         </div>
           </div>
@@ -565,10 +562,15 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {slots.map((slot) => {
               const isDisabled = !slot.is_enabled;
-              const isReservationFull = slot.remaining_reservation_slots <= 0;
-              const isWalkinFull = slot.remaining_walkin_slots <= 0;
+              const resStatus = slot.reservation_status;
+              const walkinStatus = slot.walkin_status;
+              const isReservationFull = resStatus === 'full' || resStatus === 'closed' || resStatus === 'suspended';
+              const isWalkinFull = walkinStatus === 'walkin_full' || walkinStatus === 'walkin_closed' || walkinStatus === 'suspended';
               const isSelectable = !isDisabled && (!isReservationFull || !isWalkinFull);
               const isSelected = selectedSlotIds.includes(slot.id);
+
+              const resDisplay = getStatusLabel(resStatus);
+              const walkinDisplay = getStatusLabel(walkinStatus);
 
               return (
                 <label
@@ -631,10 +633,10 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
                         </span>
                       )}
                       <span>
-                        予約券残り: <span style={{ color: slot.remaining_reservation_slots > 0 ? 'var(--color-success)' : 'var(--color-danger)', fontWeight: 600 }}>{slot.remaining_reservation_slots}</span> / {slot.reservation_capacity} 席
+                        予約受付: <span style={{ color: resDisplay.color, fontWeight: 600 }}>{resDisplay.text}</span>
                       </span>
                       <span>
-                        当日券残り: <span style={{ color: slot.remaining_walkin_slots > 0 ? 'var(--color-warning)' : 'var(--color-danger)', fontWeight: 600 }}>{slot.remaining_walkin_slots}</span> 席
+                        当日券受付: <span style={{ color: walkinDisplay.color, fontWeight: 600 }}>{walkinDisplay.text}</span>
                       </span>
                     </div>
                     {slot.is_reservation_enabled && (slot.reservation_starts_at || slot.reservation_ends_at) && (

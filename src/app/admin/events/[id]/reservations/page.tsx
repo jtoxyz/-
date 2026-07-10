@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import AdminNav from '@/components/AdminNav';
 import { supabase } from '@/lib/supabase';
+import * as XLSX from 'xlsx';
 
 interface ReservationItem {
   id: string;
@@ -71,6 +72,7 @@ export default function AdminReservationsPage({ params }: { params: Promise<{ id
   
   // Modals / Actions
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const [showWipeModal, setShowWipeModal] = useState(false);
   const [wiping, setWiping] = useState(false);
 
@@ -153,12 +155,24 @@ export default function AdminReservationsPage({ params }: { params: Promise<{ id
       // Reload lists
       await loadData();
     } catch (err) {
-      console.error('Error cancelling reservation:', err);
-      setError('キャンセル処理中にエラーが発生しました。');
-    } finally {
+      console.error('Error in cancellation:', err);
+      setError('予期せぬエラーが発生しました。');
       setCancellingId(null);
     }
   };
+
+  const filteredReservations = reservations.filter((res) => {
+    if (!searchQuery.trim()) return true;
+    
+    const query = searchQuery.trim().toLowerCase();
+    
+    // Name (ignore leading/trailing spaces)
+    const nameStr = res.student_name ? res.student_name.trim().toLowerCase() : '';
+    // Student Number (ignore case, ignore leading/trailing spaces)
+    const noStr = res.student_number ? res.student_number.trim().toLowerCase() : '';
+    
+    return nameStr.includes(query) || noStr.includes(query);
+  });
 
   const handleWipeData = async () => {
     setError(null);
@@ -188,64 +202,38 @@ export default function AdminReservationsPage({ params }: { params: Promise<{ id
     }
   };
 
-  // CSV Exporter (UTF-8 with BOM for Excel compatibility)
-  const handleExportCSV = () => {
-    if (reservations.length === 0) {
-      alert('エクスポートする予約データがありません。');
+  // Excel Exporter
+  const handleExportExcel = () => {
+    // Export all reservations excluding cancelled
+    const activeReservations = reservations.filter(r => r.status !== 'cancelled');
+    
+    if (activeReservations.length === 0) {
+      alert('エクスポートする有効な予約データがありません。');
       return;
     }
 
     const headers = [
-      '予約日時',
-      '券種',
+      '企画名',
       '氏名',
       '学籍番号',
       '開催枠',
-      '大学メール',
-      '予約状態',
-      '使用状況',
-      '使用日時',
     ];
 
-    const rows = reservations.map((res) => {
-      let statusLabel = '予約完了';
-      if (res.status === 'used') statusLabel = '使用済み';
-      if (res.status === 'cancelled') statusLabel = 'キャンセル済み';
+    const rows = activeReservations.map((res) => [
+      eventTitle,
+      res.student_name || '',
+      res.student_number || '',
+      res.event_slots?.label || '-',
+    ]);
 
-      return [
-        formatDateTime(res.created_at),
-        res.ticket_type === 'walkin' ? '当日券' : '予約券',
-        res.student_name,
-        res.student_number,
-        res.event_slots?.label || '-',
-        res.university_email,
-        statusLabel,
-        res.status === 'used' ? '使用済み' : '未使用',
-        formatDateTime(res.used_at),
-      ];
-    });
+    const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Reservations');
 
-    const csvContent =
-      headers.join(',') +
-      '\n' +
-      rows.map((r) => r.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(',')).join('\n');
-
-    // Excel support: add BOM header (\ufeff)
-    const blob = new Blob([new Uint8Array([0xef, 0xbb, 0xbf]), csvContent], {
-      type: 'text/csv;charset=utf-8;',
-    });
-
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    
-    // Format file name
     const timestamp = new Date().toISOString().slice(0, 10);
-    link.setAttribute('download', `reservations_${eventTitle.replace(/[\s/]/g, '_')}_${timestamp}.csv`);
-    
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const fileName = `reservations_${eventTitle.replace(/[\s/]/g, '_')}_${timestamp}.xlsx`;
+
+    XLSX.writeFile(workbook, fileName);
   };
 
   if (authLoading || loading) {
@@ -276,10 +264,41 @@ export default function AdminReservationsPage({ params }: { params: Promise<{ id
       </div>
 
       <div className="glass-card" style={{ borderLeft: '4px solid var(--color-primary)' }}>
-        <h1 style={{ fontSize: '1.4rem', color: 'var(--text-primary)' }}>{eventTitle}</h1>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: '4px' }}>
-          予約者一覧と利用実績データの確認・エクスポートが行えます。
-        </p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
+          <div>
+            <div style={{ display: 'flex', gap: '16px', alignItems: 'center', marginBottom: '24px' }}>
+              <h1 style={{ fontSize: '1.5rem', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
+                予約者一覧
+              </h1>
+              <span className="badge" style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--card-border)' }}>
+                {filteredReservations.length} / {reservations.length}件表示
+              </span>
+            </div>
+            <p style={{ color: 'var(--text-secondary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {eventTitle}
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <div className="search-box" style={{ minWidth: '300px' }}>
+              <input
+                type="text"
+                className="form-input"
+                placeholder="氏名・学籍番号で検索..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{ width: '100%' }}
+              />
+            </div>
+            <button 
+              onClick={handleExportExcel} 
+              className="btn btn-secondary"
+              disabled={loading || filteredReservations.length === 0}
+              style={{ padding: '10px 16px', minWidth: '150px' }}
+            >
+              📥 Excel出力
+            </button>
+          </div>
+        </div>
 
         {/* Status Blocks */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '12px', marginTop: '20px' }}>
@@ -303,14 +322,6 @@ export default function AdminReservationsPage({ params }: { params: Promise<{ id
 
         {/* Action Panel */}
         <div style={{ display: 'flex', gap: '12px', marginTop: '24px', flexWrap: 'wrap' }}>
-          <button
-            className="btn btn-primary btn-sm"
-            onClick={handleExportCSV}
-            style={{ width: 'auto' }}
-          >
-            📥 CSVファイルを出力
-          </button>
-          
           <button
             className="btn btn-danger btn-sm"
             onClick={() => setShowWipeModal(true)}
@@ -406,6 +417,11 @@ export default function AdminReservationsPage({ params }: { params: Promise<{ id
           <p style={{ fontSize: '1.2rem', marginBottom: '8px' }}>予約者が登録されていません</p>
           <p style={{ fontSize: '0.875rem' }}>現在この企画には予約されたチケットはありません。</p>
         </div>
+      ) : filteredReservations.length === 0 ? (
+        <div className="glass-card text-center" style={{ padding: '60px 20px', color: 'var(--text-secondary)' }}>
+          <p style={{ fontSize: '1.2rem', marginBottom: '8px' }}>検索結果がありません</p>
+          <p style={{ fontSize: '0.875rem' }}>条件に一致する予約者が見つかりませんでした。</p>
+        </div>
       ) : (
         <>
         <div className="admin-table-container reservations-table-desktop">
@@ -424,7 +440,7 @@ export default function AdminReservationsPage({ params }: { params: Promise<{ id
               </tr>
             </thead>
             <tbody>
-              {reservations.map((res) => {
+              {filteredReservations.map((res) => {
                 const isItemReserved = res.status === 'reserved';
                 const isItemUsed = res.status === 'used';
                 const isItemCancelled = res.status === 'cancelled';

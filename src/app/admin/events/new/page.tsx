@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import AdminNav from '@/components/AdminNav';
+import EventPreviewModal from '@/components/EventPreviewModal';
 import { supabase } from '@/lib/supabase';
 
 interface SlotFormRow {
@@ -43,6 +44,9 @@ export default function AdminNewEventPage() {
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Preview state
+  const [showPreview, setShowPreview] = useState(false);
 
   // Form states
   const [title, setTitle] = useState('');
@@ -99,6 +103,18 @@ export default function AdminNewEventPage() {
   const [surveyAfterUseMessage, setSurveyAfterUseMessage] = useState(
     'ご参加ありがとうございました。今後の企画改善のため、アンケートにご協力ください。'
   );
+
+  // Slot row helpers
+
+  // New features
+  const [isReservationSuspended, setIsReservationSuspended] = useState(false);
+  const [isWalkinSuspended, setIsWalkinSuspended] = useState(false);
+  const [isTicketUseSuspended, setIsTicketUseSuspended] = useState(false);
+  const [autoSuspendAt, setAutoSuspendAt] = useState('');
+  const [autoHideAt, setAutoHideAt] = useState('');
+  const [postReservationNotes, setPostReservationNotes] = useState('');
+  const [lowRemainingThreshold, setLowRemainingThreshold] = useState('10');
+  const [lowRemainingThresholdType, setLowRemainingThresholdType] = useState<'count' | 'percent'>('count');
 
   // Slot row helpers
   const updateSlotRow = (slotId: string, field: keyof SlotFormRow, value: any) => {
@@ -160,7 +176,23 @@ export default function AdminNewEventPage() {
   };
 
   const removeSlotRow = (slotId: string) => {
-    setSlotRows((prev) => prev.length <= 1 ? prev : prev.filter((row) => row.id !== slotId));
+    setSlotRows((prev) => prev.filter((row) => row.id !== slotId));
+  };
+
+  const duplicateSlotRow = (slotId: string) => {
+    setSlotRows((prev) => {
+      const rowIndex = prev.findIndex(r => r.id === slotId);
+      if (rowIndex === -1) return prev;
+      const target = prev[rowIndex];
+      const newRow = {
+        ...target,
+        id: crypto.randomUUID(),
+        label: target.label ? `${target.label}（コピー）` : 'コピー',
+      };
+      const newRows = [...prev];
+      newRows.splice(rowIndex + 1, 0, newRow);
+      return newRows;
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -344,6 +376,14 @@ export default function AdminNewEventPage() {
       survey_after_use_enabled: surveyAfterUseEnabled,
       survey_after_use_url: surveyAfterUseUrl.trim() || null,
       survey_after_use_message: surveyAfterUseMessage.trim() || null,
+      is_reservation_suspended: isReservationSuspended,
+      is_walkin_suspended: isWalkinSuspended,
+      is_ticket_use_suspended: isTicketUseSuspended,
+      auto_suspend_at: autoSuspendAt ? new Date(autoSuspendAt).toISOString() : null,
+      auto_hide_at: autoHideAt ? new Date(autoHideAt).toISOString() : null,
+      post_reservation_notes: postReservationNotes.trim() || null,
+      low_remaining_threshold: parseInt(lowRemainingThreshold) || 10,
+      low_remaining_threshold_type: lowRemainingThresholdType,
     };
 
     try {
@@ -423,9 +463,21 @@ export default function AdminNewEventPage() {
       </div>
 
       <div>
-        <h1 style={{ fontSize: '1.5rem', marginBottom: '24px', color: 'var(--text-primary)' }}>
-          新規企画の作成
-        </h1>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
+          <h1 style={{ fontSize: '1.5rem', margin: 0, color: 'var(--text-primary)' }}>
+            新規企画の作成
+          </h1>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ padding: '8px 16px', fontSize: '0.85rem' }}
+              onClick={() => setShowPreview(true)}
+            >
+              👁 プレビュー
+            </button>
+          </div>
+        </div>
 
         {error && (
           <div className="error-banner">
@@ -455,8 +507,73 @@ export default function AdminNewEventPage() {
               />
             </div>
 
+
             <div className="form-group">
-              <label className="form-label" htmlFor="description">説明文</label>
+              <label className="form-label" htmlFor="description" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+                <span>説明文（専用タグやMarkdown記法が使用可能です）</span>
+              </label>
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
+                <button type="button" className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '0.8rem', color: 'var(--color-danger)', borderColor: 'var(--color-danger)' }} onClick={() => {
+                  const el = document.getElementById('description') as HTMLTextAreaElement;
+                  if (!el) return;
+                  const start = el.selectionStart;
+                  const end = el.selectionEnd;
+                  const text = el.value;
+                  const selectedText = text.substring(start, end) || '重要なテキスト';
+                  const before = text.substring(0, start);
+                  const after = text.substring(end);
+                  setDescription(`${before}[red:${selectedText}]${after}`);
+                  setTimeout(() => { el.focus(); el.setSelectionRange(start + 5, start + 5 + selectedText.length); }, 0);
+                }}>赤字(重要)</button>
+                <button type="button" className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '0.8rem', color: 'var(--color-warning)', borderColor: 'var(--color-warning)' }} onClick={() => {
+                  const el = document.getElementById('description') as HTMLTextAreaElement;
+                  if (!el) return;
+                  const start = el.selectionStart;
+                  const end = el.selectionEnd;
+                  const text = el.value;
+                  const selectedText = text.substring(start, end) || '注意テキスト';
+                  const before = text.substring(0, start);
+                  const after = text.substring(end);
+                  setDescription(`${before}[orange:${selectedText}]${after}`);
+                  setTimeout(() => { el.focus(); el.setSelectionRange(start + 8, start + 8 + selectedText.length); }, 0);
+                }}>オレンジ(注意)</button>
+                <button type="button" className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '0.8rem', color: 'var(--color-primary)', borderColor: 'var(--color-primary)' }} onClick={() => {
+                  const el = document.getElementById('description') as HTMLTextAreaElement;
+                  if (!el) return;
+                  const start = el.selectionStart;
+                  const end = el.selectionEnd;
+                  const text = el.value;
+                  const selectedText = text.substring(start, end) || '補足テキスト';
+                  const before = text.substring(0, start);
+                  const after = text.substring(end);
+                  setDescription(`${before}[blue:${selectedText}]${after}`);
+                  setTimeout(() => { el.focus(); el.setSelectionRange(start + 6, start + 6 + selectedText.length); }, 0);
+                }}>青字(補足)</button>
+                <button type="button" className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '0.8rem', color: 'var(--color-success)', borderColor: 'var(--color-success)' }} onClick={() => {
+                  const el = document.getElementById('description') as HTMLTextAreaElement;
+                  if (!el) return;
+                  const start = el.selectionStart;
+                  const end = el.selectionEnd;
+                  const text = el.value;
+                  const selectedText = text.substring(start, end) || '案内テキスト';
+                  const before = text.substring(0, start);
+                  const after = text.substring(end);
+                  setDescription(`${before}[green:${selectedText}]${after}`);
+                  setTimeout(() => { el.focus(); el.setSelectionRange(start + 7, start + 7 + selectedText.length); }, 0);
+                }}>緑字(案内)</button>
+                <button type="button" className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '0.8rem', background: 'var(--bg-secondary)', borderColor: 'var(--card-border)' }} onClick={() => {
+                  const el = document.getElementById('description') as HTMLTextAreaElement;
+                  if (!el) return;
+                  const start = el.selectionStart;
+                  const end = el.selectionEnd;
+                  const text = el.value;
+                  const selectedText = text.substring(start, end) || '注意書きブロック内容';
+                  const before = text.substring(0, start);
+                  const after = text.substring(end);
+                  setDescription(`${before}[alert:${selectedText}]${after}`);
+                  setTimeout(() => { el.focus(); el.setSelectionRange(start + 7, start + 7 + selectedText.length); }, 0);
+                }}>注意書きブロック</button>
+              </div>
               <textarea
                 id="description"
                 className="form-input"
@@ -466,9 +583,84 @@ export default function AdminNewEventPage() {
                 onChange={(e) => setDescription(e.target.value)}
                 disabled={saving}
               />
+              <span className="form-hint">文字を太字にしたり、リンクを貼ったりできます。</span>
             </div>
 
 
+            <div className="form-group">
+              <label className="form-label" htmlFor="postReservationNotes">予約完了後の注意事項（利用者のチケット画面上部に表示）</label>
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
+                <button type="button" className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '0.8rem', color: 'var(--color-danger)', borderColor: 'var(--color-danger)' }} onClick={() => {
+                  const el = document.getElementById('postReservationNotes') as HTMLTextAreaElement;
+                  if (!el) return;
+                  const start = el.selectionStart;
+                  const end = el.selectionEnd;
+                  const text = el.value;
+                  const selectedText = text.substring(start, end) || '重要なテキスト';
+                  const before = text.substring(0, start);
+                  const after = text.substring(end);
+                  setPostReservationNotes(`${before}[red:${selectedText}]${after}`);
+                  setTimeout(() => { el.focus(); el.setSelectionRange(start + 5, start + 5 + selectedText.length); }, 0);
+                }}>赤字(重要)</button>
+                <button type="button" className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '0.8rem', color: 'var(--color-warning)', borderColor: 'var(--color-warning)' }} onClick={() => {
+                  const el = document.getElementById('postReservationNotes') as HTMLTextAreaElement;
+                  if (!el) return;
+                  const start = el.selectionStart;
+                  const end = el.selectionEnd;
+                  const text = el.value;
+                  const selectedText = text.substring(start, end) || '注意テキスト';
+                  const before = text.substring(0, start);
+                  const after = text.substring(end);
+                  setPostReservationNotes(`${before}[orange:${selectedText}]${after}`);
+                  setTimeout(() => { el.focus(); el.setSelectionRange(start + 8, start + 8 + selectedText.length); }, 0);
+                }}>オレンジ(注意)</button>
+                <button type="button" className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '0.8rem', color: 'var(--color-primary)', borderColor: 'var(--color-primary)' }} onClick={() => {
+                  const el = document.getElementById('postReservationNotes') as HTMLTextAreaElement;
+                  if (!el) return;
+                  const start = el.selectionStart;
+                  const end = el.selectionEnd;
+                  const text = el.value;
+                  const selectedText = text.substring(start, end) || '補足テキスト';
+                  const before = text.substring(0, start);
+                  const after = text.substring(end);
+                  setPostReservationNotes(`${before}[blue:${selectedText}]${after}`);
+                  setTimeout(() => { el.focus(); el.setSelectionRange(start + 6, start + 6 + selectedText.length); }, 0);
+                }}>青字(補足)</button>
+                <button type="button" className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '0.8rem', color: 'var(--color-success)', borderColor: 'var(--color-success)' }} onClick={() => {
+                  const el = document.getElementById('postReservationNotes') as HTMLTextAreaElement;
+                  if (!el) return;
+                  const start = el.selectionStart;
+                  const end = el.selectionEnd;
+                  const text = el.value;
+                  const selectedText = text.substring(start, end) || '案内テキスト';
+                  const before = text.substring(0, start);
+                  const after = text.substring(end);
+                  setPostReservationNotes(`${before}[green:${selectedText}]${after}`);
+                  setTimeout(() => { el.focus(); el.setSelectionRange(start + 7, start + 7 + selectedText.length); }, 0);
+                }}>緑字(案内)</button>
+                <button type="button" className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '0.8rem', background: 'var(--bg-secondary)', borderColor: 'var(--card-border)' }} onClick={() => {
+                  const el = document.getElementById('postReservationNotes') as HTMLTextAreaElement;
+                  if (!el) return;
+                  const start = el.selectionStart;
+                  const end = el.selectionEnd;
+                  const text = el.value;
+                  const selectedText = text.substring(start, end) || '注意書きブロック内容';
+                  const before = text.substring(0, start);
+                  const after = text.substring(end);
+                  setPostReservationNotes(`${before}[alert:${selectedText}]${after}`);
+                  setTimeout(() => { el.focus(); el.setSelectionRange(start + 7, start + 7 + selectedText.length); }, 0);
+                }}>注意書きブロック</button>
+              </div>
+              <textarea
+                id="postReservationNotes"
+                className="form-input"
+                rows={3}
+                placeholder="例：当日は学生証を必ず持参してください。10分前には集合してください。"
+                value={postReservationNotes}
+                onChange={(e) => setPostReservationNotes(e.target.value)}
+                disabled={saving}
+              />
+            </div>
 
             <div className="form-group">
               <label className="form-label" htmlFor="allowedDomains">許可する大学メールのドメイン (カンマ区切り)</label>
@@ -546,6 +738,36 @@ export default function AdminNewEventPage() {
                 </label>
               </div>
               <span className="form-hint">ユーザーが予約時に選択できる開催枠の数を制限します。</span>
+            </div>
+
+            {/* Remaining Threshold Setting */}
+            <div className="form-group" style={{ marginTop: '16px', background: 'var(--card-bg)', padding: '16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--card-border)' }}>
+              <label className="form-label" style={{ marginBottom: '8px' }}>「残りわずか」表示の基準（利用者画面の表示）</label>
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                <input
+                  type="number"
+                  className="form-input"
+                  style={{ width: '120px' }}
+                  min="0"
+                  value={lowRemainingThreshold}
+                  onChange={(e) => setLowRemainingThreshold(e.target.value)}
+                  disabled={saving}
+                />
+                <select
+                  className="form-input"
+                  style={{ width: '120px' }}
+                  value={lowRemainingThresholdType}
+                  onChange={(e) => setLowRemainingThresholdType(e.target.value as 'count' | 'percent')}
+                  disabled={saving}
+                >
+                  <option value="count">人以下</option>
+                  <option value="percent">%以下</option>
+                </select>
+              </div>
+              <span className="form-hint" style={{ marginTop: '8px' }}>
+                ※ 残数がこの基準を下回った場合、予約画面で具体的な人数ではなく「残りわずか」と表示されます。<br/>
+                ※ 基準値以上残っている場合は「余裕あり」、定員に達した場合は「満席」と表示されます。
+              </span>
             </div>
 
             {/* Slot management */}
@@ -829,8 +1051,25 @@ export default function AdminNewEventPage() {
                     </div>
                   </div>
 
-                  {/* Row 5: 削除ボタン */}
-                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  {/* Row 5: 複製・削除ボタン */}
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+                    <button
+                      type="button"
+                      onClick={() => duplicateSlotRow(row.id)}
+                      disabled={saving}
+                      style={{
+                        background: 'transparent',
+                        border: '1px solid var(--color-primary-border)',
+                        color: 'var(--color-primary)',
+                        borderRadius: 'var(--radius-sm)',
+                        padding: '8px 16px',
+                        cursor: saving ? 'not-allowed' : 'pointer',
+                        opacity: saving ? 0.5 : 1,
+                        fontSize: '0.85rem',
+                      }}
+                    >
+                      📄 この枠を複製
+                    </button>
                     <button
                       type="button"
                       onClick={() => removeSlotRow(row.id)}
@@ -1019,12 +1258,12 @@ export default function AdminNewEventPage() {
           </div>
 
           {/* Section: Status */}
-          <div style={{ marginBottom: '32px' }}>
+          <div className="glass-card" style={{ marginBottom: '24px' }}>
             <h3 style={{ fontSize: '1.1rem', marginBottom: '16px', color: 'var(--color-primary)' }}>
-              5. 公開設定
+              5. 公開・一時停止設定
             </h3>
             
-            <div style={{ display: 'flex', gap: '24px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div className="form-group">
                 <label className="form-checkbox-label">
                   <input
@@ -1050,6 +1289,72 @@ export default function AdminNewEventPage() {
                   予約の受付を有効にする
                 </label>
               </div>
+
+              <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+                <div className="form-group">
+                  <label className="form-checkbox-label">
+                    <input
+                      type="checkbox"
+                      className="form-checkbox"
+                      checked={isReservationSuspended}
+                      onChange={(e) => setIsReservationSuspended(e.target.checked)}
+                      disabled={saving}
+                    />
+                    予約受付を一時停止
+                  </label>
+                </div>
+                <div className="form-group">
+                  <label className="form-checkbox-label">
+                    <input
+                      type="checkbox"
+                      className="form-checkbox"
+                      checked={isWalkinSuspended}
+                      onChange={(e) => setIsWalkinSuspended(e.target.checked)}
+                      disabled={saving}
+                    />
+                    当日券発行を一時停止
+                  </label>
+                </div>
+                <div className="form-group">
+                  <label className="form-checkbox-label">
+                    <input
+                      type="checkbox"
+                      className="form-checkbox"
+                      checked={isTicketUseSuspended}
+                      onChange={(e) => setIsTicketUseSuspended(e.target.checked)}
+                      disabled={saving}
+                    />
+                    チケット使用を一時停止
+                  </label>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px', marginTop: '8px' }}>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="autoSuspendAt">自動停止日時（予約・当日券・チケット使用を停止）</label>
+                  <input
+                    id="autoSuspendAt"
+                    type="datetime-local"
+                    className="form-input"
+                    value={autoSuspendAt}
+                    onChange={(e) => setAutoSuspendAt(e.target.value)}
+                    disabled={saving}
+                  />
+                  <span className="form-hint">指定した日時以降、すべての受付・使用が自動停止します。</span>
+                </div>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="autoHideAt">自動非公開日時（企画を非公開にする）</label>
+                  <input
+                    id="autoHideAt"
+                    type="datetime-local"
+                    className="form-input"
+                    value={autoHideAt}
+                    onChange={(e) => setAutoHideAt(e.target.value)}
+                    disabled={saving}
+                  />
+                  <span className="form-hint">指定した日時以降、一覧から自動的に非表示になります。</span>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1068,6 +1373,36 @@ export default function AdminNewEventPage() {
       </div>
       </div>
       </div>
+
+      {/* Preview Modal */}
+      <EventPreviewModal
+        isOpen={showPreview}
+        onClose={() => setShowPreview(false)}
+        formData={{
+          title,
+          description,
+          slotRows: slotRows.map(row => ({
+            id: row.id,
+            label: row.label,
+            date: row.date,
+            startTime: row.startTime,
+            endTime: row.endTime,
+            capacity: row.capacity,
+            totalCapacity: row.totalCapacity,
+            isEnabled: true,
+            isReservationEnabled: row.isReservationEnabled,
+            isWalkinEnabled: row.isWalkinEnabled,
+            isTicketUseEnabled: row.isTicketUseEnabled,
+            reservationStartsAt: row.reservationStartsAt,
+            reservationEndsAt: row.reservationEndsAt,
+            walkinStartsAt: row.walkinStartsAt,
+            walkinEndsAt: row.walkinEndsAt,
+            ticketUseStartsAt: row.ticketUseStartsAt,
+            ticketUseEndsAt: row.ticketUseEndsAt,
+          })),
+          postReservationNotes: postReservationNotes,
+        }}
+      />
     </div>
   );
 }
