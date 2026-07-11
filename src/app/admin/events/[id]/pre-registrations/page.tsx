@@ -264,7 +264,7 @@ export default function AdminPreRegistrationsPage({ params }: { params: Promise<
                 <tbody>
                   {preRegistrations.map((pr) => (
                     <tr key={pr.id} style={{ opacity: pr.status === 'cancelled' ? 0.5 : 1 }}>
-                      <td>{new Date(pr.created_at).toLocaleString('ja-JP')}</td>
+                      <td>{new Date(pr.created_at).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}</td>
                       <td>{pr.event_slots?.label || '-'}</td>
                       <td>{pr.ticket_type === 'walkin' ? '当日券' : '予約券'}</td>
                       <td style={{ fontWeight: 700 }}>{pr.student_name}</td>

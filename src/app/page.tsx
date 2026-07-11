@@ -49,12 +49,18 @@ interface PublicEvent {
 function formatDateTime(dateStr: string | null): string {
   if (!dateStr) return '制限なし';
   const date = new Date(dateStr);
-  return date.toLocaleDateString('ja-JP', {
+  const dateTimeStr = date.toLocaleString('ja-JP', {
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
-  }) + ` (${['日', '月', '火', '水', '木', '金', '土'][date.getDay()]})`;
+    timeZone: 'Asia/Tokyo',
+  });
+  const weekday = new Intl.DateTimeFormat('ja-JP', {
+    weekday: 'short',
+    timeZone: 'Asia/Tokyo',
+  }).format(date);
+  return `${dateTimeStr} (${weekday})`;
 }
 
 export default async function Home() {

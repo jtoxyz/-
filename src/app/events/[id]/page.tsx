@@ -64,12 +64,18 @@ function normalizeStudentNumber(val: string): string {
 function formatDateTime(dateStr: string | null): string {
   if (!dateStr) return '制限なし';
   const date = new Date(dateStr);
-  return date.toLocaleDateString('ja-JP', {
+  const dateTimeStr = date.toLocaleString('ja-JP', {
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
-  }) + ` (${['日', '月', '火', '水', '木', '金', '土'][date.getDay()]})`;
+    timeZone: 'Asia/Tokyo',
+  });
+  const weekday = new Intl.DateTimeFormat('ja-JP', {
+    weekday: 'short',
+    timeZone: 'Asia/Tokyo',
+  }).format(date);
+  return `${dateTimeStr} (${weekday})`;
 }
 
 export default function EventBookingPage({ params }: { params: Promise<{ id: string }> }) {
@@ -466,8 +472,8 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
     const ends = selectedSlot.walkin_ends_at ? new Date(selectedSlot.walkin_ends_at) : null;
     
     if (starts && now < starts) {
-      const dateStr = starts.toLocaleDateString('ja-JP', { month: '2-digit', day: '2-digit' });
-      const timeStr = starts.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', hour12: false });
+      const dateStr = starts.toLocaleDateString('ja-JP', { month: '2-digit', day: '2-digit', timeZone: 'Asia/Tokyo' });
+      const timeStr = starts.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Tokyo' });
       return `当日券受付前（${dateStr} ${timeStr} 受付開始）`;
     }
     if (ends && now > ends) return '当日券受付終了';

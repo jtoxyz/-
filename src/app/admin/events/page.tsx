@@ -24,11 +24,12 @@ interface EventAdminItem {
 function formatDateTime(dateStr: string | null): string {
   if (!dateStr) return '未設定';
   const date = new Date(dateStr);
-  return date.toLocaleDateString('ja-JP', {
+  return date.toLocaleString('ja-JP', {
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
+    timeZone: 'Asia/Tokyo',
   });
 }
 
@@ -472,7 +473,7 @@ export default function AdminEventsPage() {
                   <tbody>
                     {[
                       { label: '企画名', value: restoreData.event?.title || '不明' },
-                      { label: 'バックアップ作成日時', value: restoreData.created_at ? new Date(restoreData.created_at).toLocaleString('ja-JP') : '不明' },
+                      { label: 'バックアップ作成日時', value: restoreData.created_at ? new Date(restoreData.created_at).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' }) : '不明' },
                       { label: 'バックアップ形式バージョン', value: restoreData.schema_version },
                       { label: 'バックアップ種別', value: restoreData.backup_type === 'full' ? '予約者情報あり' : '設定のみ' },
                       { label: '開催枠数', value: `${restoreData.event_slots?.length ?? 0} 枠` },
