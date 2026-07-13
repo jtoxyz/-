@@ -29,6 +29,34 @@ interface EventSlot {
   is_ticket_use_enabled: boolean;
   is_walkin_enabled: boolean;
   is_enabled: boolean;
+  remaining_reservation_slots?: number;
+  remaining_walkin_slots?: number;
+}
+
+/**
+ * Fallback: compute reservation/walkin status from remaining fields
+ * when the RPC does not return status columns.
+ */
+function computeReservationStatusFallback(slot: EventSlot): string {
+  if (!slot.is_enabled || !slot.is_reservation_enabled) return 'closed';
+  const now = new Date();
+  if (slot.reservation_starts_at && now < new Date(slot.reservation_starts_at)) return 'before_open';
+  if (slot.reservation_ends_at && now > new Date(slot.reservation_ends_at)) return 'closed';
+  if (slot.remaining_reservation_slots !== undefined && slot.remaining_reservation_slots !== null) {
+    if (slot.remaining_reservation_slots <= 0) return 'full';
+  }
+  return 'available';
+}
+
+function computeWalkinStatusFallback(slot: EventSlot): string {
+  if (!slot.is_enabled || !slot.is_walkin_enabled) return 'walkin_closed';
+  const now = new Date();
+  if (slot.walkin_starts_at && now < new Date(slot.walkin_starts_at)) return 'walkin_upcoming';
+  if (slot.walkin_ends_at && now > new Date(slot.walkin_ends_at)) return 'walkin_closed';
+  if (slot.remaining_walkin_slots !== undefined && slot.remaining_walkin_slots !== null) {
+    if (slot.remaining_walkin_slots <= 0) return 'walkin_full';
+  }
+  return 'walkin_available';
 }
 
 interface EventDetails {
@@ -125,7 +153,13 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
         // Fetch event slots
         const { data: slotsData } = await supabase.rpc('get_event_slots', { p_event_id: id });
         if (slotsData && Array.isArray(slotsData)) {
-          setSlots(slotsData);
+          // Fallback: if RPC does not return reservation_status/walkin_status, compute from remaining fields
+          const enrichedSlots = slotsData.map((slot: EventSlot) => ({
+            ...slot,
+            reservation_status: slot.reservation_status ?? computeReservationStatusFallback(slot),
+            walkin_status: slot.walkin_status ?? computeWalkinStatusFallback(slot),
+          }));
+          setSlots(enrichedSlots);
         }
       } catch (err) {
         console.error('Error fetching event details:', err);
@@ -517,8 +551,9 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
         return { text: '停止中', color: 'var(--color-danger)' };
       case 'closed':
       case 'walkin_closed':
-      default:
         return { text: '受付終了', color: 'var(--text-muted)' };
+      default:
+        return { text: '状態不明', color: 'var(--text-muted)' };
     }
   };
 
