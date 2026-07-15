@@ -27,6 +27,19 @@ function enhanceDisplay(root: ParentNode) {
 
   document.querySelectorAll<HTMLElement>('span, div').forEach((element) => {
     const text = element.textContent?.trim();
+
+    if (text === '開催枠') {
+      const slotName = element.nextElementSibling;
+      const slotDate = slotName?.nextElementSibling;
+
+      if (slotName instanceof HTMLElement) {
+        slotName.classList.add('ticket-slot-name-emphasis');
+      }
+      if (slotDate instanceof HTMLElement) {
+        slotDate.classList.add('ticket-slot-date-compact');
+      }
+    }
+
     if (text === '予約券 使用可能時間' || text === '当日券 使用可能時間') {
       const box = element.parentElement;
       if (!box) return;
@@ -37,6 +50,28 @@ function enhanceDisplay(root: ParentNode) {
       const time = element.nextElementSibling;
       if (time instanceof HTMLElement) {
         time.classList.add('ticket-use-window-time');
+
+        if (!time.dataset.splitApplied) {
+          const parts = (time.textContent ?? '').split('〜').map((part) => part.trim());
+          if (parts.length === 2) {
+            time.replaceChildren();
+
+            const start = document.createElement('span');
+            start.className = 'ticket-use-window-date-line';
+            start.textContent = parts[0];
+
+            const separator = document.createElement('span');
+            separator.className = 'ticket-use-window-separator';
+            separator.textContent = '〜';
+
+            const end = document.createElement('span');
+            end.className = 'ticket-use-window-date-line';
+            end.textContent = parts[1];
+
+            time.append(start, separator, end);
+            time.dataset.splitApplied = 'true';
+          }
+        }
       }
     }
   });
