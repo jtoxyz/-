@@ -64,6 +64,12 @@ export default function AdminNav() {
       >
         ➕ 新規企画作成
       </Link>
+      <Link
+        href="/admin/settings/student-number"
+        className={`admin-nav-link ${pathname === '/admin/settings/student-number' ? 'active' : ''}`}
+      >
+        🎓 学籍番号設定
+      </Link>
       {isReservationsPage && (
         <>
           <button
