@@ -15,6 +15,47 @@ interface CachedTicket {
   public_token: string;
   event_title: string;
   slot_label?: string | null;
+  slot_ticket_use_ends_at?: string | null;
+}
+
+function formatDeadline(dateStr: string): string {
+  const date = new Date(dateStr);
+  const datePart = date.toLocaleDateString('ja-JP', {
+    month: '2-digit',
+    day: '2-digit',
+    timeZone: 'Asia/Tokyo',
+  });
+  const weekday = new Intl.DateTimeFormat('ja-JP', {
+    weekday: 'short',
+    timeZone: 'Asia/Tokyo',
+  }).format(date);
+  const timePart = date.toLocaleTimeString('ja-JP', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'Asia/Tokyo',
+  });
+  return `${datePart}（${weekday}）${timePart}`;
+}
+
+function getDeadlineMessage(dateStr: string): { text: string; expired: boolean } {
+  const deadline = new Date(dateStr);
+  const now = new Date();
+  const diffMs = deadline.getTime() - now.getTime();
+
+  if (diffMs <= 0) {
+    return { text: `支払期限を過ぎています（${formatDeadline(dateStr)}まで）`, expired: true };
+  }
+
+  const remainingDays = Math.ceil(diffMs / (24 * 60 * 60 * 1000));
+  if (remainingDays <= 1) {
+    return { text: `支払期限は本日です（${formatDeadline(dateStr)}まで）`, expired: false };
+  }
+
+  return {
+    text: `支払期限まであと${remainingDays}日（${formatDeadline(dateStr)}まで）`,
+    expired: false,
+  };
 }
 
 export default function MyTicketsList() {
@@ -36,7 +77,6 @@ export default function MyTicketsList() {
           });
 
           if (error || !data || data.length === 0) {
-            // If ticket is not found (perhaps deleted or invalid), clean up cache
             if (!error) removeToken(token);
             return null;
           }
@@ -46,10 +86,6 @@ export default function MyTicketsList() {
 
         const fetchedTickets = await Promise.all(ticketFetches);
         const validTickets = fetchedTickets.filter((t: CachedTicket | null): t is CachedTicket => t !== null);
-        
-        // Filter out cancelled ones if we don't want to display them, or show them?
-        // Let's filter out cancelled tickets to keep user dashboard clean, or keep them.
-        // It's cleaner to only show 'reserved' or 'used' tickets.
         const activeTickets = validTickets.filter((t: CachedTicket) => t.status !== 'cancelled');
         setTickets(activeTickets);
       } catch (err) {
@@ -78,60 +114,83 @@ export default function MyTicketsList() {
       <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>
         このブラウザで予約したチケットです。タップしてチケット画面を表示できます。
       </p>
-      
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-        {tickets.map((ticket) => (
-          <Link
-            key={ticket.public_token}
-            href={`/tickets/${ticket.public_token}`}
-            style={{ display: 'block' }}
-          >
-            <div
-              style={{
-                background: 'var(--card-bg)',
-                border: '1px solid var(--card-border)',
-                borderRadius: 'var(--radius-md)',
-                padding: '12px 16px',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                cursor: 'pointer',
-                transition: 'all 0.2s',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = 'var(--color-primary)';
-                e.currentTarget.style.background = 'var(--card-bg)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = 'var(--card-border)';
-                e.currentTarget.style.background = 'var(--card-bg)';
-              }}
+        {tickets.map((ticket) => {
+          const deadline =
+            ticket.status === 'reserved' &&
+            ticket.ticket_type === 'reservation' &&
+            ticket.slot_ticket_use_ends_at
+              ? getDeadlineMessage(ticket.slot_ticket_use_ends_at)
+              : null;
+
+          return (
+            <Link
+              key={ticket.public_token}
+              href={`/tickets/${ticket.public_token}`}
+              style={{ display: 'block' }}
             >
-              <div>
-                <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-primary)', marginBottom: '2px' }}>
-                  {ticket.event_title}
-                </div>
-                {ticket.slot_label && (
-                  <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: '1px' }}>
-                    📅 {ticket.slot_label}
+              <div
+                style={{
+                  background: 'var(--card-bg)',
+                  border: '1px solid var(--card-border)',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '12px 16px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  gap: '12px',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--color-primary)';
+                  e.currentTarget.style.background = 'var(--card-bg)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--card-border)';
+                  e.currentTarget.style.background = 'var(--card-bg)';
+                }}
+              >
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-primary)', marginBottom: '2px' }}>
+                    {ticket.event_title}
                   </div>
-                )}
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                  氏名: {ticket.student_name} / 学籍番号: {ticket.student_number}
+                  {ticket.slot_label && (
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: '1px' }}>
+                      📅 {ticket.slot_label}
+                    </div>
+                  )}
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                    氏名: {ticket.student_name} / 学籍番号: {ticket.student_number}
+                  </div>
+                  {deadline && (
+                    <div
+                      style={{
+                        marginTop: '8px',
+                        fontSize: '0.76rem',
+                        lineHeight: 1.5,
+                        fontWeight: 700,
+                        color: deadline.expired ? 'var(--color-danger)' : 'var(--color-warning)',
+                      }}
+                    >
+                      💴 {deadline.text}
+                    </div>
+                  )}
+                </div>
+                <div style={{ flexShrink: 0 }}>
+                  {ticket.status === 'used' ? (
+                    <span className="badge badge-warning" style={{ fontSize: '0.7rem' }}>使用済み</span>
+                  ) : ticket.ticket_type === 'walkin' ? (
+                    <span className="badge" style={{ fontSize: '0.7rem', backgroundColor: 'var(--color-warning-bg)', color: 'var(--color-warning)', borderColor: 'var(--color-warning-border)' }}>当日券</span>
+                  ) : (
+                    <span className="badge" style={{ fontSize: '0.7rem', backgroundColor: 'var(--color-primary-glow)', color: 'var(--color-primary)', borderColor: 'var(--card-border-hover)' }}>予約券</span>
+                  )}
                 </div>
               </div>
-              <div>
-                {ticket.status === 'used' ? (
-                  <span className="badge badge-warning" style={{ fontSize: '0.7rem' }}>使用済み</span>
-                ) : ticket.ticket_type === 'walkin' ? (
-                  <span className="badge" style={{ fontSize: '0.7rem', backgroundColor: 'var(--color-warning-bg)', color: 'var(--color-warning)', borderColor: 'var(--color-warning-border)' }}>当日券</span>
-                ) : (
-                  <span className="badge" style={{ fontSize: '0.7rem', backgroundColor: 'var(--color-primary-glow)', color: 'var(--color-primary)', borderColor: 'var(--card-border-hover)' }}>予約券</span>
-                )}
-              </div>
-            </div>
-          </Link>
-        ))}
+            </Link>
+          );
+        })}
       </div>
     </div>
   );
