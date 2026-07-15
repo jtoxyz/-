@@ -18,26 +18,34 @@ export default function AdminNav() {
     }
   };
 
-  const handleCopyReservationNames = async () => {
+  const getActiveReservationColumnValues = (columnIndex: number): string[] => {
     const rows = Array.from(
       document.querySelectorAll<HTMLTableRowElement>('.reservations-table-desktop tbody tr')
     );
 
-    const names = rows
+    return rows
       .filter((row) => row.style.opacity !== '0.4')
-      .map((row) => row.querySelectorAll<HTMLTableCellElement>('td')[2]?.textContent?.trim() || '')
+      .map((row) => row.querySelectorAll<HTMLTableCellElement>('td')[columnIndex]?.textContent?.trim() || '')
       .filter(Boolean);
+  };
 
-    if (names.length === 0) {
-      alert('コピーできる有効な予約者がいません。');
+  const copyReservationColumn = async (
+    columnIndex: number,
+    emptyMessage: string,
+    successLabel: string
+  ) => {
+    const values = getActiveReservationColumnValues(columnIndex);
+
+    if (values.length === 0) {
+      alert(emptyMessage);
       return;
     }
 
     try {
-      await navigator.clipboard.writeText(names.join('\n'));
-      alert(`${names.length}名の氏名をクリップボードにコピーしました。`);
+      await navigator.clipboard.writeText(values.join('\n'));
+      alert(`${values.length}件の${successLabel}をクリップボードにコピーしました。`);
     } catch (error) {
-      console.error('氏名のコピーに失敗しました:', error);
+      console.error(`${successLabel}のコピーに失敗しました:`, error);
       alert('クリップボードへのコピーに失敗しました。');
     }
   };
@@ -57,19 +65,34 @@ export default function AdminNav() {
         ➕ 新規企画作成
       </Link>
       {isReservationsPage && (
-        <button
-          type="button"
-          onClick={handleCopyReservationNames}
-          className="admin-nav-link"
-          style={{
-            border: 'none',
-            cursor: 'pointer',
-            background: 'var(--color-primary-glow)',
-            color: 'var(--color-primary)',
-          }}
-        >
-          📋 氏名のみコピー
-        </button>
+        <>
+          <button
+            type="button"
+            onClick={() => copyReservationColumn(2, 'コピーできる有効な予約者がいません。', '氏名')}
+            className="admin-nav-link"
+            style={{
+              border: 'none',
+              cursor: 'pointer',
+              background: 'var(--color-primary-glow)',
+              color: 'var(--color-primary)',
+            }}
+          >
+            📋 氏名のみコピー
+          </button>
+          <button
+            type="button"
+            onClick={() => copyReservationColumn(3, 'コピーできる有効な学籍番号がありません。', '学籍番号')}
+            className="admin-nav-link"
+            style={{
+              border: 'none',
+              cursor: 'pointer',
+              background: 'var(--color-primary-glow)',
+              color: 'var(--color-primary)',
+            }}
+          >
+            🎓 学籍番号のみコピー
+          </button>
+        </>
       )}
       <button
         onClick={handleLogout}
