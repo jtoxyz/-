@@ -16,6 +16,8 @@ interface CachedTicket {
   event_title: string;
   slot_label?: string | null;
   slot_ticket_use_ends_at?: string | null;
+  slot_reservation_use_ends_at?: string | null;
+  use_ends_at?: string | null;
 }
 
 function formatDeadline(dateStr: string): string {
@@ -38,22 +40,36 @@ function formatDeadline(dateStr: string): string {
   return `${datePart}（${weekday}）${timePart}`;
 }
 
-function getDeadlineMessage(dateStr: string): { text: string; expired: boolean } {
+function getDeadlineInfo(dateStr: string): {
+  headline: string;
+  detail: string;
+  expired: boolean;
+} {
   const deadline = new Date(dateStr);
   const now = new Date();
   const diffMs = deadline.getTime() - now.getTime();
+  const detail = `${formatDeadline(dateStr)}までにお支払いください`;
 
   if (diffMs <= 0) {
-    return { text: `支払期限を過ぎています（${formatDeadline(dateStr)}まで）`, expired: true };
+    return {
+      headline: '支払期限を過ぎています',
+      detail,
+      expired: true,
+    };
   }
 
   const remainingDays = Math.ceil(diffMs / (24 * 60 * 60 * 1000));
   if (remainingDays <= 1) {
-    return { text: `支払期限は本日です（${formatDeadline(dateStr)}まで）`, expired: false };
+    return {
+      headline: '支払期限は本日です',
+      detail,
+      expired: false,
+    };
   }
 
   return {
-    text: `支払期限まであと${remainingDays}日（${formatDeadline(dateStr)}まで）`,
+    headline: `支払期限まであと${remainingDays}日`,
+    detail,
     expired: false,
   };
 }
@@ -117,11 +133,17 @@ export default function MyTicketsList() {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         {tickets.map((ticket) => {
+          const paymentDeadline =
+            ticket.slot_ticket_use_ends_at ||
+            ticket.slot_reservation_use_ends_at ||
+            ticket.use_ends_at ||
+            null;
+
           const deadline =
             ticket.status === 'reserved' &&
             ticket.ticket_type === 'reservation' &&
-            ticket.slot_ticket_use_ends_at
-              ? getDeadlineMessage(ticket.slot_ticket_use_ends_at)
+            paymentDeadline
+              ? getDeadlineInfo(paymentDeadline)
               : null;
 
           return (
@@ -167,14 +189,24 @@ export default function MyTicketsList() {
                   {deadline && (
                     <div
                       style={{
-                        marginTop: '8px',
-                        fontSize: '0.76rem',
-                        lineHeight: 1.5,
-                        fontWeight: 700,
-                        color: deadline.expired ? 'var(--color-danger)' : 'var(--color-warning)',
+                        marginTop: '9px',
+                        paddingTop: '8px',
+                        borderTop: '1px solid var(--card-border)',
+                        lineHeight: 1.45,
                       }}
                     >
-                      💴 {deadline.text}
+                      <div
+                        style={{
+                          fontSize: '0.82rem',
+                          fontWeight: 800,
+                          color: deadline.expired ? 'var(--color-danger)' : 'var(--color-warning)',
+                        }}
+                      >
+                        ⏰ {deadline.headline}
+                      </div>
+                      <div style={{ marginTop: '2px', fontSize: '0.73rem', color: 'var(--text-secondary)' }}>
+                        {deadline.detail}
+                      </div>
                     </div>
                   )}
                 </div>
