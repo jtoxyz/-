@@ -5,6 +5,93 @@ import { useEffect } from 'react';
 const DATE_TIME_PATTERN = /(\d{2}\/\d{2})\s+(\d{2}:\d{2})\s+\(([^)]+)\)/g;
 const FULL_DATE_TIME_PATTERN = /(\d{4}\/\d{2}\/\d{2})\s+(\d{2}:\d{2}(?::\d{2})?)\s+\(([^)]+)\)/g;
 
+function getUnpaidReservationEmails(): string[] {
+  const emails = new Set<string>();
+
+  document
+    .querySelectorAll<HTMLTableRowElement>('.reservations-table-desktop tbody tr')
+    .forEach((row) => {
+      const cells = row.querySelectorAll<HTMLTableCellElement>('td');
+      if (cells.length < 7) return;
+
+      const ticketType = cells[1].textContent?.trim() ?? '';
+      const email = cells[5].textContent?.trim() ?? '';
+      const status = cells[6].textContent?.trim() ?? '';
+
+      if (
+        ticketType.includes('予約券') &&
+        status.includes('有効') &&
+        /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+      ) {
+        emails.add(email);
+      }
+    });
+
+  return Array.from(emails);
+}
+
+async function copyText(text: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.select();
+  const copied = document.execCommand('copy');
+  textarea.remove();
+
+  if (!copied) throw new Error('コピーに失敗しました');
+}
+
+function addUnpaidEmailCopyButton() {
+  if (!/^\/admin\/events\/[^/]+\/reservations\/?$/.test(window.location.pathname)) return;
+  if (document.getElementById('copy-unpaid-reservation-emails')) return;
+
+  const excelButton = Array.from(document.querySelectorAll<HTMLButtonElement>('button')).find((button) =>
+    button.textContent?.includes('Excel出力')
+  );
+  const buttonArea = excelButton?.parentElement;
+  if (!buttonArea) return;
+
+  const button = document.createElement('button');
+  button.id = 'copy-unpaid-reservation-emails';
+  button.type = 'button';
+  button.className = 'btn btn-secondary';
+  button.style.padding = '10px 16px';
+  button.style.minWidth = '210px';
+
+  const refreshLabel = () => {
+    const count = getUnpaidReservationEmails().length;
+    button.textContent = `📧 未払い者メール（BCC）コピー：${count}人`;
+    button.disabled = count === 0;
+  };
+
+  button.addEventListener('click', async () => {
+    const emails = getUnpaidReservationEmails();
+    if (emails.length === 0) {
+      window.alert('未払いの予約者は見つかりませんでした。');
+      refreshLabel();
+      return;
+    }
+
+    try {
+      await copyText(emails.join(', '));
+      window.alert(`${emails.length}人分のメールアドレスをBCC用にコピーしました。\nGmailのBCC欄へ貼り付けてください。`);
+    } catch (error) {
+      console.error('Failed to copy unpaid reservation emails:', error);
+      window.alert('メールアドレスのコピーに失敗しました。ブラウザの権限をご確認ください。');
+    }
+  });
+
+  buttonArea.insertBefore(button, excelButton ?? null);
+  refreshLabel();
+}
+
 function enhanceDisplay(root: ParentNode) {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   const textNodes: Text[] = [];
@@ -75,6 +162,8 @@ function enhanceDisplay(root: ParentNode) {
       }
     }
   });
+
+  addUnpaidEmailCopyButton();
 }
 
 export default function DisplayEnhancer() {
