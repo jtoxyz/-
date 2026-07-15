@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import Link from 'next/link';
 import ThemeSwitcher from '@/components/ThemeSwitcher';
+import DisplayEnhancer from '@/components/DisplayEnhancer';
 
 export const metadata: Metadata = {
   title: '大学委員会 参加型企画予約システム',
@@ -39,6 +40,7 @@ export default function RootLayout({
         />
       </head>
       <body>
+        <DisplayEnhancer />
         <div className="app-container">
           <header className="header">
             <div className="header-container">
