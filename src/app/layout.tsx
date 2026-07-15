@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import './display-enhancements.css';
 import Link from 'next/link';
 import ThemeSwitcher from '@/components/ThemeSwitcher';
 import DisplayEnhancer from '@/components/DisplayEnhancer';
