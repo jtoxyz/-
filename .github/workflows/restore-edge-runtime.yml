@@ -1,0 +1,52 @@
+name: Restore required Edge Runtime
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  restore:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Restore runtime declarations
+        shell: python
+        run: |
+          from pathlib import Path
+
+          paths = [
+              'src/app/page.tsx',
+              'src/app/events/[id]/page.tsx',
+              'src/app/tickets/[publicToken]/page.tsx',
+              'src/app/admin/events/[id]/page.tsx',
+              'src/app/admin/events/[id]/reservations/page.tsx',
+              'src/app/admin/events/[id]/pre-registrations/page.tsx',
+          ]
+
+          marker = "export const runtime = 'edge';"
+          for raw in paths:
+              path = Path(raw)
+              text = path.read_text(encoding='utf-8')
+              if marker in text:
+                  continue
+              if text.startswith("'use client';"):
+                  text = text.replace("'use client';", "'use client';\n\n" + marker, 1)
+              else:
+                  text = marker + "\n\n" + text
+              path.write_text(text, encoding='utf-8')
+
+          workflow = Path('.github/workflows/restore-edge-runtime.yml')
+          workflow.unlink()
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Restore required Cloudflare Edge Runtime" || exit 0
+          git push
