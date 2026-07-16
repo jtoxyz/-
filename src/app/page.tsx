@@ -1,3 +1,5 @@
+export const runtime = 'edge';
+
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import MyTicketsList from '@/components/MyTicketsList';
