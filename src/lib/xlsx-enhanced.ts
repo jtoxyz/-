@@ -1,23 +1,9 @@
-// Readability-focused wrapper around SheetJS Community Edition.
-// It keeps the existing export API while applying sensible widths, filters,
-// row heights and print settings to every generated worksheet.
-// @ts-expect-error The package ships the ESM runtime without a matching declaration for this subpath.
-import * as BaseXLSX from 'xlsx/xlsx.mjs';
+type Worksheet = {
+  rows: unknown[][];
+};
 
-const baseUtils = BaseXLSX.utils;
-
-type CellAddress = { r: number; c: number };
-type CellRange = { s: CellAddress; e: CellAddress };
-
-type Worksheet = Record<string, unknown> & {
-  ['!ref']?: string;
-  ['!cols']?: Array<{ wch: number }>;
-  ['!rows']?: Array<{ hpt: number }>;
-  ['!autofilter']?: { ref: string };
-  ['!freeze']?: { xSplit: number; ySplit: number; topLeftCell: string; activePane: string; state: string };
-  ['!margins']?: Record<string, number>;
-  ['!pageSetup']?: Record<string, unknown>;
-  ['!merges']?: CellRange[];
+type Workbook = {
+  sheets: Array<{ name: string; sheet: Worksheet }>;
 };
 
 const japaneseCollator = new Intl.Collator('ja', {
@@ -39,36 +25,38 @@ function formatPrintDate(): string {
   }).format(new Date());
 }
 
-function isReservationExport(data: unknown[][]): boolean {
-  if (data.length === 0 || !Array.isArray(data[0])) return false;
-  const headers = data[0].map((value) => String(value ?? '').trim());
-  return headers.includes('企画名') && headers.includes('氏名') && headers.includes('学籍番号') && headers.includes('開催枠');
+function escapeHtml(value: unknown): string {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
 }
 
-function buildReservationSheetData(data: unknown[][]): {
-  rows: unknown[][];
-  headerRow: number;
-  merges: CellRange[];
-} {
-  const sourceHeaders = data[0].map((value) => String(value ?? '').trim());
-  const eventIndex = sourceHeaders.indexOf('企画名');
-  const nameIndex = sourceHeaders.indexOf('氏名');
-  const studentNumberIndex = sourceHeaders.indexOf('学籍番号');
-  const slotIndex = sourceHeaders.indexOf('開催枠');
+function buildReservationRows(data: unknown[][]): unknown[][] {
+  const headers = data[0].map((value) => String(value ?? '').trim());
+  const eventIndex = headers.indexOf('企画名');
+  const nameIndex = headers.indexOf('氏名');
+  const studentNumberIndex = headers.indexOf('学籍番号');
+  const slotIndex = headers.indexOf('開催枠');
 
-  const sourceRows = data.slice(1).filter((row) => Array.isArray(row));
+  if (eventIndex < 0 || nameIndex < 0 || studentNumberIndex < 0 || slotIndex < 0) {
+    return data;
+  }
+
+  const sourceRows = data.slice(1);
   const eventTitle = String(sourceRows[0]?.[eventIndex] ?? '予約者').trim() || '予約者';
-
   const sortedRows = [...sourceRows].sort((left, right) => {
-    const leftSlot = String(left?.[slotIndex] ?? '');
-    const rightSlot = String(right?.[slotIndex] ?? '');
-    const slotComparison = japaneseCollator.compare(leftSlot, rightSlot);
-    if (slotComparison !== 0) return slotComparison;
+    const slotResult = japaneseCollator.compare(
+      String(left?.[slotIndex] ?? ''),
+      String(right?.[slotIndex] ?? ''),
+    );
+    if (slotResult !== 0) return slotResult;
 
     const leftName = String(left?.[nameIndex] ?? '').replace(/[\s　]+/g, ' ').trim();
     const rightName = String(right?.[nameIndex] ?? '').replace(/[\s　]+/g, ' ').trim();
-    const nameComparison = japaneseCollator.compare(leftName, rightName);
-    if (nameComparison !== 0) return nameComparison;
+    const nameResult = japaneseCollator.compare(leftName, rightName);
+    if (nameResult !== 0) return nameResult;
 
     return japaneseCollator.compare(
       String(left?.[studentNumberIndex] ?? ''),
@@ -76,117 +64,67 @@ function buildReservationSheetData(data: unknown[][]): {
     );
   });
 
-  const title = `${eventTitle} 受付用予約者リスト（印刷日時: ${formatPrintDate()}）`;
-  const outputHeaders = ['No.', '氏名', '学籍番号', '開催枠', '受付チェック欄（当日はここに記入してください）'];
-  const outputRows = sortedRows.map((row, index) => [
-    index + 1,
-    row?.[nameIndex] ?? '',
-    row?.[studentNumberIndex] ?? '',
-    row?.[slotIndex] ?? '-',
-    '',
-  ]);
-
-  return {
-    rows: [[title, '', '', '', ''], outputHeaders, ...outputRows],
-    headerRow: 1,
-    merges: [{ s: { r: 0, c: 0 }, e: { r: 0, c: 4 } }],
-  };
-}
-
-function improveWorksheet(
-  worksheet: Worksheet,
-  options?: { headerRow?: number; merges?: CellRange[]; reservationLayout?: boolean },
-): Worksheet {
-  const range = worksheet['!ref'];
-  if (!range) return worksheet;
-
-  const decoded = baseUtils.decode_range(range);
-  const columnCount = decoded.e.c - decoded.s.c + 1;
-  const rowCount = decoded.e.r - decoded.s.r + 1;
-  const headerRow = options?.headerRow ?? decoded.s.r;
-
-  const preferredWidths = options?.reservationLayout
-    ? [7, 22, 16, 18, 44]
-    : [24, 18, 14, 16, 14, 14, 22, 22, 18, 18];
-
-  worksheet['!cols'] = Array.from({ length: columnCount }, (_, index) => ({
-    wch: preferredWidths[index] ?? 18,
-  }));
-
-  worksheet['!rows'] = Array.from({ length: rowCount }, (_, index) => ({
-    hpt: options?.reservationLayout
-      ? index === 0
-        ? 30
-        : index === headerRow
-          ? 28
-          : 22
-      : index === headerRow
-        ? 28
-        : 22,
-  }));
-
-  worksheet['!autofilter'] = {
-    ref: baseUtils.encode_range({
-      s: { r: headerRow, c: decoded.s.c },
-      e: { r: headerRow, c: decoded.e.c },
-    }),
-  };
-
-  worksheet['!freeze'] = {
-    xSplit: 0,
-    ySplit: headerRow + 1,
-    topLeftCell: `A${headerRow + 2}`,
-    activePane: 'bottomLeft',
-    state: 'frozen',
-  };
-
-  worksheet['!margins'] = {
-    left: 0.3,
-    right: 0.3,
-    top: 0.5,
-    bottom: 0.5,
-    header: 0.2,
-    footer: 0.2,
-  };
-
-  worksheet['!pageSetup'] = {
-    orientation: options?.reservationLayout || columnCount >= 6 ? 'landscape' : 'portrait',
-    fitToWidth: 1,
-    fitToHeight: 0,
-    paperSize: 9,
-  };
-
-  if (options?.merges?.length) {
-    worksheet['!merges'] = options.merges;
-  }
-
-  return worksheet;
+  return [
+    [`${eventTitle} 受付用予約者リスト（印刷日時: ${formatPrintDate()}）`],
+    ['No.', '氏名', '学籍番号', '開催枠', '受付チェック欄（当日はここに記入してください）'],
+    ...sortedRows.map((row, index) => [
+      index + 1,
+      row?.[nameIndex] ?? '',
+      row?.[studentNumberIndex] ?? '',
+      row?.[slotIndex] ?? '-',
+      '',
+    ]),
+  ];
 }
 
 export const utils = {
-  ...baseUtils,
-  aoa_to_sheet(data: unknown[][], options?: Record<string, unknown>) {
-    if (isReservationExport(data)) {
-      const reservationSheet = buildReservationSheetData(data);
-      return improveWorksheet(
-        baseUtils.aoa_to_sheet(reservationSheet.rows, options) as Worksheet,
-        {
-          headerRow: reservationSheet.headerRow,
-          merges: reservationSheet.merges,
-          reservationLayout: true,
-        },
-      );
-    }
-
-    return improveWorksheet(baseUtils.aoa_to_sheet(data, options) as Worksheet);
+  aoa_to_sheet(data: unknown[][]): Worksheet {
+    return { rows: buildReservationRows(data) };
   },
-  json_to_sheet(data: unknown[], options?: Record<string, unknown>) {
-    return improveWorksheet(baseUtils.json_to_sheet(data, options) as Worksheet);
+  book_new(): Workbook {
+    return { sheets: [] };
+  },
+  book_append_sheet(workbook: Workbook, sheet: Worksheet, name: string): void {
+    workbook.sheets.push({ name, sheet });
   },
 };
 
-export const writeFile = BaseXLSX.writeFile;
-export const writeFileXLSX = BaseXLSX.writeFileXLSX;
-export const write = BaseXLSX.write;
-export const read = BaseXLSX.read;
-export const readFile = BaseXLSX.readFile;
+export function writeFile(workbook: Workbook, requestedFileName: string): void {
+  const sheet = workbook.sheets[0]?.sheet;
+  if (!sheet || typeof document === 'undefined') return;
+
+  const bodyRows = sheet.rows.map((row, rowIndex) => {
+    if (rowIndex === 0) {
+      return `<tr><th colspan="5" class="title">${escapeHtml(row[0])}</th></tr>`;
+    }
+
+    const tag = rowIndex === 1 ? 'th' : 'td';
+    return `<tr>${row.map((cell) => `<${tag}>${escapeHtml(cell)}</${tag}>`).join('')}</tr>`;
+  }).join('');
+
+  const html = `<!doctype html><html><head><meta charset="utf-8"><style>
+    @page { size: A4 landscape; margin: 10mm; }
+    body { font-family: "Yu Gothic", "Meiryo", sans-serif; }
+    table { border-collapse: collapse; width: 100%; table-layout: fixed; }
+    th, td { border: 1px solid #000; padding: 7px 8px; vertical-align: middle; }
+    th { background: #d9e2f3; font-weight: 700; text-align: center; }
+    .title { background: #ffffff; font-size: 16pt; text-align: left; padding: 10px 4px; }
+    tr td:nth-child(1) { width: 7%; text-align: center; }
+    tr td:nth-child(2) { width: 22%; }
+    tr td:nth-child(3) { width: 16%; text-align: center; mso-number-format:"\\@"; }
+    tr td:nth-child(4) { width: 18%; text-align: center; }
+    tr td:nth-child(5) { width: 37%; height: 26px; }
+  </style></head><body><table>${bodyRows}</table></body></html>`;
+
+  const blob = new Blob(['\ufeff', html], {
+    type: 'application/vnd.ms-excel;charset=utf-8',
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = requestedFileName.replace(/\.xlsx$/i, '.xls');
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
