@@ -1,0 +1,63 @@
+name: Cleanup Worker Size
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/cleanup-worker-size.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Remove unnecessary Edge Runtime declarations
+        shell: bash
+        run: |
+          files=(
+            'src/app/page.tsx'
+            'src/app/events/[id]/page.tsx'
+            'src/app/tickets/[publicToken]/page.tsx'
+            'src/app/admin/events/[id]/page.tsx'
+            'src/app/admin/events/[id]/reservations/page.tsx'
+            'src/app/admin/events/[id]/pre-registrations/page.tsx'
+            'src/app/admin/settings/student-number/page.tsx'
+          )
+          for file in "${files[@]}"; do
+            sed -i "/^export const runtime = 'edge';$/d" "$file"
+          done
+
+      - name: Remove unused packages and legacy exporter
+        shell: bash
+        run: |
+          npm uninstall xlsx @types/marked
+          rm -f src/lib/xlsx-enhanced.ts
+
+      - name: Remove one-time workflow
+        run: rm -f .github/workflows/cleanup-worker-size.yml
+
+      - name: Commit cleanup
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          if git diff --cached --quiet; then
+            echo 'No changes to commit.'
+            exit 0
+          fi
+          git commit -m 'Reduce Cloudflare Worker bundle size'
+          git push origin main
