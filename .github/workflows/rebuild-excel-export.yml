@@ -1,0 +1,175 @@
+name: Rebuild reservation Excel export
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/rebuild-excel-export.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Replace Excel export implementation
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/app/admin/events/[id]/reservations/page.tsx')
+          text = path.read_text(encoding='utf-8')
+
+          text = text.replace("import * as XLSX from 'xlsx';\n", '')
+
+          start = text.index('  // Excel Exporter')
+          end = text.index('\n  if (authLoading || loading)', start)
+
+          replacement = r'''  // Excel Exporter (browser-only, isolated from reservation processing)
+  const handleExportExcel = () => {
+    try {
+      const collator = new Intl.Collator('ja', {
+        numeric: true,
+        sensitivity: 'base',
+        ignorePunctuation: true,
+      });
+
+      const activeReservations = reservations
+        .filter((res) => res.status !== 'cancelled')
+        .sort((left, right) => {
+          const slotResult = collator.compare(
+            left.event_slots?.label || '',
+            right.event_slots?.label || '',
+          );
+          if (slotResult !== 0) return slotResult;
+
+          const leftName = (left.student_name || '').replace(/[\s　]+/g, ' ').trim();
+          const rightName = (right.student_name || '').replace(/[\s　]+/g, ' ').trim();
+          const nameResult = collator.compare(leftName, rightName);
+          if (nameResult !== 0) return nameResult;
+
+          return collator.compare(left.student_number || '', right.student_number || '');
+        });
+
+      if (activeReservations.length === 0) {
+        alert('エクスポートする有効な予約データがありません。');
+        return;
+      }
+
+      const escapeHtml = (value: unknown) => String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;');
+
+      const printDate = new Intl.DateTimeFormat('ja-JP', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+        timeZone: 'Asia/Tokyo',
+      }).format(new Date());
+
+      const rows = activeReservations.map((res, index) => `
+        <tr>
+          <td class="no">${index + 1}</td>
+          <td>${escapeHtml(res.student_name)}</td>
+          <td class="student-number">${escapeHtml(res.student_number)}</td>
+          <td class="slot">${escapeHtml(res.event_slots?.label || '-')}</td>
+          <td class="check"></td>
+        </tr>
+      `).join('');
+
+      const html = `<!doctype html>
+      <html xmlns:o="urn:schemas-microsoft-com:office:office"
+            xmlns:x="urn:schemas-microsoft-com:office:excel"
+            xmlns="http://www.w3.org/TR/REC-html40">
+        <head>
+          <meta charset="utf-8">
+          <!--[if gte mso 9]><xml>
+            <x:ExcelWorkbook>
+              <x:ExcelWorksheets>
+                <x:ExcelWorksheet>
+                  <x:Name>受付名簿</x:Name>
+                  <x:WorksheetOptions>
+                    <x:Selected/>
+                    <x:FreezePanes/>
+                    <x:FrozenNoSplit/>
+                    <x:SplitHorizontal>2</x:SplitHorizontal>
+                    <x:TopRowBottomPane>2</x:TopRowBottomPane>
+                    <x:ProtectContents>False</x:ProtectContents>
+                    <x:ProtectObjects>False</x:ProtectObjects>
+                    <x:ProtectScenarios>False</x:ProtectScenarios>
+                  </x:WorksheetOptions>
+                </x:ExcelWorksheet>
+              </x:ExcelWorksheets>
+            </x:ExcelWorkbook>
+          </xml><![endif]-->
+          <style>
+            @page { size: A4 landscape; margin: 10mm; }
+            body { font-family: "Yu Gothic", "Meiryo", sans-serif; }
+            table { border-collapse: collapse; table-layout: fixed; width: 100%; }
+            th, td { border: 1px solid #000; padding: 7px 8px; vertical-align: middle; }
+            .title { font-size: 16pt; font-weight: 700; text-align: left; background: #fff; height: 30px; }
+            .header th { background: #d9e2f3; font-weight: 700; text-align: center; height: 28px; }
+            .no { width: 7%; text-align: center; }
+            .name { width: 22%; }
+            .student-number { width: 16%; text-align: center; mso-number-format:"\\@"; }
+            .slot { width: 18%; text-align: center; }
+            .check { width: 37%; height: 26px; }
+          </style>
+        </head>
+        <body>
+          <table>
+            <tr><th colspan="5" class="title">${escapeHtml(eventTitle)} 受付用予約者リスト（印刷日時: ${escapeHtml(printDate)}）</th></tr>
+            <tr class="header">
+              <th class="no">No.</th>
+              <th class="name">氏名</th>
+              <th>学籍番号</th>
+              <th>開催枠</th>
+              <th>受付チェック欄（当日はここに記入してください）</th>
+            </tr>
+            ${rows}
+          </table>
+        </body>
+      </html>`;
+
+      const blob = new Blob(['\ufeff', html], {
+        type: 'application/vnd.ms-excel;charset=utf-8',
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const date = new Intl.DateTimeFormat('sv-SE', {
+        timeZone: 'Asia/Tokyo',
+      }).format(new Date());
+      const safeTitle = eventTitle.replace(/[\\/:*?"<>|\s]+/g, '_');
+
+      link.href = url;
+      link.download = `受付名簿_${safeTitle}_${date}.xls`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (exportError) {
+      console.error('Excel export failed:', exportError);
+      alert('Excel出力に失敗しました。予約データやサイト本体には影響ありません。');
+    }
+  };
+'''
+
+          path.write_text(text[:start] + replacement + text[end:], encoding='utf-8')
+          PY
+      - name: Remove one-time workflow
+        run: rm .github/workflows/rebuild-excel-export.yml
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/app/admin/events/'[id]'/reservations/page.tsx .github/workflows/rebuild-excel-export.yml
+          git commit -m "Rebuild reservation Excel export in page"
+          git push
