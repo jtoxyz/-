@@ -173,3 +173,5 @@ jobs:
           git add src/app/admin/events/'[id]'/reservations/page.tsx .github/workflows/rebuild-excel-export.yml
           git commit -m "Rebuild reservation Excel export in page"
           git push
+
+# retrigger
