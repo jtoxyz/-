@@ -1,4 +1,7 @@
 /**
+ * Client-side ticket cache utilities.
+ * Handles saving and retrieving public tokens from localStorage and document.cookie.
+ * This is used solely to list "already reserved tickets" on the home page for user convenience.
  * [重要度: 高]
  * 利用者が取得済みの予約券・当日券を再表示できるよう、公開トークンを端末内へ保存する補助処理。
  * これは表示上の利便性のためのキャッシュであり、予約の成立判定や本人確認そのものには使用しないこと。
@@ -38,6 +41,7 @@ export function getSavedTokens(): string[] {
 
   let tokens: string[] = [];
 
+  // Try localStorage
   // [重要度: 中]
   // 通常は容量が大きく扱いやすいlocalStorageを優先して読み込む。
   try {
@@ -49,6 +53,7 @@ export function getSavedTokens(): string[] {
     console.error('Error reading localStorage ticket cache:', e);
   }
 
+  // Try Cookies if empty
   // [重要度: 中]
   // localStorageにデータがない場合、Cookieに残っているトークンを復元する。
   if (tokens.length === 0) {
@@ -62,6 +67,7 @@ export function getSavedTokens(): string[] {
     }
   }
 
+  // Ensure it is always an array of unique strings
   // [重要度: 高]
   // 不正な型・空文字・重複トークンを除去し、後続のチケット取得処理へ安全な配列だけを渡す。
   if (!Array.isArray(tokens)) {
@@ -80,6 +86,7 @@ export function saveToken(token: string) {
   if (!tokens.includes(token)) {
     tokens.push(token);
     
+    // Save to localStorage
     // [重要度: 中]
     // 主保存先としてlocalStorageを更新する。失敗してもCookie保存は続行する。
     try {
@@ -88,6 +95,7 @@ export function saveToken(token: string) {
       console.error('Failed to save to localStorage:', e);
     }
 
+    // Save to Cookie
     // [重要度: 中]
     // localStorageが利用できない環境に備え、同じ内容をCookieにも保存する。
     try {
@@ -107,6 +115,7 @@ export function removeToken(token: string) {
   let tokens = getSavedTokens();
   tokens = tokens.filter((t) => t !== token);
 
+  // Update localStorage
   // [重要度: 中]
   // localStorage側の一覧を更新する。
   try {
@@ -115,6 +124,7 @@ export function removeToken(token: string) {
     console.error('Failed to update localStorage cache:', e);
   }
 
+  // Update Cookie
   // [重要度: 中]
   // Cookie側も同じ内容へ更新し、保存先の不一致を防ぐ。
   try {
