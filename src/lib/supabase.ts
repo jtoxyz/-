@@ -12,6 +12,8 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 /**
+ * Creates a Supabase client with the service role key.
+ * This should ONLY be called on the server side (Route Handlers, Server Actions, Pages Functions).
  * [重要度: 最高]
  * サーバー側の管理処理専用として、Service Roleキーを使うSupabaseクライアントを生成する。
  * Service RoleキーはRLSを回避できる強い権限を持つため、ブラウザ側のコードから絶対に呼び出さないこと。
