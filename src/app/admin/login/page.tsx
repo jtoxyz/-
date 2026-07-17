@@ -21,6 +21,7 @@ export default function AdminLoginPage() {
     setLoading(true);
 
     try {
+      // 1. Sign in with email and password
       // [重要度: 最高]
       // 入力されたメールアドレスとパスワードでSupabase Authへログインする。
       // ここでは本人認証のみを行い、管理者権限の有無はまだ確定していない。
@@ -43,6 +44,7 @@ export default function AdminLoginPage() {
         return;
       }
 
+      // 2. Verify if user is an admin by querying the admin_users table
       // [重要度: 最高]
       // 認証済みユーザーのIDがadmin_usersテーブルに登録されているか確認する。
       // この照合が管理画面への最終的な権限判定になるため、テーブル名・user_id条件を変更すると
@@ -67,6 +69,7 @@ export default function AdminLoginPage() {
       if (!adminData) {
         setError('このアカウントには管理者権限がありません。');
 
+        // Sign out immediately to clear session
         // [重要度: 最高]
         // 認証自体が成功していても管理者登録がなければセッションを破棄する。
         // このログアウトを削除すると、権限のない認証セッションが端末に残る可能性がある。
@@ -75,6 +78,7 @@ export default function AdminLoginPage() {
         return;
       }
 
+      // Success: Redirect to admin dashboard
       // [重要度: 高]
       // 認証と管理者確認の両方が成功した場合だけ、管理画面の企画一覧へ移動する。
       router.push('/admin/events');
