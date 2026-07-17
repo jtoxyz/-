@@ -3,8 +3,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { Palette, Check } from 'lucide-react';
 
+// [重要度: 低]
+// 利用可能なテーマIDを型で限定し、想定外の文字列がテーマ設定へ入ることを防ぐ。
 type Theme = 'white' | 'dark' | 'blue' | 'green' | 'pink';
 
+// [重要度: 低]
+// テーマ選択メニューに表示する名称と色見本。CSS側のdata-theme定義とIDを一致させること。
 const THEMES: { id: Theme; name: string; color: string }[] = [
   { id: 'white', name: 'ホワイト', color: '#f6f8fb' },
   { id: 'dark', name: 'ダーク', color: '#111827' },
@@ -13,6 +17,9 @@ const THEMES: { id: Theme; name: string; color: string }[] = [
   { id: 'pink', name: 'ピンク', color: '#fce7f3' },
 ];
 
+// [重要度: 低]
+// 利用者が画面テーマを選択し、その設定をブラウザへ保存する表示用コンポーネント。
+// 予約・当日券・権限などの業務処理には影響しない。
 export default function ThemeSwitcher() {
   const [isOpen, setIsOpen] = useState(false);
   const [currentTheme, setCurrentTheme] = useState<Theme>('white');
@@ -20,12 +27,16 @@ export default function ThemeSwitcher() {
 
   useEffect(() => {
     // 外部クリック
+    // [重要度: 低]
+    // メニュー外をクリックした場合にテーマ一覧を閉じる。
     const handleOutsideClick = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setIsOpen(false);
       }
     };
     // ESCキー
+    // [重要度: 低]
+    // キーボード操作でもメニューを閉じられるようにする。
     const handleEscKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setIsOpen(false);
@@ -36,6 +47,8 @@ export default function ThemeSwitcher() {
       document.addEventListener('mousedown', handleOutsideClick);
       document.addEventListener('keydown', handleEscKey);
     }
+    // [重要度: 中]
+    // 再描画のたびにイベントが重複登録されないよう、必ず同じリスナーを解除する。
     return () => {
       document.removeEventListener('mousedown', handleOutsideClick);
       document.removeEventListener('keydown', handleEscKey);
@@ -44,6 +57,8 @@ export default function ThemeSwitcher() {
 
   useEffect(() => {
     // 初回マウント時にlocalStorageからテーマを読み込む
+    // [重要度: 低]
+    // 保存済みテーマが許可一覧に存在する場合だけ復元し、不正値はwhiteへ戻す。
     try {
       const stored = localStorage.getItem('theme') as Theme | null;
       if (stored && THEMES.some(t => t.id === stored)) {
@@ -59,6 +74,9 @@ export default function ThemeSwitcher() {
     }
   }, []);
 
+  // [重要度: 低]
+  // 選択したテーマをHTML属性とlocalStorageの両方へ反映する。
+  // CSS側はdata-theme属性を参照するため、属性更新を削除すると表示だけ切り替わらなくなる。
   const changeTheme = (theme: Theme) => {
     setCurrentTheme(theme);
     setIsOpen(false);
