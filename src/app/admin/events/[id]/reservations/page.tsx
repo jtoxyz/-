@@ -8,7 +8,6 @@ import Link from 'next/link';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import AdminNav from '@/components/AdminNav';
 import { supabase } from '@/lib/supabase';
-import * as XLSX from 'xlsx';
 
 interface ReservationItem {
   id: string;
@@ -22,6 +21,14 @@ interface ReservationItem {
   cancelled_at: string | null;
   created_at: string;
   event_slots: { label: string } | null;
+}
+
+function escapeCsvCell(value: string): string {
+  return `"${value.replace(/"/g, '""')}"`;
+}
+
+function safeFileName(value: string): string {
+  return value.replace(/[\/:*?"<>|\s]+/g, '_').replace(/^_+|_+$/g, '') || 'event';
 }
 
 function formatDateTime(dateStr: string | null): string {
@@ -204,39 +211,85 @@ export default function AdminReservationsPage({ params }: { params: Promise<{ id
     }
   };
 
-  // Excel Exporter
-  const handleExportExcel = () => {
-    // Export all reservations excluding cancelled
-    const activeReservations = reservations.filter(r => r.status !== 'cancelled');
-    
-    if (activeReservations.length === 0) {
-      alert('エクスポートする有効な予約データがありません。');
-      return;
-    }
+  // CSV Exporter
+const handleExportCsv = () => {
+  if (reservations.length === 0) {
+    alert('エクスポートする予約データがありません。');
+    return;
+  }
 
-    const headers = [
-      '企画名',
-      '氏名',
-      '学籍番号',
-      '開催枠',
-    ];
+  const headers = [
+    '企画名',
+    '開催枠',
+    '券種',
+    '氏名',
+    '学籍番号',
+    '大学メール',
+    '状態',
+    '申込日時',
+    '使用日時',
+    '取消日時',
+    'チケットコード',
+  ];
 
-    const rows = activeReservations.map((res) => [
-      eventTitle,
-      res.student_name || '',
-      res.student_number || '',
-      res.event_slots?.label || '-',
-    ]);
+  const statusLabel = {
+    reserved: '有効',
+    used: '使用済み',
+    cancelled: 'キャンセル',
+  } as const;
 
-    const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Reservations');
+  const ticketTypeLabel = {
+    reservation: '予約券',
+    walkin: '当日券',
+  } as const;
 
-    const timestamp = new Date().toISOString().slice(0, 10);
-    const fileName = `reservations_${eventTitle.replace(/[\s/]/g, '_')}_${timestamp}.xlsx`;
+  const sortedReservations = [...reservations].sort((a, b) => {
+    const slotCompare = (a.event_slots?.label || '').localeCompare(
+      b.event_slots?.label || '',
+      'ja',
+      { numeric: true },
+    );
+    if (slotCompare !== 0) return slotCompare;
 
-    XLSX.writeFile(workbook, fileName);
-  };
+    const typeCompare = ticketTypeLabel[a.ticket_type].localeCompare(
+      ticketTypeLabel[b.ticket_type],
+      'ja',
+    );
+    if (typeCompare !== 0) return typeCompare;
+
+    return (a.student_name || '').localeCompare(b.student_name || '', 'ja');
+  });
+
+  const rows = sortedReservations.map((res) => [
+    eventTitle,
+    res.event_slots?.label || '-',
+    ticketTypeLabel[res.ticket_type],
+    res.student_name || '',
+    res.student_number || '',
+    res.university_email || '',
+    statusLabel[res.status],
+    formatDateTime(res.created_at),
+    res.used_at ? formatDateTime(res.used_at) : '',
+    res.cancelled_at ? formatDateTime(res.cancelled_at) : '',
+    res.ticket_code || '',
+  ]);
+
+  const csv = [headers, ...rows]
+    .map((row) => row.map((cell) => escapeCsvCell(String(cell))).join(','))
+    .join('\r\n');
+
+  const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  const timestamp = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
+
+  link.href = url;
+  link.download = `reservations_${safeFileName(eventTitle)}_${timestamp}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+};
 
   if (authLoading || loading) {
     return (
@@ -292,12 +345,12 @@ export default function AdminReservationsPage({ params }: { params: Promise<{ id
               />
             </div>
             <button 
-              onClick={handleExportExcel} 
+              onClick={handleExportCsv} 
               className="btn btn-secondary"
               disabled={loading || filteredReservations.length === 0}
               style={{ padding: '10px 16px', minWidth: '150px' }}
             >
-              📥 Excel出力
+              📥 CSV出力
             </button>
           </div>
         </div>
