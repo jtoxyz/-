@@ -1,0 +1,101 @@
+name: Add reservation email copy buttons
+
+on:
+  push:
+    paths:
+      - '.github/workflows/add-reservation-email-copy.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Add email copy actions
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('src/app/admin/events/[id]/reservations/page.tsx')
+          text = path.read_text(encoding='utf-8')
+
+          function_marker = "  const filteredReservations = reservations.filter((res) => {"
+          function_code = """  const handleCopyReservationEmails = async (includeUsed: boolean) => {
+    const emails = Array.from(
+      new Set(
+        reservations
+          .filter((res) => {
+            if (res.status === 'cancelled') return false;
+            return includeUsed ? res.status === 'reserved' || res.status === 'used' : res.status === 'reserved';
+          })
+          .map((res) => res.university_email?.trim())
+          .filter((email): email is string => Boolean(email)),
+      ),
+    );
+
+    if (emails.length === 0) {
+      alert(includeUsed ? 'コピーできる予約者メールがありません。' : '未使用の予約者メールがありません。');
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(emails.join(','));
+      alert(`${emails.length}件のメールアドレスをコピーしました。`);
+    } catch (copyError) {
+      console.error('Failed to copy reservation emails:', copyError);
+      setError('メールアドレスのコピーに失敗しました。');
+    }
+  };
+
+"""
+
+          if 'handleCopyReservationEmails' not in text:
+            if function_marker not in text:
+              raise SystemExit('Function insertion marker not found')
+            text = text.replace(function_marker, function_code + function_marker, 1)
+
+          panel_marker = """        {/* Action Panel */}
+        <div style={{ display: 'flex', gap: '12px', marginTop: '24px', flexWrap: 'wrap' }}>
+          <button
+            className="btn btn-danger btn-sm"
+"""
+          panel_replacement = """        {/* Action Panel */}
+        <div style={{ display: 'flex', gap: '12px', marginTop: '24px', flexWrap: 'wrap' }}>
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={() => handleCopyReservationEmails(false)}
+            disabled={reservations.filter((res) => res.status === 'reserved').length === 0}
+            style={{ width: 'auto' }}
+          >
+            📋 未使用者メールをコピー
+          </button>
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={() => handleCopyReservationEmails(true)}
+            disabled={reservations.filter((res) => res.status === 'reserved' || res.status === 'used').length === 0}
+            style={{ width: 'auto' }}
+          >
+            📋 予約者全員のメールをコピー
+          </button>
+          <button
+            className="btn btn-danger btn-sm"
+"""
+
+          if '予約者全員のメールをコピー' not in text:
+            if panel_marker not in text:
+              raise SystemExit('Action panel insertion marker not found')
+            text = text.replace(panel_marker, panel_replacement, 1)
+
+          path.write_text(text, encoding='utf-8')
+
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/app/admin/events/[id]/reservations/page.tsx
+          git diff --cached --quiet && exit 0
+          git commit -m "Add copy buttons for reservation emails"
+          git push
