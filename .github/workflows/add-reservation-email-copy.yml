@@ -99,3 +99,5 @@ jobs:
           git diff --cached --quiet && exit 0
           git commit -m "Add copy buttons for reservation emails"
           git push
+
+# Triggered after workflow registration
