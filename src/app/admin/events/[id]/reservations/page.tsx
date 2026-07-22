@@ -10,6 +10,7 @@ import { supabase } from '@/lib/supabase';
 
 interface ReservationItem {
   id: string;
+  event_slot_id: string | null;
   student_name: string;
   student_number: string;
   university_email: string;
@@ -33,12 +34,6 @@ interface AdminEventSlot {
   walkin_count: number;
   remaining_reservation_slots: number;
   remaining_walkin_slots: number;
-  reservation_starts_at: string | null;
-  reservation_ends_at: string | null;
-  walkin_starts_at: string | null;
-  walkin_ends_at: string | null;
-  is_reservation_enabled: boolean;
-  is_walkin_enabled: boolean;
   walkin_limit: number | null;
 }
 
@@ -53,12 +48,8 @@ function safeFileName(value: string): string {
 function formatDateTime(dateStr: string | null): string {
   if (!dateStr) return '-';
   return new Date(dateStr).toLocaleString('ja-JP', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
     timeZone: 'Asia/Tokyo',
   });
 }
@@ -66,12 +57,8 @@ function formatDateTime(dateStr: string | null): string {
 function formatSlotDateTime(dateStr: string | null): string {
   if (!dateStr) return '-';
   return new Date(dateStr).toLocaleString('ja-JP', {
-    month: 'numeric',
-    day: 'numeric',
-    weekday: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone: 'Asia/Tokyo',
+    month: 'numeric', day: 'numeric', weekday: 'short',
+    hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tokyo',
   });
 }
 
@@ -90,6 +77,7 @@ export default function AdminReservationsPage({ params }: { params: Promise<{ id
 
   const loadData = async () => {
     try {
+      setError(null);
       const { data: eventData, error: eventError } = await supabase
         .from('events').select('title').eq('id', id).single();
       if (eventError || !eventData) throw new Error('企画情報が見つかりません。');
@@ -104,7 +92,8 @@ export default function AdminReservationsPage({ params }: { params: Promise<{ id
       setReservations((resData as unknown as ReservationItem[]) || []);
 
       const { data: slotsData, error: slotsError } = await supabase.rpc('get_event_slots', { p_event_id: id });
-      if (!slotsError) setSlots((slotsData as AdminEventSlot[]) || []);
+      if (slotsError) throw slotsError;
+      setSlots((slotsData as AdminEventSlot[]) || []);
     } catch (err) {
       console.error(err);
       setError(err instanceof Error ? err.message : 'データの読み込みに失敗しました。');
@@ -124,12 +113,10 @@ export default function AdminReservationsPage({ params }: { params: Promise<{ id
         .map((res) => res.university_email?.trim())
         .filter((email): email is string => Boolean(email)),
     ));
-
     if (emails.length === 0) {
       alert(includeUsed ? 'コピーできる予約者メールがありません。' : '未使用の予約者メールがありません。');
       return;
     }
-
     try {
       await navigator.clipboard.writeText(emails.join(','));
       alert(`${emails.length}件のメールアドレスをコピーしました。`);
@@ -187,7 +174,9 @@ export default function AdminReservationsPage({ params }: { params: Promise<{ id
     return !query || res.student_name.toLowerCase().includes(query) || res.student_number.toLowerCase().includes(query);
   });
 
-  if (authLoading || loading) return <div style={{ textAlign: 'center', padding: '60px 0' }}><div className="loading-spinner" /></div>;
+  if (authLoading || loading) {
+    return <div style={{ textAlign: 'center', padding: '60px 0' }}><div className="loading-spinner" /></div>;
+  }
 
   const activeBookings = reservations.filter((r) => r.status === 'reserved' || r.status === 'used').length;
   const unusedTickets = reservations.filter((r) => r.status === 'reserved').length;
@@ -200,6 +189,7 @@ export default function AdminReservationsPage({ params }: { params: Promise<{ id
         <AdminNav />
         <div>
           <div style={{ marginBottom: 20 }}><Link href="/admin/events">← 企画一覧に戻る</Link></div>
+
           <div className="glass-card" style={{ borderLeft: '4px solid var(--color-primary)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
               <div><h1>予約者一覧</h1><p>{eventTitle}</p></div>
@@ -208,6 +198,7 @@ export default function AdminReservationsPage({ params }: { params: Promise<{ id
                 <button onClick={handleExportCsv} className="btn btn-secondary">📥 CSV出力</button>
               </div>
             </div>
+
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12, marginTop: 20 }}>
               <div className="glass-card"><small>有効発行数</small><div style={{ fontSize: 28, fontWeight: 700 }}>{activeBookings}</div><small>未使用＋使用済み</small></div>
               <div className="glass-card"><small>未使用数</small><div style={{ fontSize: 28, fontWeight: 700 }}>{unusedTickets}</div><small>これから使用可能</small></div>
@@ -215,6 +206,7 @@ export default function AdminReservationsPage({ params }: { params: Promise<{ id
               <div className="glass-card"><small>キャンセル数</small><div style={{ fontSize: 28, fontWeight: 700 }}>{cancelledBookings}</div><small>有効数には含まない</small></div>
               <div className="glass-card"><small>総記録件数</small><div style={{ fontSize: 28, fontWeight: 700 }}>{reservations.length}</div><small>有効＋キャンセル</small></div>
             </div>
+
             <div style={{ display: 'flex', gap: 12, marginTop: 24, flexWrap: 'wrap' }}>
               <button className="btn btn-secondary btn-sm" onClick={() => handleCopyEmails(false)}>📋 未使用者メールをコピー</button>
               <button className="btn btn-secondary btn-sm" onClick={() => handleCopyEmails(true)}>📋 予約者全員のメールをコピー</button>
@@ -226,30 +218,23 @@ export default function AdminReservationsPage({ params }: { params: Promise<{ id
 
           {slots.length > 0 && (
             <div className="glass-card" style={{ marginTop: 20 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'end', flexWrap: 'wrap', marginBottom: 14 }}>
-                <div>
-                  <h2 style={{ marginBottom: 6 }}>📊 開催枠ごとの発行状況</h2>
-                  <p style={{ margin: 0, opacity: 0.75 }}>「発行数・上限・残り」を券種ごとに分けて表示しています。</p>
-                </div>
-              </div>
+              <h2 style={{ marginBottom: 6 }}>📊 開催枠ごとの発行状況</h2>
+              <p style={{ marginTop: 0, opacity: 0.75 }}>実際の発行数、事前確保数、現在発行できる残りを分けて表示します。</p>
+
               <div className="admin-table-container">
                 <table className="admin-table">
-                  <thead>
-                    <tr>
-                      <th>開催枠</th>
-                      <th>全体定員</th>
-                      <th>予約券</th>
-                      <th>当日券</th>
-                      <th>合計</th>
-                    </tr>
-                  </thead>
+                  <thead><tr><th>開催枠</th><th>全体定員</th><th>予約券</th><th>当日券</th><th>全体</th></tr></thead>
                   <tbody>
                     {slots.map((s) => {
-                      const reservationLimit = Math.min(s.reservation_capacity ?? s.total_capacity, s.total_capacity);
-                      const walkinLimit = Math.min(s.walkin_limit ?? s.total_capacity, s.total_capacity);
-                      const issuedTotal = s.reserved_count + s.walkin_count;
-                      const totalRemaining = Math.max(s.total_capacity - issuedTotal, 0);
-                      const usageRate = s.total_capacity > 0 ? Math.min((issuedTotal / s.total_capacity) * 100, 100) : 0;
+                      const slotActive = reservations.filter((r) => r.event_slot_id === s.id && r.status !== 'cancelled');
+                      const reservationIssued = slotActive.filter((r) => r.ticket_type === 'reservation').length;
+                      const walkinIssued = slotActive.filter((r) => r.ticket_type === 'walkin').length;
+                      const reservationHeld = Math.max(s.reserved_count - reservationIssued, 0);
+                      const walkinHeld = Math.max(s.walkin_count - walkinIssued, 0);
+                      const occupied = reservationIssued + walkinIssued + reservationHeld + walkinHeld;
+                      const totalRemaining = Math.max(s.total_capacity - occupied, 0);
+                      const usageRate = s.total_capacity > 0 ? Math.min((occupied / s.total_capacity) * 100, 100) : 0;
+                      const dynamicWalkinCapacity = walkinIssued + walkinHeld + s.remaining_walkin_slots;
 
                       return (
                         <tr key={s.id}>
@@ -261,19 +246,25 @@ export default function AdminReservationsPage({ params }: { params: Promise<{ id
                           </td>
                           <td><strong>{s.total_capacity}人</strong></td>
                           <td>
-                            <div><strong>発行 {s.reserved_count}人</strong> / 上限 {reservationLimit}人</div>
-                            <div style={{ marginTop: 5, fontWeight: 700 }}>残り {s.remaining_reservation_slots}人</div>
+                            <div><strong>発行済み {reservationIssued}人</strong></div>
+                            {reservationHeld > 0 && <div style={{ marginTop: 4 }}>事前確保 {reservationHeld}人</div>}
+                            <div style={{ marginTop: 4 }}>予約枠上限 {s.reservation_capacity}人</div>
+                            <div style={{ marginTop: 5, fontWeight: 700 }}>予約枠残り {s.remaining_reservation_slots}人</div>
                           </td>
                           <td>
-                            <div><strong>発行 {s.walkin_count}人</strong> / 上限 {walkinLimit}人</div>
-                            <div style={{ marginTop: 5, fontWeight: 700 }}>残り {s.remaining_walkin_slots}人</div>
+                            <div><strong>発行済み {walkinIssued}人</strong></div>
+                            {walkinHeld > 0 && <div style={{ marginTop: 4 }}>事前確保 {walkinHeld}人</div>}
+                            <div style={{ marginTop: 4 }}>
+                              {s.walkin_limit == null ? `動的上限（現在最大 ${dynamicWalkinCapacity}人）` : `固定上限 ${s.walkin_limit}人`}
+                            </div>
+                            <div style={{ marginTop: 5, fontWeight: 700 }}>今から発行可能 {s.remaining_walkin_slots}人</div>
                           </td>
-                          <td style={{ minWidth: 170 }}>
-                            <div><strong>{issuedTotal}人 / {s.total_capacity}人</strong></div>
+                          <td style={{ minWidth: 180 }}>
+                            <div><strong>占有 {occupied}人 / {s.total_capacity}人</strong></div>
                             <div style={{ marginTop: 6, height: 8, borderRadius: 999, background: 'rgba(255,255,255,0.1)', overflow: 'hidden' }}>
                               <div style={{ width: `${usageRate}%`, height: '100%', background: 'var(--color-primary)', borderRadius: 999 }} />
                             </div>
-                            <div style={{ marginTop: 5, fontSize: 12 }}>全体残り {totalRemaining}人（{usageRate.toFixed(1)}%発行済み）</div>
+                            <div style={{ marginTop: 5, fontSize: 12 }}>全体残り {totalRemaining}人（{usageRate.toFixed(1)}%）</div>
                           </td>
                         </tr>
                       );
@@ -281,21 +272,45 @@ export default function AdminReservationsPage({ params }: { params: Promise<{ id
                   </tbody>
                 </table>
               </div>
+
               <div style={{ marginTop: 14, padding: 12, borderRadius: 10, background: 'rgba(255,255,255,0.04)', fontSize: 13, lineHeight: 1.7 }}>
-                <strong>見方：</strong> 発行数はキャンセルを除いた現在有効なチケット数です。券種別の「残り」は各券種の上限まで、合計欄の「全体残り」は開催枠全体の定員までの残り人数です。
+                <strong>見方：</strong> 「発行済み」は予約データとして作成済みのチケットです。「事前確保」は管理者の事前登録で押さえている枠です。当日券の動的上限は、予約やキャンセルの増減に応じて全体残席から自動計算されます。
               </div>
             </div>
           )}
 
           <div className="admin-table-container reservations-table-desktop" style={{ marginTop: 20 }}>
-            <table className="admin-table"><thead><tr><th>予約日時</th><th>券種</th><th>氏名</th><th>学籍番号</th><th>開催枠</th><th>大学メールアドレス</th><th>状態</th><th>操作</th></tr></thead><tbody>
-              {filteredReservations.map((res) => <tr key={res.id} style={{ opacity: res.status === 'cancelled' ? 0.4 : 1 }}>
-                <td>{formatDateTime(res.created_at)}</td><td>{res.ticket_type === 'walkin' ? '当日券' : '予約券'}</td><td>{res.student_name}</td><td>{res.student_number}</td><td>{res.event_slots?.label || '-'}</td><td>{res.university_email}</td><td>{res.status === 'reserved' ? '有効' : res.status === 'used' ? '使用済み' : 'キャンセル'}</td><td>{res.status !== 'cancelled' && <button className="btn btn-secondary btn-sm" onClick={() => handleCancelReservation(res.id)} disabled={cancellingId === res.id}>❌ 取消</button>}</td>
-              </tr>)}
-            </tbody></table>
+            <table className="admin-table">
+              <thead><tr><th>予約日時</th><th>券種</th><th>氏名</th><th>学籍番号</th><th>開催枠</th><th>大学メールアドレス</th><th>状態</th><th>操作</th></tr></thead>
+              <tbody>
+                {filteredReservations.map((res) => (
+                  <tr key={res.id} style={{ opacity: res.status === 'cancelled' ? 0.4 : 1 }}>
+                    <td>{formatDateTime(res.created_at)}</td>
+                    <td>{res.ticket_type === 'walkin' ? '当日券' : '予約券'}</td>
+                    <td>{res.student_name}</td>
+                    <td>{res.student_number}</td>
+                    <td>{res.event_slots?.label || '-'}</td>
+                    <td>{res.university_email}</td>
+                    <td>{res.status === 'reserved' ? '有効' : res.status === 'used' ? '使用済み' : 'キャンセル'}</td>
+                    <td>{res.status !== 'cancelled' && <button className="btn btn-secondary btn-sm" onClick={() => handleCancelReservation(res.id)} disabled={cancellingId === res.id}>❌ 取消</button>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
 
-          {showWipeModal && <div className="modal-overlay"><div className="modal-content"><h3>⚠️ 予約データの完全削除</h3><p>この企画のすべての予約データを完全に削除します。本当に削除しますか？</p><div className="modal-actions"><button className="btn btn-secondary" onClick={() => setShowWipeModal(false)}>キャンセル</button><button className="btn btn-danger" onClick={handleWipeData} disabled={wiping}>{wiping ? '削除実行中...' : 'はい、完全に削除します'}</button></div></div></div>}
+          {showWipeModal && (
+            <div className="modal-overlay">
+              <div className="modal-content">
+                <h3>⚠️ 予約データの完全削除</h3>
+                <p>この企画のすべての予約データを完全に削除します。本当に削除しますか？</p>
+                <div className="modal-actions">
+                  <button className="btn btn-secondary" onClick={() => setShowWipeModal(false)}>キャンセル</button>
+                  <button className="btn btn-danger" onClick={handleWipeData} disabled={wiping}>{wiping ? '削除実行中...' : 'はい、完全に削除します'}</button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
