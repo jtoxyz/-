@@ -231,6 +231,7 @@ export default function AdminReservationsPage({ params }: { params: Promise<{ id
                       const walkinIssued = slotActive.filter((r) => r.ticket_type === 'walkin').length;
                       const reservationHeld = Math.max(s.reserved_count - reservationIssued, 0);
                       const walkinHeld = Math.max(s.walkin_count - walkinIssued, 0);
+                      const reservationCapacityRemaining = Math.max(s.reservation_capacity - reservationIssued - reservationHeld, 0);
                       const occupied = reservationIssued + walkinIssued + reservationHeld + walkinHeld;
                       const totalRemaining = Math.max(s.total_capacity - occupied, 0);
                       const usageRate = s.total_capacity > 0 ? Math.min((occupied / s.total_capacity) * 100, 100) : 0;
@@ -249,7 +250,7 @@ export default function AdminReservationsPage({ params }: { params: Promise<{ id
                             <div><strong>発行済み {reservationIssued}人</strong></div>
                             {reservationHeld > 0 && <div style={{ marginTop: 4 }}>事前確保 {reservationHeld}人</div>}
                             <div style={{ marginTop: 4 }}>予約枠上限 {s.reservation_capacity}人</div>
-                            <div style={{ marginTop: 5, fontWeight: 700 }}>予約枠残り {s.remaining_reservation_slots}人</div>
+                            <div style={{ marginTop: 5, fontWeight: 700 }}>予約枠残り {reservationCapacityRemaining}人</div>
                           </td>
                           <td>
                             <div><strong>発行済み {walkinIssued}人</strong></div>
