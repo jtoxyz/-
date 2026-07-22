@@ -28,6 +28,7 @@ interface AdminEventSlot {
   starts_at: string | null;
   ends_at: string | null;
   total_capacity: number;
+  reservation_capacity: number;
   reserved_count: number;
   walkin_count: number;
   remaining_reservation_slots: number;
@@ -58,6 +59,18 @@ function formatDateTime(dateStr: string | null): string {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
+    timeZone: 'Asia/Tokyo',
+  });
+}
+
+function formatSlotDateTime(dateStr: string | null): string {
+  if (!dateStr) return '-';
+  return new Date(dateStr).toLocaleString('ja-JP', {
+    month: 'numeric',
+    day: 'numeric',
+    weekday: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
     timeZone: 'Asia/Tokyo',
   });
 }
@@ -177,6 +190,7 @@ export default function AdminReservationsPage({ params }: { params: Promise<{ id
   if (authLoading || loading) return <div style={{ textAlign: 'center', padding: '60px 0' }}><div className="loading-spinner" /></div>;
 
   const activeBookings = reservations.filter((r) => r.status === 'reserved' || r.status === 'used').length;
+  const unusedTickets = reservations.filter((r) => r.status === 'reserved').length;
   const usedTickets = reservations.filter((r) => r.status === 'used').length;
   const cancelledBookings = reservations.filter((r) => r.status === 'cancelled').length;
 
@@ -194,11 +208,12 @@ export default function AdminReservationsPage({ params }: { params: Promise<{ id
                 <button onClick={handleExportCsv} className="btn btn-secondary">📥 CSV出力</button>
               </div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 12, marginTop: 20 }}>
-              <div className="glass-card"><small>有効予約数</small><div>{activeBookings}</div></div>
-              <div className="glass-card"><small>使用済み数</small><div>{usedTickets}</div></div>
-              <div className="glass-card"><small>キャンセル数</small><div>{cancelledBookings}</div></div>
-              <div className="glass-card"><small>総ログ件数</small><div>{reservations.length}</div></div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12, marginTop: 20 }}>
+              <div className="glass-card"><small>有効発行数</small><div style={{ fontSize: 28, fontWeight: 700 }}>{activeBookings}</div><small>未使用＋使用済み</small></div>
+              <div className="glass-card"><small>未使用数</small><div style={{ fontSize: 28, fontWeight: 700 }}>{unusedTickets}</div><small>これから使用可能</small></div>
+              <div className="glass-card"><small>使用済み数</small><div style={{ fontSize: 28, fontWeight: 700 }}>{usedTickets}</div><small>すでに使用済み</small></div>
+              <div className="glass-card"><small>キャンセル数</small><div style={{ fontSize: 28, fontWeight: 700 }}>{cancelledBookings}</div><small>有効数には含まない</small></div>
+              <div className="glass-card"><small>総記録件数</small><div style={{ fontSize: 28, fontWeight: 700 }}>{reservations.length}</div><small>有効＋キャンセル</small></div>
             </div>
             <div style={{ display: 'flex', gap: 12, marginTop: 24, flexWrap: 'wrap' }}>
               <button className="btn btn-secondary btn-sm" onClick={() => handleCopyEmails(false)}>📋 未使用者メールをコピー</button>
@@ -211,10 +226,64 @@ export default function AdminReservationsPage({ params }: { params: Promise<{ id
 
           {slots.length > 0 && (
             <div className="glass-card" style={{ marginTop: 20 }}>
-              <h2>📊 開催枠ごとの内訳</h2>
-              <div className="admin-table-container"><table className="admin-table"><thead><tr><th>枠名</th><th>定員</th><th>予約券残席 / 発行数</th><th>当日券残席 / 発行数</th><th>有効発行数</th></tr></thead><tbody>
-                {slots.map((s) => <tr key={s.id}><td>{s.label}</td><td>{s.total_capacity}</td><td>{s.remaining_reservation_slots} / {s.reserved_count}</td><td>{s.remaining_walkin_slots} / {s.walkin_count}</td><td>{s.reserved_count + s.walkin_count}</td></tr>)}
-              </tbody></table></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'end', flexWrap: 'wrap', marginBottom: 14 }}>
+                <div>
+                  <h2 style={{ marginBottom: 6 }}>📊 開催枠ごとの発行状況</h2>
+                  <p style={{ margin: 0, opacity: 0.75 }}>「発行数・上限・残り」を券種ごとに分けて表示しています。</p>
+                </div>
+              </div>
+              <div className="admin-table-container">
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>開催枠</th>
+                      <th>全体定員</th>
+                      <th>予約券</th>
+                      <th>当日券</th>
+                      <th>合計</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {slots.map((s) => {
+                      const reservationLimit = Math.min(s.reservation_capacity ?? s.total_capacity, s.total_capacity);
+                      const walkinLimit = Math.min(s.walkin_limit ?? s.total_capacity, s.total_capacity);
+                      const issuedTotal = s.reserved_count + s.walkin_count;
+                      const totalRemaining = Math.max(s.total_capacity - issuedTotal, 0);
+                      const usageRate = s.total_capacity > 0 ? Math.min((issuedTotal / s.total_capacity) * 100, 100) : 0;
+
+                      return (
+                        <tr key={s.id}>
+                          <td>
+                            <strong>{s.label}</strong>
+                            <div style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>
+                              {formatSlotDateTime(s.starts_at)}〜{s.ends_at ? new Date(s.ends_at).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tokyo' }) : '-'}
+                            </div>
+                          </td>
+                          <td><strong>{s.total_capacity}人</strong></td>
+                          <td>
+                            <div><strong>発行 {s.reserved_count}人</strong> / 上限 {reservationLimit}人</div>
+                            <div style={{ marginTop: 5, fontWeight: 700 }}>残り {s.remaining_reservation_slots}人</div>
+                          </td>
+                          <td>
+                            <div><strong>発行 {s.walkin_count}人</strong> / 上限 {walkinLimit}人</div>
+                            <div style={{ marginTop: 5, fontWeight: 700 }}>残り {s.remaining_walkin_slots}人</div>
+                          </td>
+                          <td style={{ minWidth: 170 }}>
+                            <div><strong>{issuedTotal}人 / {s.total_capacity}人</strong></div>
+                            <div style={{ marginTop: 6, height: 8, borderRadius: 999, background: 'rgba(255,255,255,0.1)', overflow: 'hidden' }}>
+                              <div style={{ width: `${usageRate}%`, height: '100%', background: 'var(--color-primary)', borderRadius: 999 }} />
+                            </div>
+                            <div style={{ marginTop: 5, fontSize: 12 }}>全体残り {totalRemaining}人（{usageRate.toFixed(1)}%発行済み）</div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div style={{ marginTop: 14, padding: 12, borderRadius: 10, background: 'rgba(255,255,255,0.04)', fontSize: 13, lineHeight: 1.7 }}>
+                <strong>見方：</strong> 発行数はキャンセルを除いた現在有効なチケット数です。券種別の「残り」は各券種の上限まで、合計欄の「全体残り」は開催枠全体の定員までの残り人数です。
+              </div>
             </div>
           )}
 
