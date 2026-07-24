@@ -1,7 +1,11 @@
 name: Implement university Google authentication
 
 on:
-  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - scripts/implement-google-auth.py
+      - .github/workflows/implement-google-university-auth.yml
 
 permissions:
   contents: write
