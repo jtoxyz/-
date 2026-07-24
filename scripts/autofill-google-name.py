@@ -9,13 +9,17 @@ old = """      if (match) {
 """
 new = """      if (match) {
         setUniversityEmail(email);
-        setStudentNumber(match[1].toUpperCase());
+        const normalizedStudentNumber = match[1].toUpperCase();
+        setStudentNumber(normalizedStudentNumber);
         const googleName = String(
           session?.user?.user_metadata?.full_name ??
           session?.user?.user_metadata?.name ??
           ''
         ).trim();
-        setStudentName((current) => current || googleName);
+        const nameWithoutStudentNumber = googleName
+          .replace(normalizedStudentNumber, '')
+          .trim();
+        setStudentName((current) => current || nameWithoutStudentNumber || googleName);
         setError(null);
 """
 if old not in text:
