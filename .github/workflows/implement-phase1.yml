@@ -27,6 +27,31 @@ jobs:
           node-version: '22'
           cache: npm
 
+      - name: Patch phase 1 script
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('scripts/implement-phase1.mjs')
+          text = path.read_text(encoding='utf-8')
+          old = """  text = mustReplace(
+              text,
+              '  reservation_starts_at: string | null;\\n  reservation_ends_at: string | null;\\n',
+              '',
+              `${path}: remove event-level fields from interface`,
+            );"""
+          new = """  text = mustReplaceRegex(
+              text,
+              /(interface EventDetails \\{[\\s\\S]*?  ends_at: string \\| null;\\n)  reservation_starts_at: string \\| null;\\n  reservation_ends_at: string \\| null;\\n/,
+              '$1',
+              `${path}: remove event-level fields from EventDetails interface`,
+            );"""
+          if text.count(old) != 1:
+              raise SystemExit(f'Expected one public interface patch target, found {text.count(old)}')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+
       - name: Apply phase 1 changes
         id: apply
         shell: bash
@@ -70,6 +95,7 @@ jobs:
         run: |
           rm .github/workflows/implement-phase1.yml
           rm scripts/implement-phase1.mjs
+          rm -f phase1-apply.log
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
