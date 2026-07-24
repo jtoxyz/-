@@ -15,7 +15,7 @@ BEGIN
 
   -- Service-role and administrators may create/manage records without student OAuth.
   IF v_role = 'service_role' OR EXISTS (
-    SELECT 1 FROM public.admin_users au WHERE au.id = auth.uid()
+    SELECT 1 FROM public.admin_users au WHERE au.user_id = auth.uid()
   ) THEN
     RETURN NEW;
   END IF;
@@ -34,7 +34,7 @@ BEGIN
     RAISE EXCEPTION '確認済みの大学Googleアカウントが必要です。';
   END IF;
 
-  IF v_email !~ '^s[0-9]{2}[a-z][0-9]{3}@ge\\.osaka-sandai\\.ac\\.jp$' THEN
+  IF v_email !~ '^s[0-9]{2}[a-z][0-9]{3}@ge\.osaka-sandai\.ac\.jp$' THEN
     RAISE EXCEPTION '大阪産業大学のGoogleアカウントでログインしてください。';
   END IF;
 
