@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
@@ -8,6 +9,32 @@ export default function AdminNav() {
   const router = useRouter();
   const pathname = usePathname();
   const isReservationsPage = /^\/admin\/events\/[^/]+\/reservations$/.test(pathname);
+
+  useEffect(() => {
+    const isNewEventPage = pathname === '/admin/events/new';
+    const isEditEventPage = /^\/admin\/events\/[^/]+$/.test(pathname) && !isNewEventPage;
+
+    if (!isNewEventPage && !isEditEventPage) return;
+
+    const hideObsoleteFields = () => {
+      ['reservationStartsAt', 'reservationEndsAt'].forEach((id) => {
+        const input = document.getElementById(id);
+        const formGroup = input?.closest<HTMLElement>('.form-group');
+
+        if (formGroup) {
+          formGroup.hidden = true;
+          formGroup.setAttribute('aria-hidden', 'true');
+        }
+      });
+    };
+
+    hideObsoleteFields();
+
+    const observer = new MutationObserver(hideObsoleteFields);
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    return () => observer.disconnect();
+  }, [pathname]);
 
   const handleLogout = async () => {
     try {
