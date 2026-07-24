@@ -25,56 +25,52 @@ jobs:
               Path('src/app/admin/events/[id]/page.tsx'),
           ]
 
-          state_block = """  // Date/Time strings (empty string represents null)
-          const [reservationStartsAt, setReservationStartsAt] = useState('');
-          const [reservationEndsAt, setReservationEndsAt] = useState('');
-          const [useStartsAt, setUseStartsAt] = useState('');
-          """
-          state_replacement = """  // Date/Time strings (empty string represents null)
-          const [useStartsAt, setUseStartsAt] = useState('');
-          """
+          common_replacements = (
+              ("  const [reservationStartsAt, setReservationStartsAt] = useState('');\n", ''),
+              ("  const [reservationEndsAt, setReservationEndsAt] = useState('');\n", ''),
+              (
+                  'reservation_starts_at: reservationStartsAt ? new Date(reservationStartsAt).toISOString() : null,',
+                  'reservation_starts_at: null,',
+              ),
+              (
+                  'reservation_ends_at: reservationEndsAt ? new Date(reservationEndsAt).toISOString() : null,',
+                  'reservation_ends_at: null,',
+              ),
+          )
 
-          ui_start = """            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
-                        <div className=\"form-group\">
-                          <label className=\"form-label\" htmlFor=\"reservationStartsAt\">予約受付開始日時</label>"""
-          ui_end = """
+          edit_only_replacements = (
+              ("        setReservationStartsAt(formatIsoToLocalString(data.reservation_starts_at));\n", ''),
+              ("        setReservationEndsAt(formatIsoToLocalString(data.reservation_ends_at));\n", ''),
+          )
 
-                      {/* Slot selection mode */}"""
+          section_marker = '2. 日程・受付時間設定'
+          ui_start_marker = "            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>"
+          ui_end_marker = '            {/* Slot selection mode */}'
 
           for path in paths:
               text = path.read_text(encoding='utf-8')
 
-              if text.count(state_block) != 1:
-                  raise RuntimeError(f'{path}: event-level reservation state block was not found exactly once')
-              text = text.replace(state_block, state_replacement, 1)
+              for old, new in common_replacements:
+                  if text.count(old) != 1:
+                      raise RuntimeError(f'{path}: expected text was not found exactly once: {old}')
+                  text = text.replace(old, new, 1)
 
-              old_start = "reservation_starts_at: reservationStartsAt ? new Date(reservationStartsAt).toISOString() : null,"
-              old_end = "reservation_ends_at: reservationEndsAt ? new Date(reservationEndsAt).toISOString() : null,"
-              if text.count(old_start) != 1 or text.count(old_end) != 1:
-                  raise RuntimeError(f'{path}: event-level reservation payload fields were not found exactly once')
-              text = text.replace(old_start, 'reservation_starts_at: null,', 1)
-              text = text.replace(old_end, 'reservation_ends_at: null,', 1)
+              if '[id]' in str(path):
+                  for old, new in edit_only_replacements:
+                      if text.count(old) != 1:
+                          raise RuntimeError(f'{path}: expected edit initializer was not found exactly once: {old}')
+                      text = text.replace(old, new, 1)
 
-              start_index = text.find(ui_start)
-              if start_index == -1:
-                  raise RuntimeError(f'{path}: event-level reservation UI start was not found')
-              end_index = text.find(ui_end, start_index)
-              if end_index == -1:
-                  raise RuntimeError(f'{path}: event-level reservation UI end was not found')
-              text = text[:start_index] + '            {/* Slot selection mode */}' + text[end_index + len(ui_end):]
-
-              if path.name == 'page.tsx' and '[id]' in str(path):
-                  for line in (
-                      "        setReservationStartsAt(formatIsoToLocalString(data.reservation_starts_at));\n",
-                      "        setReservationEndsAt(formatIsoToLocalString(data.reservation_ends_at));\n",
-                  ):
-                      if text.count(line) != 1:
-                          raise RuntimeError(f'{path}: expected edit-page initializer was not found exactly once')
-                      text = text.replace(line, '', 1)
+              section_index = text.index(section_marker)
+              start_index = text.index(ui_start_marker, section_index)
+              end_index = text.index(ui_end_marker, start_index)
+              text = text[:start_index] + text[end_index:]
 
               forbidden = (
                   'const [reservationStartsAt, setReservationStartsAt]',
                   'const [reservationEndsAt, setReservationEndsAt]',
+                  'setReservationStartsAt(formatIsoToLocalString(data.reservation_starts_at))',
+                  'setReservationEndsAt(formatIsoToLocalString(data.reservation_ends_at))',
                   'value={reservationStartsAt}',
                   'value={reservationEndsAt}',
                   'htmlFor="reservationStartsAt"',
@@ -102,3 +98,5 @@ jobs:
           git add src/app/admin/events/new/page.tsx src/app/admin/events/'[id]'/page.tsx .github/workflows/remove-event-level-reservation-window.yml
           git commit -m "Remove duplicated event-level reservation window fields"
           git push
+
+# trigger cleanup workflow
