@@ -178,3 +178,5 @@ jobs:
           git add src/app/admin/events/new/page.tsx src/app/admin/events/'[id]'/page.tsx src/app/events/'[id]'/page.tsx .github/workflows/cleanup-event-reservation-window.yml
           git commit -m "Remove duplicated event-level reservation window fields"
           git push
+
+# Triggered after configuring GitHub Actions secrets.
