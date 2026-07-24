@@ -1,0 +1,41 @@
+name: Implement university Google authentication
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Apply implementation
+        run: python scripts/implement-google-auth.py
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/app/events/[id]/page.tsx supabase/migrations/20260724000300_require_google_university_auth.sql
+          git commit -m "Require university Google authentication for reservations"
+          git push
+
+      - name: Remove temporary implementation files
+        run: |
+          git rm scripts/implement-google-auth.py .github/workflows/implement-google-university-auth.yml
+          git commit -m "Remove temporary Google auth implementation workflow"
+          git push
