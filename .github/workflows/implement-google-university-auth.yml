@@ -31,7 +31,16 @@ jobs:
         run: npm ci
 
       - name: Build
-        run: npm run build
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee build.log
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: google-auth-build-log
+          path: build.log
 
       - name: Commit changes to pull request branch
         run: |
