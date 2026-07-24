@@ -54,10 +54,10 @@ REVOKE ALL ON FUNCTION public.enforce_verified_university_identity() FROM PUBLIC
 
 REVOKE EXECUTE ON FUNCTION public.create_reservation(uuid, uuid, text, text, text, text) FROM anon;
 REVOKE EXECUTE ON FUNCTION public.create_walkin_reservation(uuid, uuid, text, text, text, text) FROM anon;
-REVOKE EXECUTE ON FUNCTION public.create_reservations_bulk(uuid, uuid[], text, text, text, text) FROM anon;
+REVOKE EXECUTE ON FUNCTION public.create_reservations_bulk(uuid, uuid[], text, text, text) FROM anon;
 GRANT EXECUTE ON FUNCTION public.create_reservation(uuid, uuid, text, text, text, text) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.create_walkin_reservation(uuid, uuid, text, text, text, text) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.create_reservations_bulk(uuid, uuid[], text, text, text, text) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.create_reservations_bulk(uuid, uuid[], text, text, text) TO authenticated;
 
 NOTIFY pgrst, 'reload schema';
 COMMIT;
