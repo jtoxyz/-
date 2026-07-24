@@ -4,11 +4,12 @@ export const runtime = 'edge';
 
 
 import { use, useEffect, useState } from 'react';
+import type { Session } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { saveToken } from '@/lib/ticketCache';
-import { ALLOWED_EMAIL_DOMAINS, STUDENT_EMAIL_DOMAIN } from '@/lib/config';
+import { STUDENT_EMAIL_DOMAIN } from '@/lib/config';
 import { marked } from 'marked';
 import DOMPurify from 'isomorphic-dompurify';
 import { parseShortcodes } from '@/lib/parseShortcodes';
@@ -121,7 +122,61 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
   const [studentName, setStudentName] = useState('');
   const [studentNumber, setStudentNumber] = useState('');
   const [universityEmail, setUniversityEmail] = useState('');
-  const [isEmailEdited, setIsEmailEdited] = useState(false);
+  const [authSession, setAuthSession] = useState<Session | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const applySession = (session: Session | null) => {
+      if (!mounted) return;
+      setAuthSession(session);
+      const email = session?.user?.email?.trim().toLowerCase() ?? '';
+      const match = email.match(/^s([0-9]{2}[a-z][0-9]{3})@ge\.osaka-sandai\.ac\.jp$/i);
+      if (match) {
+        setUniversityEmail(email);
+        setStudentNumber(match[1].toUpperCase());
+        setError(null);
+      } else {
+        setUniversityEmail('');
+        setStudentNumber('');
+        if (session) {
+          setError('大阪産業大学のGoogleアカウントでログインしてください。');
+        }
+      }
+      setAuthLoading(false);
+    };
+
+    supabase.auth.getSession().then(({ data }) => applySession(data.session));
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => applySession(session));
+
+    return () => {
+      mounted = false;
+      listener.subscription.unsubscribe();
+    };
+  }, []);
+
+  const handleGoogleLogin = async () => {
+    setError(null);
+    const { error: signInError } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: window.location.href,
+        queryParams: {
+          hd: STUDENT_EMAIL_DOMAIN,
+          prompt: 'select_account',
+        },
+      },
+    });
+    if (signInError) setError('Googleログインを開始できませんでした。');
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setStudentName('');
+    setStudentNumber('');
+    setUniversityEmail('');
+  };
 
   useEffect(() => {
     async function fetchEventDetails() {
@@ -171,39 +226,6 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
     fetchEventDetails();
   }, [id]);
 
-  // Handle student number change (remove whitespace, no capitalization during typing to prevent IME duplication)
-  const handleStudentNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let rawVal = e.target.value;
-    
-    // Remove all whitespace
-    rawVal = rawVal.replace(/\s+/g, '');
-    
-    setStudentNumber(rawVal);
-
-    // Auto-generate email based on normalized student number
-    const normalized = normalizeStudentNumber(rawVal);
-    if (normalized.trim() !== '') {
-      const emailUserPart = 's' + normalized.toLowerCase();
-      setUniversityEmail(`${emailUserPart}@${STUDENT_EMAIL_DOMAIN}`);
-      setIsEmailEdited(false);
-    } else {
-      setUniversityEmail('');
-      setIsEmailEdited(false);
-    }
-  };
-
-  const handleStudentNumberBlur = (e: React.FocusEvent<HTMLInputElement>) => {
-    const rawVal = e.target.value;
-    const normalized = normalizeStudentNumber(rawVal);
-    setStudentNumber(normalized);
-  };
-
-  // Handle email changes (mark as manually modified)
-  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setUniversityEmail(e.target.value);
-    setIsEmailEdited(true);
-  };
-
   const handleSlotToggle = (slotId: string) => {
     if (!event) return;
     if (event.slot_selection_mode === 'single') {
@@ -227,8 +249,14 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
     const cleanEmail = universityEmail.trim().toLowerCase();
 
     // Validations
+    if (!authSession) {
+      setError('大学Googleアカウントでログインしてください。');
+      setBooking(false);
+      return;
+    }
+
     if (!cleanName || !normalizedNumber || !cleanEmail) {
-      setError('すべての項目を入力してください。');
+      setError('氏名を入力してください。');
       setBooking(false);
       return;
     }
@@ -236,31 +264,6 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
     // Validate at least one slot is selected
     if (selectedSlotIds.length === 0) {
       setError('参加する枠を選択してください。');
-      setBooking(false);
-      return;
-    }
-
-    // Student number regex validation
-    const studentNumberRegex = /^\d{2}[A-Z]\d{3}$/;
-    if (!studentNumberRegex.test(normalizedNumber)) {
-      setError('学籍番号は「数字2桁 + 英字1文字 + 数字3桁」の形式で入力してください。(例: 24B123)');
-      setBooking(false);
-      return;
-    }
-
-    // Verify email matches student number
-    const expectedEmailLocalPart = 's' + normalizedNumber.toLowerCase();
-    const actualEmailLocalPart = cleanEmail.split('@')[0];
-    if (actualEmailLocalPart !== expectedEmailLocalPart) {
-      setError('メールアドレスのユーザー名（@の左側）が学籍番号と一致しません。');
-      setBooking(false);
-      return;
-    }
-
-    // Domain validation on frontend
-    const domain = cleanEmail.split('@')[1];
-    if (!domain || !ALLOWED_EMAIL_DOMAINS.includes(domain)) {
-      setError(`許可されている大学のメールアドレスを入力してください。(${ALLOWED_EMAIL_DOMAINS.join(', ')})`);
       setBooking(false);
       return;
     }
@@ -337,8 +340,14 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
     const cleanEmail = universityEmail.trim().toLowerCase();
 
     // Validations
+    if (!authSession) {
+      setError('大学Googleアカウントでログインしてください。');
+      setBooking(false);
+      return;
+    }
+
     if (!cleanName || !normalizedNumber || !cleanEmail) {
-      setError('すべての項目を入力してください。');
+      setError('氏名を入力してください。');
       setBooking(false);
       return;
     }
@@ -346,31 +355,6 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
     // Validate exactly one slot is selected
     if (selectedSlotIds.length !== 1) {
       setError('当日券を取得する枠を1つだけ選択してください。');
-      setBooking(false);
-      return;
-    }
-
-    // Student number regex validation
-    const studentNumberRegex = /^\d{2}[A-Z]\d{3}$/;
-    if (!studentNumberRegex.test(normalizedNumber)) {
-      setError('学籍番号は「数字2桁 + 英字1文字 + 数字3桁」の形式で入力してください。(例: 24B123)');
-      setBooking(false);
-      return;
-    }
-
-    // Verify email matches student number
-    const expectedEmailLocalPart = 's' + normalizedNumber.toLowerCase();
-    const actualEmailLocalPart = cleanEmail.split('@')[0];
-    if (actualEmailLocalPart !== expectedEmailLocalPart) {
-      setError('メールアドレスのユーザー名（@の左側）が学籍番号と一致しません。');
-      setBooking(false);
-      return;
-    }
-
-    // Domain validation on frontend
-    const domain = cleanEmail.split('@')[1];
-    if (!domain || !ALLOWED_EMAIL_DOMAINS.includes(domain)) {
-      setError(`許可されている大学のメールアドレスを入力してください。(${ALLOWED_EMAIL_DOMAINS.join(', ')})`);
       setBooking(false);
       return;
     }
@@ -715,61 +699,49 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
               </div>
             )}
 
-            <div className="form-group">
-              <label className="form-label" htmlFor="studentName">氏名</label>
-              <input
-                id="studentName"
-                type="text"
-                className="form-input"
-                placeholder="例：山田 太郎"
-                required
-                value={studentName}
-                onChange={(e) => setStudentName(e.target.value)}
-                disabled={booking}
-              />
-            </div>
+            {authLoading ? (
+              <div style={{ padding: '18px 0', color: 'var(--text-secondary)' }}>ログイン状態を確認しています...</div>
+            ) : !authSession || !universityEmail ? (
+              <div style={{ marginBottom: '20px' }}>
+                <p style={{ color: 'var(--text-secondary)', marginBottom: '14px', lineHeight: 1.6 }}>
+                  予約・当日券の取得には、大阪産業大学のGoogleアカウントでログインしてください。
+                </p>
+                <button type="button" className="btn btn-primary" onClick={handleGoogleLogin}>
+                  Googleでログイン
+                </button>
+              </div>
+            ) : (
+              <>
+                <div style={{
+                  marginBottom: '18px', padding: '14px 16px', borderRadius: 'var(--radius-md)',
+                  background: 'var(--card-bg)', border: '1px solid var(--card-border)'
+                }}>
+                  <div style={{ fontWeight: 700, marginBottom: '8px' }}>大学アカウントで認証済み</div>
+                  <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+                    学籍番号：<strong style={{ color: 'var(--text-primary)' }}>{studentNumber}</strong><br />
+                    大学メール：<strong style={{ color: 'var(--text-primary)' }}>{universityEmail}</strong>
+                  </div>
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={handleLogout} style={{ marginTop: '10px' }}>
+                    別のアカウントでログイン
+                  </button>
+                </div>
 
-            <div className="form-group">
-              <label className="form-label" htmlFor="studentNumber">学籍番号</label>
-              <input
-                id="studentNumber"
-                type="text"
-                className="form-input"
-                placeholder="例：24B123（先頭の s は入力しない）"
-                required
-                value={studentNumber}
-                onChange={handleStudentNumberChange}
-                onBlur={handleStudentNumberBlur}
-                disabled={booking}
-                style={{ textTransform: 'uppercase' }}
-                autoCorrect="off"
-                spellCheck={false}
-                autoCapitalize="characters"
-                maxLength={7}
-              />
-              <span className="form-hint" style={{ color: 'var(--color-warning)' }}>
-                例：24B123（先頭の s は入力しない）
-              </span>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label" htmlFor="universityEmail">大学メールアドレス</label>
-              <input
-                id="universityEmail"
-                type="email"
-                className="form-input"
-                placeholder={`例：s23a123@${STUDENT_EMAIL_DOMAIN}`}
-                required
-                value={universityEmail}
-                onChange={handleEmailChange}
-                disabled={booking}
-              />
-              {!isEmailEdited && studentNumber && (
-                <span className="form-hint" style={{ color: 'var(--color-success)', display: 'block', marginTop: '6px' }}>
-                  💡 学籍番号から自動入力しています。違う場合は修正してください。
-                </span>
-              )}
-            </div>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="studentName">氏名</label>
+                  <input
+                    id="studentName"
+                    type="text"
+                    className="form-input"
+                    placeholder="例：山田 太郎"
+                    required
+                    value={studentName}
+                    onChange={(e) => setStudentName(e.target.value)}
+                    disabled={booking}
+                    autoComplete="name"
+                  />
+                </div>
+              </>
+            )}
 
             <div style={{
               margin: '20px 0',
@@ -791,8 +763,8 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
               <button
                 type="submit"
                 className="btn btn-primary"
-                disabled={booking || !isReservationButtonEnabled}
-                style={{ opacity: isReservationButtonEnabled ? 1 : 0.5 }}
+                disabled={booking || authLoading || !authSession || !universityEmail || !studentName.trim() || !isReservationButtonEnabled}
+                style={{ opacity: authSession && universityEmail && studentName.trim() && isReservationButtonEnabled ? 1 : 0.5 }}
               >
                 {booking ? '予約処理中...' : '予約券を取得する'}
               </button>
@@ -800,7 +772,7 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
                 type="button"
                 className="btn btn-secondary"
                 onClick={handleWalkinSubmit}
-                disabled={booking || !isWalkinButtonEnabled}
+                disabled={booking || authLoading || !authSession || !universityEmail || !studentName.trim() || !isWalkinButtonEnabled}
                 style={{
                   borderColor: isWalkinButtonEnabled ? 'var(--color-warning-border)' : 'var(--card-border)',
                   color: isWalkinButtonEnabled ? 'var(--color-warning)' : 'var(--text-muted)',
