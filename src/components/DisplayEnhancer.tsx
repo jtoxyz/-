@@ -2,9 +2,14 @@
 
 import { useEffect } from 'react';
 
+// [重要度: 低]
+// 画面内の日時文字列を「日付（曜日）時刻」の並びへ整えるための表示専用パターン。
 const DATE_TIME_PATTERN = /(\d{2}\/\d{2})\s+(\d{2}:\d{2})\s+\(([^)]+)\)/g;
 const FULL_DATE_TIME_PATTERN = /(\d{4}\/\d{2}\/\d{2})\s+(\d{2}:\d{2}(?::\d{2})?)\s+\(([^)]+)\)/g;
 
+// [重要度: 高]
+// 予約一覧の表示中テーブルから、未使用の予約券に対応するメールアドレスだけを重複なく抽出する。
+// DOMの列番号に依存するため、予約一覧の列順を変更した場合は必ず合わせて確認すること。
 function getUnpaidReservationEmails(): string[] {
   const emails = new Set<string>();
 
@@ -30,6 +35,9 @@ function getUnpaidReservationEmails(): string[] {
   return Array.from(emails);
 }
 
+// [重要度: 中]
+// Clipboard APIを優先し、未対応ブラウザでは一時textareaを使って文字列をコピーする。
+// 予約データを変更する処理ではなく、画面上の文字列を端末のクリップボードへ渡すだけ。
 async function copyText(text: string): Promise<void> {
   if (navigator.clipboard?.writeText) {
     await navigator.clipboard.writeText(text);
@@ -48,6 +56,9 @@ async function copyText(text: string): Promise<void> {
   if (!copied) throw new Error('コピーに失敗しました');
 }
 
+// [重要度: 中]
+// 予約一覧画面のExcel出力ボタン付近へ、未払い者メールをBCC用にコピーする補助ボタンを一度だけ追加する。
+// 同じIDのボタンが存在する場合は再追加せず、MutationObserverによる重複生成を防ぐ。
 function addUnpaidEmailCopyButton() {
   if (!/^\/admin\/events\/[^/]+\/reservations\/?$/.test(window.location.pathname)) return;
   if (document.getElementById('copy-unpaid-reservation-emails')) return;
@@ -65,6 +76,8 @@ function addUnpaidEmailCopyButton() {
   button.style.padding = '10px 16px';
   button.style.minWidth = '210px';
 
+  // [重要度: 低]
+  // 現在抽出できる人数に合わせてボタン表示と有効状態を更新する。
   const refreshLabel = () => {
     const count = getUnpaidReservationEmails().length;
     button.textContent = `📧 未払い者メール（BCC）コピー：${count}人`;
@@ -92,6 +105,9 @@ function addUnpaidEmailCopyButton() {
   refreshLabel();
 }
 
+// [重要度: 低]
+// 描画済みDOMを走査し、日時表記やチケット使用時間の見た目を後付けで整える。
+// 元データや予約状態は変更せず、テキスト配置とCSSクラスだけを調整する。
 function enhanceDisplay(root: ParentNode) {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   const textNodes: Text[] = [];
@@ -138,6 +154,8 @@ function enhanceDisplay(root: ParentNode) {
       if (time instanceof HTMLElement) {
         time.classList.add('ticket-use-window-time');
 
+        // [重要度: 低]
+        // 使用開始・終了を別行表示へ分割する処理は一度だけ行い、再走査でDOMが増え続けないよう印を付ける。
         if (!time.dataset.splitApplied) {
           const parts = (time.textContent ?? '').split('〜').map((part) => part.trim());
           if (parts.length === 2) {
@@ -166,6 +184,9 @@ function enhanceDisplay(root: ParentNode) {
   addUnpaidEmailCopyButton();
 }
 
+// [重要度: 中]
+// ページ描画後とDOM更新時に表示補助処理を実行する監視コンポーネント。
+// requestAnimationFrameで同一フレーム内の連続実行をまとめ、過剰なDOM走査を防ぐ。
 export default function DisplayEnhancer() {
   useEffect(() => {
     let scheduled = false;
@@ -185,6 +206,8 @@ export default function DisplayEnhancer() {
     const observer = new MutationObserver(schedule);
     observer.observe(document.body, { childList: true, subtree: true, characterData: true });
 
+    // [重要度: 中]
+    // コンポーネント破棄時に監視を停止し、不要な処理やメモリ保持を防ぐ。
     return () => observer.disconnect();
   }, []);
 
