@@ -7,7 +7,7 @@ import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { marked } from 'marked';
-import DOMPurify from 'isomorphic-dompurify';
+import DOMPurify from 'dompurify';
 import { parseShortcodes } from '@/lib/parseShortcodes';
 
 interface TicketDetails {

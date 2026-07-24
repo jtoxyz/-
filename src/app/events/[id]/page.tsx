@@ -11,7 +11,7 @@ import { supabase } from '@/lib/supabase';
 import { saveToken } from '@/lib/ticketCache';
 import { STUDENT_EMAIL_DOMAIN } from '@/lib/config';
 import { marked } from 'marked';
-import DOMPurify from 'isomorphic-dompurify';
+import DOMPurify from 'dompurify';
 import { parseShortcodes } from '@/lib/parseShortcodes';
 
 interface EventSlot {

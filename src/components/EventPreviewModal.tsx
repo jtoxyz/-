@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect } from 'react';
-import DOMPurify from 'isomorphic-dompurify';
+import DOMPurify from 'dompurify';
 import { marked } from 'marked';
 import { parseShortcodes } from '@/lib/parseShortcodes';
 
