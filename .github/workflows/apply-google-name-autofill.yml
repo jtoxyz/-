@@ -5,6 +5,7 @@ on:
   push:
     paths:
       - scripts/autofill-google-name.py
+      - .github/workflows/apply-google-name-autofill.yml
 
 permissions:
   contents: write
