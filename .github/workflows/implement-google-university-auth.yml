@@ -11,6 +11,10 @@ on:
 permissions:
   contents: write
 
+env:
+  NEXT_PUBLIC_SUPABASE_URL: https://nbhpsjhqaakaweeywhxa.supabase.co
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: build-placeholder-key
+
 jobs:
   implement:
     runs-on: ubuntu-latest
