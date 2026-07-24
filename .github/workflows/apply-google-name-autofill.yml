@@ -29,3 +29,5 @@ jobs:
           git add src/app/events/[id]/page.tsx
           git diff --cached --quiet || git commit -m "Autofill reservation name from Google account"
           git push
+
+# run: google-name-autofill
