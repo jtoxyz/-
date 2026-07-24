@@ -1,0 +1,104 @@
+name: Remove event-level reservation window fields
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/remove-event-level-reservation-window.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Remove duplicated event-level reservation date fields
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          paths = [
+              Path('src/app/admin/events/new/page.tsx'),
+              Path('src/app/admin/events/[id]/page.tsx'),
+          ]
+
+          state_block = """  // Date/Time strings (empty string represents null)
+          const [reservationStartsAt, setReservationStartsAt] = useState('');
+          const [reservationEndsAt, setReservationEndsAt] = useState('');
+          const [useStartsAt, setUseStartsAt] = useState('');
+          """
+          state_replacement = """  // Date/Time strings (empty string represents null)
+          const [useStartsAt, setUseStartsAt] = useState('');
+          """
+
+          ui_start = """            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
+                        <div className=\"form-group\">
+                          <label className=\"form-label\" htmlFor=\"reservationStartsAt\">予約受付開始日時</label>"""
+          ui_end = """
+
+                      {/* Slot selection mode */}"""
+
+          for path in paths:
+              text = path.read_text(encoding='utf-8')
+
+              if text.count(state_block) != 1:
+                  raise RuntimeError(f'{path}: event-level reservation state block was not found exactly once')
+              text = text.replace(state_block, state_replacement, 1)
+
+              old_start = "reservation_starts_at: reservationStartsAt ? new Date(reservationStartsAt).toISOString() : null,"
+              old_end = "reservation_ends_at: reservationEndsAt ? new Date(reservationEndsAt).toISOString() : null,"
+              if text.count(old_start) != 1 or text.count(old_end) != 1:
+                  raise RuntimeError(f'{path}: event-level reservation payload fields were not found exactly once')
+              text = text.replace(old_start, 'reservation_starts_at: null,', 1)
+              text = text.replace(old_end, 'reservation_ends_at: null,', 1)
+
+              start_index = text.find(ui_start)
+              if start_index == -1:
+                  raise RuntimeError(f'{path}: event-level reservation UI start was not found')
+              end_index = text.find(ui_end, start_index)
+              if end_index == -1:
+                  raise RuntimeError(f'{path}: event-level reservation UI end was not found')
+              text = text[:start_index] + '            {/* Slot selection mode */}' + text[end_index + len(ui_end):]
+
+              if path.name == 'page.tsx' and '[id]' in str(path):
+                  for line in (
+                      "        setReservationStartsAt(formatIsoToLocalString(data.reservation_starts_at));\n",
+                      "        setReservationEndsAt(formatIsoToLocalString(data.reservation_ends_at));\n",
+                  ):
+                      if text.count(line) != 1:
+                          raise RuntimeError(f'{path}: expected edit-page initializer was not found exactly once')
+                      text = text.replace(line, '', 1)
+
+              forbidden = (
+                  'const [reservationStartsAt, setReservationStartsAt]',
+                  'const [reservationEndsAt, setReservationEndsAt]',
+                  'value={reservationStartsAt}',
+                  'value={reservationEndsAt}',
+                  'htmlFor="reservationStartsAt"',
+                  'htmlFor="reservationEndsAt"',
+              )
+              remaining = [item for item in forbidden if item in text]
+              if remaining:
+                  raise RuntimeError(f'{path}: old event-level fields remain: {remaining}')
+
+              path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Verify production build
+        run: |
+          npm ci
+          npm run build
+
+      - name: Remove one-time workflow
+        run: rm .github/workflows/remove-event-level-reservation-window.yml
+
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/app/admin/events/new/page.tsx src/app/admin/events/'[id]'/page.tsx .github/workflows/remove-event-level-reservation-window.yml
+          git commit -m "Remove duplicated event-level reservation window fields"
+          git push
