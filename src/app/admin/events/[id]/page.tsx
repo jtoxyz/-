@@ -75,8 +75,6 @@ export default function AdminEditEventPage({ params }: { params: Promise<{ id: s
   const [description, setDescription] = useState('');
   
   // Date/Time strings (empty string represents null)
-  const [reservationStartsAt, setReservationStartsAt] = useState('');
-  const [reservationEndsAt, setReservationEndsAt] = useState('');
   const [useStartsAt, setUseStartsAt] = useState('');
   const [useEndsAt, setUseEndsAt] = useState('');
 
@@ -153,8 +151,6 @@ export default function AdminEditEventPage({ params }: { params: Promise<{ id: s
         // Prepopulate states
         setTitle(data.title || '');
         setDescription(data.description || '');
-        setReservationStartsAt(formatIsoToLocalString(data.reservation_starts_at));
-        setReservationEndsAt(formatIsoToLocalString(data.reservation_ends_at));
         setUseStartsAt(formatIsoToLocalString(data.use_starts_at));
         setUseEndsAt(formatIsoToLocalString(data.use_ends_at));
         setIsPublic(data.is_public ?? false);
@@ -197,8 +193,8 @@ export default function AdminEditEventPage({ params }: { params: Promise<{ id: s
             date: extractDate(s.starts_at),
             startTime: extractTime(s.starts_at),
             endTime: extractTime(s.ends_at),
-            reservationStartsAt: formatIsoToLocalString(s.reservation_starts_at || data.reservation_starts_at),
-            reservationEndsAt: formatIsoToLocalString(s.reservation_ends_at || data.reservation_ends_at),
+            reservationStartsAt: formatIsoToLocalString(s.reservation_starts_at),
+            reservationEndsAt: formatIsoToLocalString(s.reservation_ends_at),
             ticketUseStartsAt: formatIsoToLocalString(s.ticket_use_starts_at || s.reservation_use_starts_at || data.use_starts_at || s.starts_at),
             ticketUseEndsAt: formatIsoToLocalString(s.ticket_use_ends_at || s.reservation_use_ends_at || data.use_ends_at || s.ends_at),
             walkinStartsAt: formatIsoToLocalString(s.walkin_starts_at || s.walkin_use_starts_at || s.starts_at),
@@ -581,8 +577,8 @@ export default function AdminEditEventPage({ params }: { params: Promise<{ id: s
       capacity: firstSlot.capacity,
       starts_at: combineDateTime(firstSlot.date, firstSlot.startTime),
       ends_at: combineDateTime(firstSlot.date, firstSlot.endTime),
-      reservation_starts_at: reservationStartsAt ? new Date(reservationStartsAt).toISOString() : null,
-      reservation_ends_at: reservationEndsAt ? new Date(reservationEndsAt).toISOString() : null,
+      reservation_starts_at: null,
+      reservation_ends_at: null,
       use_starts_at: useStartsAt ? new Date(useStartsAt).toISOString() : null,
       use_ends_at: useEndsAt ? new Date(useEndsAt).toISOString() : null,
       is_public: isPublic,
@@ -940,33 +936,6 @@ export default function AdminEditEventPage({ params }: { params: Promise<{ id: s
             <h3 style={{ fontSize: '1.1rem', marginBottom: '16px', color: 'var(--color-primary)' }}>
               2. 日程・受付時間設定
             </h3>
-            
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
-              <div className="form-group">
-                <label className="form-label" htmlFor="reservationStartsAt">予約受付開始日時</label>
-                <input
-                  id="reservationStartsAt"
-                  type="datetime-local"
-                  className="form-input"
-                  value={reservationStartsAt}
-                  onChange={(e) => setReservationStartsAt(e.target.value)}
-                  disabled={saving}
-                />
-                <span className="form-hint">空欄の場合は、即時受付可能とみなされます。</span>
-              </div>
-              <div className="form-group">
-                <label className="form-label" htmlFor="reservationEndsAt">予約受付終了日時</label>
-                <input
-                  id="reservationEndsAt"
-                  type="datetime-local"
-                  className="form-input"
-                  value={reservationEndsAt}
-                  onChange={(e) => setReservationEndsAt(e.target.value)}
-                  disabled={saving}
-                />
-                <span className="form-hint">空欄の場合は、期限なしとみなされます。</span>
-              </div>
-            </div>
 
             {/* Slot selection mode */}
             <div className="form-group" style={{ marginTop: '16px' }}>

@@ -15,6 +15,10 @@ interface EventSlot {
   id: string;
   label: string;
   starts_at: string | null;
+  ends_at: string | null;
+  ticket_use_ends_at: string | null;
+  walkin_use_ends_at: string | null;
+  walkin_ends_at: string | null;
 }
 
 function normalizeStudentNumber(val: string): string {
@@ -88,7 +92,7 @@ export default function FindTicketPage() {
       try {
         const { data, error } = await supabase
           .from('event_slots')
-          .select('id, label, starts_at')
+          .select('id, label, starts_at, ends_at, ticket_use_ends_at, walkin_use_ends_at, walkin_ends_at')
           .eq('event_id', eventId)
           .eq('is_enabled', true)
           .order('starts_at', { ascending: true });
@@ -99,7 +103,14 @@ export default function FindTicketPage() {
           return;
         }
 
-        const availableSlots = data ?? [];
+        const now = Date.now();
+        const availableSlots = (data ?? []).filter((slot) => {
+          const reservationEnd = slot.ticket_use_ends_at || slot.ends_at;
+          const walkinEnd = slot.walkin_use_ends_at || slot.walkin_ends_at || slot.ticket_use_ends_at || slot.ends_at;
+          const reservationStillVisible = !reservationEnd || new Date(reservationEnd).getTime() >= now;
+          const walkinStillVisible = !walkinEnd || new Date(walkinEnd).getTime() >= now;
+          return reservationStillVisible || walkinStillVisible;
+        });
         setSlots(availableSlots);
         if (availableSlots.length === 1) setEventSlotId(availableSlots[0].id);
       } finally {

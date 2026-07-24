@@ -67,8 +67,6 @@ interface EventDetails {
   capacity: number;
   starts_at: string | null;
   ends_at: string | null;
-  reservation_starts_at: string | null;
-  reservation_ends_at: string | null;
   reservation_enabled: boolean;
   remaining_slots: number;
   slot_selection_mode: 'single' | 'multiple';
@@ -583,11 +581,6 @@ export default function EventBookingPage({ params }: { params: Promise<{ id: str
           <div className="info-label">開催日時</div>
           <div className="info-value" style={{ fontWeight: 600 }}>{formatDateTime(event.starts_at)}</div>
 
-          <div className="info-label">受付期間</div>
-          <div className="info-value">
-            {event.reservation_starts_at ? formatDateTime(event.reservation_starts_at) : '制限なし'} 〜 <br />
-            {event.reservation_ends_at ? formatDateTime(event.reservation_ends_at) : '制限なし'}
-          </div>
         </div>
           </div>
         </div>
