@@ -64,6 +64,9 @@ export default function AdminNav() {
       <Link href="/admin/payment-qr" className={`admin-nav-link ${pathname === '/admin/payment-qr' ? 'active' : ''}`}>
         🔄 動的支払いQR
       </Link>
+      <Link href="/admin/daily-payment-qr" className={`admin-nav-link ${pathname === '/admin/daily-payment-qr' ? 'active' : ''}`}>
+        📄 1日支払いQR
+      </Link>
       <Link href="/admin/settings/student-number" className={`admin-nav-link ${pathname === '/admin/settings/student-number' ? 'active' : ''}`}>
         🎓 学籍番号設定
       </Link>
