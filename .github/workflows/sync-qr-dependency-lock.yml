@@ -1,0 +1,33 @@
+name: Sync QR dependency lock
+
+on:
+  push:
+    paths:
+      - .github/triggers/sync-qr-dependency-lock.txt
+
+permissions:
+  contents: write
+
+jobs:
+  sync-lock:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Update package lock
+        run: npm install --package-lock-only
+      - name: Verify build
+        run: |
+          npm ci
+          npm run build
+      - name: Commit package lock
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          git diff --cached --quiet && exit 0
+          git commit -m "Sync QR code dependency lock"
+          git push
