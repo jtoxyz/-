@@ -14,7 +14,7 @@ export default function AdminNav() {
       await supabase.auth.signOut();
       router.push('/admin/login');
     } catch (e) {
-      console.error('Logout error:', e);
+      console.error('Logout error', e);
     }
   };
 
@@ -52,34 +52,22 @@ export default function AdminNav() {
 
   return (
     <div className="admin-navbar">
-      <Link
-        href="/admin/events"
-        className={`admin-nav-link ${pathname === '/admin/events' ? 'active' : ''}`}
-      >
+      <Link href="/admin/events" className={`admin-nav-link ${pathname === '/admin/events' ? 'active' : ''}`}>
         📅 企画一覧・管理
       </Link>
-      <Link
-        href="/admin/events/new"
-        className={`admin-nav-link ${pathname === '/admin/events/new' ? 'active' : ''}`}
-      >
+      <Link href="/admin/events/new" className={`admin-nav-link ${pathname === '/admin/events/new' ? 'active' : ''}`}>
         ➕ 新規企画作成
       </Link>
-      <Link
-        href="/admin/settings/payment"
-        className={`admin-nav-link ${pathname === '/admin/settings/payment' ? 'active' : ''}`}
-      >
+      <Link href="/admin/settings/payment" className={`admin-nav-link ${pathname === '/admin/settings/payment' ? 'active' : ''}`}>
         💴 支払い設定
       </Link>
-      <Link
-        href="/admin/settings/student-number"
-        className={`admin-nav-link ${pathname === '/admin/settings/student-number' ? 'active' : ''}`}
-      >
+      <Link href="/admin/payment-qr" className={`admin-nav-link ${pathname === '/admin/payment-qr' ? 'active' : ''}`}>
+        🔄 動的支払いQR
+      </Link>
+      <Link href="/admin/settings/student-number" className={`admin-nav-link ${pathname === '/admin/settings/student-number' ? 'active' : ''}`}>
         🎓 学籍番号設定
       </Link>
-      <Link
-        href="/admin/blacklist"
-        className={`admin-nav-link ${pathname === '/admin/blacklist' ? 'active' : ''}`}
-      >
+      <Link href="/admin/blacklist" className={`admin-nav-link ${pathname === '/admin/blacklist' ? 'active' : ''}`}>
         🚫 ブラックリスト
       </Link>
       {isReservationsPage && (
@@ -88,12 +76,7 @@ export default function AdminNav() {
             type="button"
             onClick={() => copyReservationColumn(2, 'コピーできる有効な予約者がいません。', '氏名')}
             className="admin-nav-link"
-            style={{
-              border: 'none',
-              cursor: 'pointer',
-              background: 'var(--color-primary-glow)',
-              color: 'var(--color-primary)',
-            }}
+            style={{ border: 'none', cursor: 'pointer', background: 'var(--color-primary-glow)', color: 'var(--color-primary)' }}
           >
             📋 氏名のみコピー
           </button>
@@ -101,12 +84,7 @@ export default function AdminNav() {
             type="button"
             onClick={() => copyReservationColumn(3, 'コピーできる有効な学籍番号がありません。', '学籍番号')}
             className="admin-nav-link"
-            style={{
-              border: 'none',
-              cursor: 'pointer',
-              background: 'var(--color-primary-glow)',
-              color: 'var(--color-primary)',
-            }}
+            style={{ border: 'none', cursor: 'pointer', background: 'var(--color-primary-glow)', color: 'var(--color-primary)' }}
           >
             🎓 学籍番号のみコピー
           </button>
@@ -115,13 +93,7 @@ export default function AdminNav() {
       <button
         onClick={handleLogout}
         className="admin-nav-link"
-        style={{
-          border: 'none',
-          cursor: 'pointer',
-          background: 'rgba(244, 63, 94, 0.15)',
-          color: 'var(--color-danger)',
-          marginLeft: 'auto',
-        }}
+        style={{ border: 'none', cursor: 'pointer', background: 'rgba(244, 63, 94, 0.15)', color: 'var(--color-danger)', marginLeft: 'auto' }}
       >
         🚪 ログアウト
       </button>
