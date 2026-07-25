@@ -3,6 +3,7 @@
 export const runtime = 'edge';
 
 import { useEffect, useMemo, useState } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
 import AdminNav from '@/components/AdminNav';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { supabase } from '@/lib/supabase';
@@ -123,8 +124,13 @@ export default function AdminPaymentQrPage() {
               </button>
             ) : (
               <div className="glass-card" style={{ marginTop: 20, textAlign: 'center' }}>
-                <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 10 }}>現在有効な一回限りQRのURL</div>
-                <div style={{ wordBreak: 'break-all', fontWeight: 700, lineHeight: 1.6 }}>{paymentUrl}</div>
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 14 }}>現在有効な一回限りQR</div>
+                {paymentUrl && (
+                  <div style={{ display: 'inline-flex', padding: 18, background: '#fff', borderRadius: 16 }}>
+                    <QRCodeSVG value={paymentUrl} size={320} level="M" includeMargin />
+                  </div>
+                )}
+                <div style={{ marginTop: 14, wordBreak: 'break-all', fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{paymentUrl}</div>
                 <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text-secondary)' }}>
                   発行日時: {new Date(current.created_at).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}
                 </div>
