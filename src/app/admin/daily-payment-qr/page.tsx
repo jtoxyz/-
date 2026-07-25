@@ -38,7 +38,7 @@ export default function AdminDailyPaymentQrPage() {
   const selectedEvent = events.find((event) => event.id === eventId);
   const paymentUrl = useMemo(() => {
     if (!issuedQr || typeof window === 'undefined') return '';
-    return `${window.location.origin}/pay/${issuedQr.qr_token}`;
+    return `${window.location.origin}/pay?token=${encodeURIComponent(issuedQr.qr_token)}`;
   }, [issuedQr]);
 
   useEffect(() => {
