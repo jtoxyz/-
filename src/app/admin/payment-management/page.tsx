@@ -1,7 +1,5 @@
 'use client';
 
-export const runtime = 'edge';
-
 import { useEffect, useMemo, useState } from 'react';
 import AdminNav from '@/components/AdminNav';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
