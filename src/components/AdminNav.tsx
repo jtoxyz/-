@@ -65,6 +65,12 @@ export default function AdminNav() {
         ➕ 新規企画作成
       </Link>
       <Link
+        href="/admin/settings/payment"
+        className={`admin-nav-link ${pathname === '/admin/settings/payment' ? 'active' : ''}`}
+      >
+        💴 支払い設定
+      </Link>
+      <Link
         href="/admin/settings/student-number"
         className={`admin-nav-link ${pathname === '/admin/settings/student-number' ? 'active' : ''}`}
       >
