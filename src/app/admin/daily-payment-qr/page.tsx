@@ -2,7 +2,7 @@
 
 export const runtime = 'edge';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import AdminNav from '@/components/AdminNav';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
@@ -35,6 +35,7 @@ export default function AdminDailyPaymentQrPage() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const qrRef = useRef<HTMLDivElement>(null);
 
   const selectedEvent = events.find((event) => event.id === eventId);
   const paymentUrl = useMemo(() => {
@@ -92,6 +93,41 @@ export default function AdminDailyPaymentQrPage() {
 
   const printQr = () => window.print();
 
+  const downloadSvg = () => {
+    const svg = qrRef.current?.querySelector('svg');
+    if (!svg) return;
+    const blob = new Blob([new XMLSerializer().serializeToString(svg)], { type: 'image/svg+xml;charset=utf-8' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `${selectedEvent?.title || 'payment'}-${validDate}-qr.svg`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  };
+
+  const downloadPng = () => {
+    const svg = qrRef.current?.querySelector('svg');
+    if (!svg) return;
+    const blob = new Blob([new XMLSerializer().serializeToString(svg)], { type: 'image/svg+xml;charset=utf-8' });
+    const objectUrl = URL.createObjectURL(blob);
+    const image = new Image();
+    image.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1024;
+      canvas.height = 1024;
+      const context = canvas.getContext('2d');
+      if (!context) return;
+      context.fillStyle = '#ffffff';
+      context.fillRect(0, 0, 1024, 1024);
+      context.drawImage(image, 0, 0, 1024, 1024);
+      const link = document.createElement('a');
+      link.href = canvas.toDataURL('image/png');
+      link.download = `${selectedEvent?.title || 'payment'}-${validDate}-qr.png`;
+      link.click();
+      URL.revokeObjectURL(objectUrl);
+    };
+    image.src = objectUrl;
+  };
+
   if (authLoading || loading) {
     return <div style={{ textAlign: 'center', padding: 60 }}><div className="loading-spinner" /></div>;
   }
@@ -130,7 +166,7 @@ export default function AdminDailyPaymentQrPage() {
               <section className="glass-card payment-qr-print-area" style={{ marginTop: 24, textAlign: 'center' }}>
                 <h2 style={{ marginTop: 0 }}>{selectedEvent?.title || '支払い確認'}</h2>
                 <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>{validDate} 専用</div>
-                <div style={{ display: 'inline-flex', padding: 20, background: '#fff', borderRadius: 16 }}>
+                <div ref={qrRef} style={{ display: 'inline-flex', padding: 20, background: '#fff', borderRadius: 16 }}>
                   <QRCodeSVG value={paymentUrl} size={360} level="M" includeMargin />
                 </div>
                 <p style={{ marginTop: 16, lineHeight: 1.7 }}>
@@ -139,7 +175,9 @@ export default function AdminDailyPaymentQrPage() {
                 <div style={{ wordBreak: 'break-all', fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{paymentUrl}</div>
                 <div className="payment-qr-print-actions" style={{ display: 'flex', justifyContent: 'center', gap: 12, flexWrap: 'wrap', marginTop: 18 }}>
                   <button className="btn btn-secondary" onClick={() => navigator.clipboard.writeText(paymentUrl)}>URLをコピー</button>
-                  <button className="btn btn-primary" onClick={printQr}>印刷する</button>
+                  <button className="btn btn-primary" onClick={downloadPng}>PNGで保存</button>
+                  <button className="btn btn-secondary" onClick={downloadSvg}>SVGで保存</button>
+                  <button className="btn btn-secondary" onClick={printQr}>印刷する</button>
                 </div>
               </section>
             )}
