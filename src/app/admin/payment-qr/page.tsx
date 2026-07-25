@@ -20,7 +20,7 @@ export default function AdminPaymentQrPage() {
 
   const paymentUrl = useMemo(() => {
     if (!current || typeof window === 'undefined') return '';
-    return `${window.location.origin}/pay/${current.qr_token}`;
+    return `${window.location.origin}/pay?token=${encodeURIComponent(current.qr_token)}`;
   }, [current]);
 
   const loadEvents = async () => {
