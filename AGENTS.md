@@ -17,6 +17,14 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - 公開予約RPCでは、公開状態、受付停止、受付日時、学籍番号、大学メール、重複予約、券種競合、予約枠、総定員をDB側でも検証する。
 - 日時表示は必ず `Asia/Tokyo` を明示する。
 
+## 外部AIサービス
+
+- この予約サイトの実行環境では GitHub Models を使用しない。
+- 廃止対象の GitHub Models API、`models.github.ai`、`models.inference.ai.azure.com`、関連SDKやトークンを新規追加しない。
+- AI機能を追加する場合は、利用する提供元、料金、保存されるデータ、個人情報の送信範囲を確認してから実装する。
+- 外部AIサービスの秘密鍵を `NEXT_PUBLIC_` 付き環境変数やブラウザ側コードへ置かない。
+- GitHub Copilotなどの開発支援機能は、予約サイト本番の実行時依存とは分離して扱う。
+
 ## 現行の正式RPC契約
 
 - `create_reservation(...) -> jsonb`
