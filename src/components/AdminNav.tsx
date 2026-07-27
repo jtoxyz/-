@@ -4,11 +4,19 @@ import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 
+// [重要度: 中]
+// 管理画面内の移動、ログアウト、予約一覧の補助コピー機能をまとめたナビゲーション。
+// 予約データ自体の更新は行わず、表示中の表から文字列を取得する補助処理のみを含む。
 export default function AdminNav() {
   const router = useRouter();
   const pathname = usePathname();
+  // [重要度: 低]
+  // 予約一覧画面でのみ氏名・学籍番号のコピー操作を表示するため、現在のURLを判定する。
   const isReservationsPage = /^\/admin\/events\/[^/]+\/reservations$/.test(pathname);
 
+  // [重要度: 最高]
+  // 管理者セッションをSupabaseから破棄してログイン画面へ戻す。
+  // 画面遷移だけにすると認証セッションが残るため、signOutを削除しないこと。
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut();
@@ -18,6 +26,9 @@ export default function AdminNav() {
     }
   };
 
+  // [重要度: 中]
+  // 予約一覧テーブルのうち、無効表示されていない行だけから指定列の値を取得する。
+  // 列番号は予約一覧テーブルの構成に依存するため、表の列順を変更した場合は合わせて確認すること。
   const getActiveReservationColumnValues = (columnIndex: number): string[] => {
     const rows = Array.from(
       document.querySelectorAll<HTMLTableRowElement>('.reservations-table-desktop tbody tr')
@@ -29,6 +40,9 @@ export default function AdminNav() {
       .filter(Boolean);
   };
 
+  // [重要度: 中]
+  // 画面に表示されている有効な予約者の指定列を改行区切りでクリップボードへコピーする。
+  // Supabase上の予約データを変更・削除する処理ではない。
   const copyReservationColumn = async (
     columnIndex: number,
     emptyMessage: string,

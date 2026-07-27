@@ -20,6 +20,9 @@ interface CachedTicket {
   use_ends_at?: string | null;
 }
 
+// [重要度: 高]
+// 支払期限・使用期限として表示する日時を、実行環境のタイムゾーンに左右されず日本時間で整形する。
+// Asia/Tokyoを削除するとEdge Runtimeなどで9時間ずれて表示される可能性がある。
 function formatDeadline(dateStr: string): string {
   const date = new Date(dateStr);
   const datePart = date.toLocaleDateString('ja-JP', {
@@ -40,6 +43,9 @@ function formatDeadline(dateStr: string): string {
   return `${datePart}（${weekday}）${timePart}`;
 }
 
+// [重要度: 中]
+// 現在時刻と期限の差から、利用者向けの支払期限メッセージを作成する表示用処理。
+// 予約成立やチケット使用可否を確定する処理ではなく、最終判定はデータベース側の処理に従う。
 function getDeadlineInfo(dateStr: string): {
   headline: string;
   detail: string;
@@ -58,6 +64,8 @@ function getDeadlineInfo(dateStr: string): {
     };
   }
 
+  // [重要度: 中]
+  // 端数の時間が残っている場合も「あと1日」と表示するため切り上げで日数を算出する。
   const remainingDays = Math.ceil(diffMs / (24 * 60 * 60 * 1000));
   if (remainingDays <= 1) {
     return {
@@ -80,6 +88,9 @@ export default function MyTicketsList() {
 
   useEffect(() => {
     async function loadTickets() {
+      // [重要度: 高]
+      // このブラウザに保存された公開トークンだけを読み込み、利用者自身が取得したチケット一覧を復元する。
+      // トークンはチケット画面への参照情報なので、ログや画面上へ不用意に追加表示しないこと。
       const tokens = getSavedTokens();
       if (tokens.length === 0) {
         setLoading(false);
@@ -87,12 +98,18 @@ export default function MyTicketsList() {
       }
 
       try {
+        // [重要度: 高]
+        // 保存済みの各公開トークンをget_ticket RPCへ渡し、現在のチケット状態を取得する。
+        // ブラウザ内の古い情報ではなく、予約・使用・キャンセル後の最新状態を表示するために必要。
         const ticketFetches = tokens.map(async (token: string) => {
           const { data, error } = await supabase.rpc('get_ticket', {
             p_public_token: token,
           });
 
           if (error || !data || data.length === 0) {
+            // [重要度: 中]
+            // RPC自体のエラーではなくチケットが存在しない場合のみ、無効になったトークンを端末キャッシュから除去する。
+            // 一時的な通信エラー時に削除すると、正常なチケットが一覧から消えるため条件を変更しないこと。
             if (!error) removeToken(token);
             return null;
           }
@@ -102,6 +119,9 @@ export default function MyTicketsList() {
 
         const fetchedTickets = await Promise.all(ticketFetches);
         const validTickets = fetchedTickets.filter((t: CachedTicket | null): t is CachedTicket => t !== null);
+        // [重要度: 高]
+        // キャンセル済みチケットは利用可能な一覧から除外する。
+        // データベースから削除する処理ではなく、この画面に表示しないためのフィルタリングのみ。
         const activeTickets = validTickets.filter((t: CachedTicket) => t.status !== 'cancelled');
         setTickets(activeTickets);
       } catch (err) {
@@ -133,6 +153,9 @@ export default function MyTicketsList() {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         {tickets.map((ticket) => {
+          // [重要度: 高]
+          // 新しい開催枠単位の期限を優先し、旧データとの互換用項目、企画全体の期限の順で補完する。
+          // 古い予約データも表示できるようにしているため、後方互換項目を確認せず削除しないこと。
           const paymentDeadline =
             ticket.slot_ticket_use_ends_at ||
             ticket.slot_reservation_use_ends_at ||
