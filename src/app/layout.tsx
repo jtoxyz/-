@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import './display-enhancements.css';
 import Link from 'next/link';
+import { Ticket } from 'lucide-react';
 import ThemeSwitcher from '@/components/ThemeSwitcher';
 import DisplayEnhancer from '@/components/DisplayEnhancer';
 
@@ -45,8 +46,9 @@ export default function RootLayout({
         <div className="app-container">
           <header className="header">
             <div className="header-container">
-              <Link href="/" className="header-logo">
-                🎫 委員会企画予約
+              <Link href="/" className="header-logo" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                <Ticket size={23} strokeWidth={2.2} aria-hidden="true" />
+                <span>委員会企画予約</span>
               </Link>
               <nav style={{ display: 'flex', gap: '12px', alignItems: 'center', fontSize: '0.85rem' }}>
                 <Link href="/tickets/find" style={{ color: 'var(--text-secondary)' }}>
