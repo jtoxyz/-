@@ -6,6 +6,8 @@ import { Ticket } from 'lucide-react';
 import ThemeSwitcher from '@/components/ThemeSwitcher';
 import DisplayEnhancer from '@/components/DisplayEnhancer';
 import UiIconNormalizer from '@/components/UiIconNormalizer';
+import StudentAuthGate from '@/components/StudentAuthGate';
+import StudentAccountMenu from '@/components/StudentAccountMenu';
 
 export const metadata: Metadata = {
   title: '大学委員会 参加型企画予約システム',
@@ -38,7 +40,7 @@ export default function RootLayout({
                   document.documentElement.setAttribute('data-theme', 'white');
                 }
               })();
-            `
+            `,
           }}
         />
       </head>
@@ -52,10 +54,12 @@ export default function RootLayout({
                 <Ticket size={23} strokeWidth={2.2} aria-hidden="true" />
                 <span>委員会企画予約</span>
               </Link>
-              <nav style={{ display: 'flex', gap: '12px', alignItems: 'center', fontSize: '0.85rem' }}>
-                <Link href="/tickets/find" style={{ color: 'var(--text-secondary)' }}>
-                  チケットを探す
+              <nav style={{ display: 'flex', gap: '10px', alignItems: 'center', fontSize: '0.85rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                <Link href="/#my-tickets" style={{ color: 'var(--text-secondary)' }}>
+                  自分の予約
                 </Link>
+                <span style={{ color: 'var(--card-border)' }}>|</span>
+                <StudentAccountMenu />
                 <span style={{ color: 'var(--card-border)' }}>|</span>
                 <Link href="/admin" style={{ color: 'var(--text-secondary)' }}>
                   管理画面
@@ -65,9 +69,9 @@ export default function RootLayout({
               </nav>
             </div>
           </header>
-          
+
           <main className="main-content">
-            {children}
+            <StudentAuthGate>{children}</StudentAuthGate>
           </main>
 
           <footer className="footer">
