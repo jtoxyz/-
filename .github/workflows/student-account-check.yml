@@ -34,6 +34,7 @@ jobs:
         run: |
           set -o pipefail
           npx --yes wrangler@3.114.17 deploy .vercel/output/static/_worker.js/index.js \
+            --name committee-reservation-size-check \
             --dry-run \
             --outdir bundled-pages \
             --compatibility-date 2026-07-29 2>&1 | tee wrangler-pages-size.txt
