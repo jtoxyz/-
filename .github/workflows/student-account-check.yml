@@ -28,7 +28,7 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: https://nbhpsjhqaakaweeywhxa.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-for-build-only
           npm_config_legacy_peer_deps: 'true'
-        run: npx --yes --package=@cloudflare/next-on-pages@1.13.16 --package=wrangler@3.114.17 next-on-pages
+        run: npx --yes --package=@cloudflare/next-on-pages@1.13.16 --package=wrangler@3.114.17 --package=vercel@58.1.0 next-on-pages
 
       - name: Bundle generated Pages Worker
         run: |
