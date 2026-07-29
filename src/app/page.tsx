@@ -1,265 +1,136 @@
 export const runtime = 'edge';
+export const revalidate = 0;
 
 import Link from 'next/link';
 import { ArrowRight, CalendarDays, TriangleAlert } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import MyTicketsList from '@/components/MyTicketsList';
 
-// Opt out of static caching so reservation numbers are always real-time
-export const revalidate = 0;
-
-interface PublicEventSlot {
+type PublicEventSlot = {
   id: string;
   label: string;
-  starts_at: string | null;
-  ends_at: string | null;
   is_enabled: boolean;
   reservation_status: string;
   walkin_status: string;
-  reservation_starts_at: string | null;
-  reservation_ends_at: string | null;
-  ticket_use_starts_at: string | null;
-  ticket_use_ends_at: string | null;
-  walkin_starts_at: string | null;
-  walkin_ends_at: string | null;
-  is_reservation_enabled: boolean;
-  is_ticket_use_enabled: boolean;
-  is_walkin_enabled: boolean;
-}
+};
 
-interface PublicEvent {
+type PublicEvent = {
   id: string;
   title: string;
-  description: string;
+  description: string | null;
   starts_at: string | null;
   ends_at: string | null;
   reservation_starts_at: string | null;
   reservation_ends_at: string | null;
-  reservation_enabled: boolean;
-  ticket_enabled: boolean;
-  use_button_enabled: boolean;
-  use_starts_at: string | null;
-  use_ends_at: string | null;
-  allowed_email_domains: string[];
-  slot_selection_mode: 'single' | 'multiple';
-  created_at: string;
-  has_walkin_active: boolean;
-  has_walkin_upcoming: boolean;
   slots: PublicEventSlot[];
-}
+};
 
-function formatDateTime(dateStr: string | null): string {
-  if (!dateStr) return '制限なし';
-  const date = new Date(dateStr);
-  const dateTimeStr = date.toLocaleString('ja-JP', {
-    month: '2-digit',
-    day: '2-digit',
+function formatDateTime(value: string | null): string {
+  if (!value) return '未設定';
+  return new Date(value).toLocaleString('ja-JP', {
+    month: 'numeric',
+    day: 'numeric',
+    weekday: 'short',
     hour: '2-digit',
     minute: '2-digit',
     timeZone: 'Asia/Tokyo',
   });
-  const weekday = new Intl.DateTimeFormat('ja-JP', {
-    weekday: 'short',
-    timeZone: 'Asia/Tokyo',
-  }).format(date);
-  return `${dateTimeStr} (${weekday})`;
+}
+
+function eventStatus(event: PublicEvent) {
+  const slots = (event.slots || []).filter((slot) => slot.is_enabled);
+  if (slots.some((slot) => ['available', 'low_remaining'].includes(slot.reservation_status))) {
+    return { label: '予約受付中', button: '予約画面へ進む', badge: 'badge-success', active: true };
+  }
+  if (slots.some((slot) => ['walkin_available', 'walkin_low_remaining'].includes(slot.walkin_status))) {
+    return { label: '当日券受付中', button: '当日券を取得する', badge: 'badge-warning', active: true };
+  }
+  if (slots.some((slot) => slot.reservation_status === 'before_open' || slot.walkin_status === 'walkin_upcoming')) {
+    return { label: '受付前', button: '詳細を見る', badge: 'badge-secondary', active: true };
+  }
+  if (slots.some((slot) => slot.reservation_status === 'full' || slot.walkin_status === 'walkin_full')) {
+    return { label: '満席', button: '満席', badge: 'badge-danger', active: false };
+  }
+  return { label: '受付終了', button: '受付終了', badge: 'badge-danger', active: false };
+}
+
+function slotSummary(event: PublicEvent): string {
+  const slots = (event.slots || []).filter((slot) => slot.is_enabled);
+  const reservationOpen = slots.filter((slot) => ['available', 'low_remaining'].includes(slot.reservation_status)).length;
+  const walkinOpen = slots.filter((slot) => ['walkin_available', 'walkin_low_remaining'].includes(slot.walkin_status)).length;
+  if (reservationOpen > 0 && walkinOpen > 0) return `予約受付 ${reservationOpen}枠・当日券 ${walkinOpen}枠`;
+  if (reservationOpen > 0) return `予約受付中 ${reservationOpen}枠`;
+  if (walkinOpen > 0) return `当日券受付中 ${walkinOpen}枠`;
+  return slots.length > 0 ? `${slots.length}枠` : '開催枠準備中';
 }
 
 export default async function Home() {
-  // Fetch public events from Supabase secure RPC
-  const { data: events, error } = await supabase.rpc('get_public_events');
-
-  const getEventStatus = (event: PublicEvent) => {
-    const enabledSlots = event.slots?.filter(s => s.is_enabled) || [];
-
-    if (enabledSlots.length === 0) {
-      return { label: '準備中', buttonText: '準備中', active: false, badge: 'badge-secondary' };
-    }
-
-    if (enabledSlots.every(s => s.reservation_status === 'suspended' && s.walkin_status === 'suspended')) {
-      return { label: '停止中', buttonText: '停止中', active: false, badge: 'badge-danger' };
-    }
-
-    // 1. 予約受付中
-    const hasReservationActive = enabledSlots.some(s => s.reservation_status === 'available' || s.reservation_status === 'low_remaining');
-    if (hasReservationActive) {
-      return { label: '予約受付中', buttonText: '予約フォームへ進む', active: true, badge: 'badge-success' };
-    }
-
-    // 2. 予約受付前
-    const hasReservationUpcoming = enabledSlots.some(s => s.reservation_status === 'before_open');
-    if (hasReservationUpcoming) {
-      return { label: '予約受付前', buttonText: '詳細を見る', active: true, badge: 'badge-secondary' };
-    }
-
-    // 3. 当日券受付中
-    const hasWalkinActive = enabledSlots.some(s => s.walkin_status === 'walkin_available' || s.walkin_status === 'walkin_low_remaining');
-    if (hasWalkinActive) {
-      return { label: '当日券受付中', buttonText: '当日券を取得する', active: true, badge: 'badge-warning' };
-    }
-
-    // 4. 当日券受付前
-    const hasWalkinUpcoming = enabledSlots.some(s => s.walkin_status === 'walkin_upcoming');
-    if (hasWalkinUpcoming) {
-      return { label: '当日券受付前', buttonText: '詳細を見る', active: true, badge: 'badge-warning' };
-    }
-
-    // 5. 満席
-    const isAllFull = enabledSlots.every(s => 
-      (!s.is_reservation_enabled || s.reservation_status === 'full' || s.reservation_status === 'closed') &&
-      (!s.is_walkin_enabled || s.walkin_status === 'walkin_full' || s.walkin_status === 'walkin_closed')
-    ) && enabledSlots.some(s => s.reservation_status === 'full' || s.walkin_status === 'walkin_full');
-    
-    if (isAllFull) {
-      return { label: '満席', buttonText: '満席', active: false, badge: 'badge-danger' };
-    }
-
-    // 6. 受付終了
-    return { label: '受付終了', buttonText: '受付終了', active: false, badge: 'badge-danger' };
-  };
-
-  const getStatusLabel = (status: string) => {
-    switch(status) {
-      case 'available':
-      case 'walkin_available':
-        return { text: '余裕あり', color: 'var(--color-success)' };
-      case 'low_remaining':
-      case 'walkin_low_remaining':
-        return { text: '残りわずか', color: 'var(--color-warning)' };
-      case 'full':
-      case 'walkin_full':
-        return { text: '満席', color: 'var(--color-danger)' };
-      case 'before_open':
-      case 'walkin_upcoming':
-        return { text: '受付前', color: 'var(--text-secondary)' };
-      case 'suspended':
-        return { text: '停止中', color: 'var(--color-danger)' };
-      case 'closed':
-      case 'walkin_closed':
-      default:
-        return { text: '受付終了', color: 'var(--text-muted)' };
-    }
-  };
+  const { data, error } = await supabase.rpc('get_public_events');
+  const events = (data as PublicEvent[] | null) || [];
 
   return (
     <div>
-      <div className="text-center" style={{ marginBottom: '32px' }}>
+      <div className="text-center" style={{ marginBottom: 30 }}>
         <h1 className="page-title">委員会企画予約</h1>
-        <p className="page-subtitle">学内向け参加型企画の予約・電子チケット管理ポータル</p>
+        <p className="page-subtitle">大学Googleアカウントで予約・当日券・電子チケットをまとめて管理できます。</p>
       </div>
 
-      {/* Cached ticket links on user device */}
       <MyTicketsList />
 
-      <h2 style={{ fontSize: '1.4rem', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <CalendarDays size={24} strokeWidth={2} aria-hidden="true" />
-        <span>公開中の企画一覧</span>
+      <h2 style={{ fontSize: '1.4rem', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <CalendarDays size={24} aria-hidden="true" />公開中の企画一覧
       </h2>
 
       {error && (
         <div className="error-banner">
-          <TriangleAlert size={20} aria-hidden="true" />
-          <div>企画一覧の取得に失敗しました。時間をおいて再度お試しください。</div>
+          <TriangleAlert size={20} aria-hidden="true" />企画一覧の取得に失敗しました。時間をおいて再度お試しください。
         </div>
       )}
 
-      {!error && (!events || events.length === 0) && (
+      {!error && events.length === 0 && (
         <div className="glass-card text-center" style={{ padding: '40px 20px', color: 'var(--text-secondary)' }}>
-          <p style={{ fontSize: '1.2rem', marginBottom: '8px' }}>現在公開中の企画はありません</p>
-          <p style={{ fontSize: '0.875rem' }}>企画が追加されるまでしばらくお待ちください。</p>
+          <p style={{ fontSize: '1.15rem', marginBottom: 7 }}>現在公開中の企画はありません</p>
+          <p style={{ fontSize: '0.875rem' }}>企画が追加されるまでお待ちください。</p>
         </div>
       )}
 
-      {events && events.length > 0 && (
+      {events.length > 0 && (
         <div className="events-grid">
-          {events.map((event: PublicEvent) => {
-            const status = getEventStatus(event);
-            
-            const enabledSlots = event.slots?.filter(s => s.is_enabled) || [];
-
-            const bestResStatus = enabledSlots.reduce((best, s) => {
-              const order = { 'available': 1, 'low_remaining': 2, 'full': 3, 'before_open': 4, 'closed': 5, 'suspended': 6 };
-              const currentOrder = order[best as keyof typeof order] || 99;
-              const newOrder = order[s.reservation_status as keyof typeof order] || 99;
-              return newOrder < currentOrder ? s.reservation_status : best;
-            }, 'closed');
-
-            const bestWalkinStatus = enabledSlots.reduce((best, s) => {
-              const order = { 'walkin_available': 1, 'walkin_low_remaining': 2, 'walkin_full': 3, 'walkin_upcoming': 4, 'walkin_closed': 5, 'suspended': 6 };
-              const currentOrder = order[best as keyof typeof order] || 99;
-              const newOrder = order[s.walkin_status as keyof typeof order] || 99;
-              return newOrder < currentOrder ? s.walkin_status : best;
-            }, 'walkin_closed');
-
-            const resDisplay = getStatusLabel(bestResStatus);
-            const walkinDisplay = getStatusLabel(bestWalkinStatus);
-
+          {events.map((event) => {
+            const status = eventStatus(event);
             return (
-              <div key={event.id} className="glass-card interactive">
-                <div className="flex-between" style={{ marginBottom: '12px', alignItems: 'flex-start' }}>
+              <article key={event.id} className="glass-card interactive">
+                <div className="flex-between" style={{ marginBottom: 12, alignItems: 'flex-start', gap: 12 }}>
                   <span className={`badge ${status.badge}`}>{status.label}</span>
-                  <div style={{ textAlign: 'right', fontSize: '0.78rem', lineHeight: '1.4' }}>
-                    <div style={{ color: 'var(--text-secondary)' }}>
-                      予約受付: <span style={{ fontWeight: 700, color: resDisplay.color }}>{resDisplay.text}</span>
-                    </div>
-                    <div style={{ color: 'var(--text-secondary)', marginTop: '2px' }}>
-                      当日券受付: <span style={{ fontWeight: 700, color: walkinDisplay.color }}>{walkinDisplay.text}</span>
-                    </div>
-                  </div>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', textAlign: 'right' }}>{slotSummary(event)}</span>
                 </div>
 
-                <h3 style={{ fontSize: '1.25rem', marginBottom: '8px', color: 'var(--text-primary)' }}>
-                  {event.title}
-                </h3>
-                
+                <h3 style={{ fontSize: '1.25rem', marginBottom: 8 }}>{event.title}</h3>
                 {event.description && (
-                  <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '16px', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                  <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: 16, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden', whiteSpace: 'pre-wrap' }}>
                     {event.description}
                   </p>
                 )}
 
                 <div className="event-info-grid">
                   <div className="info-label">開催日時</div>
-                  <div className="info-value">{formatDateTime(event.starts_at)}</div>
-                  
+                  <div className="info-value">{formatDateTime(event.starts_at)} 〜<br />{formatDateTime(event.ends_at)}</div>
                   <div className="info-label">予約受付期間</div>
-                  <div className="info-value">
-                    {event.reservation_starts_at ? formatDateTime(event.reservation_starts_at) : '制限なし'} 〜 <br />
-                    {event.reservation_ends_at ? formatDateTime(event.reservation_ends_at) : '制限なし'}
-                  </div>
-
-                  <div className="info-label">当日券受付</div>
-                  <div className="info-value" style={{ fontSize: '0.82rem' }}>
-                    {bestWalkinStatus === 'walkin_available' || bestWalkinStatus === 'walkin_low_remaining'
-                      ? <span style={{ color: 'var(--color-warning)', fontWeight: 600 }}>受付中</span>
-                      : bestWalkinStatus === 'walkin_upcoming'
-                        ? <span style={{ color: 'var(--text-secondary)' }}>受付前（詳細画面で確認）</span>
-                        : (() => {
-                            const hasConfig = enabledSlots.some(s => s.is_walkin_enabled);
-                            if (hasConfig) {
-                              return <span style={{ color: 'var(--color-danger)' }}>受付終了</span>;
-                            }
-                            return <span style={{ color: 'var(--text-muted)' }}>未設定</span>;
-                          })()
-                    }
-                  </div>
+                  <div className="info-value">{formatDateTime(event.reservation_starts_at)} 〜<br />{formatDateTime(event.reservation_ends_at)}</div>
                 </div>
 
                 <div className="mt-4">
                   {status.active ? (
-                    <Link href={`/events/${event.id}`}>
-                      <button className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                        <span>{status.buttonText}</span>
-                        <ArrowRight size={17} aria-hidden="true" />
+                    <Link href={`/reserve/${event.id}`}>
+                      <button className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                        {status.button}<ArrowRight size={17} aria-hidden="true" />
                       </button>
                     </Link>
                   ) : (
-                    <button className="btn btn-secondary" disabled>
-                      {status.buttonText}
-                    </button>
+                    <button className="btn btn-secondary" disabled>{status.button}</button>
                   )}
                 </div>
-              </div>
+              </article>
             );
           })}
         </div>
