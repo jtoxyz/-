@@ -2,7 +2,22 @@
 
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
+import {
+  BadgeCheck,
+  Ban,
+  Banknote,
+  CalendarDays,
+  CirclePlus,
+  ClipboardCopy,
+  FileText,
+  GraduationCap,
+  LogOut,
+  QrCode,
+  RefreshCw,
+} from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+
+const iconStyle = { marginRight: '6px', verticalAlign: 'middle' } as const;
 
 export default function AdminNav() {
   const router = useRouter();
@@ -53,31 +68,31 @@ export default function AdminNav() {
   return (
     <div className="admin-navbar">
       <Link href="/admin/events" className={`admin-nav-link ${pathname === '/admin/events' ? 'active' : ''}`}>
-        📅 企画一覧・管理
+        <CalendarDays size={18} style={iconStyle} aria-hidden="true" />企画一覧・管理
       </Link>
       <Link href="/admin/events/new" className={`admin-nav-link ${pathname === '/admin/events/new' ? 'active' : ''}`}>
-        ➕ 新規企画作成
+        <CirclePlus size={18} style={iconStyle} aria-hidden="true" />新規企画作成
       </Link>
       <Link href="/admin/settings/payment" className={`admin-nav-link ${pathname === '/admin/settings/payment' ? 'active' : ''}`}>
-        💴 支払い設定
+        <Banknote size={18} style={iconStyle} aria-hidden="true" />支払い設定
       </Link>
       <Link href="/admin/payment-management" className={`admin-nav-link ${pathname === '/admin/payment-management' ? 'active' : ''}`}>
-        ✅ 支払い管理
+        <BadgeCheck size={18} style={iconStyle} aria-hidden="true" />支払い管理
       </Link>
       <Link href="/admin/payment-qr" className={`admin-nav-link ${pathname === '/admin/payment-qr' ? 'active' : ''}`}>
-        🔄 動的支払いQR
+        <RefreshCw size={18} style={iconStyle} aria-hidden="true" />動的支払いQR
       </Link>
       <Link href="/admin/daily-payment-qr" className={`admin-nav-link ${pathname === '/admin/daily-payment-qr' ? 'active' : ''}`}>
-        📄 1日支払いQR
+        <FileText size={18} style={iconStyle} aria-hidden="true" />1日支払いQR
       </Link>
       <Link href="/qr-maker" className={`admin-nav-link ${pathname === '/qr-maker' ? 'active' : ''}`}>
-        ◼️ QRコード作成
+        <QrCode size={18} style={iconStyle} aria-hidden="true" />QRコード作成
       </Link>
       <Link href="/admin/settings/student-number" className={`admin-nav-link ${pathname === '/admin/settings/student-number' ? 'active' : ''}`}>
-        🎓 学籍番号設定
+        <GraduationCap size={18} style={iconStyle} aria-hidden="true" />学籍番号設定
       </Link>
       <Link href="/admin/blacklist" className={`admin-nav-link ${pathname === '/admin/blacklist' ? 'active' : ''}`}>
-        🚫 ブラックリスト
+        <Ban size={18} style={iconStyle} aria-hidden="true" />ブラックリスト
       </Link>
       {isReservationsPage && (
         <>
@@ -87,7 +102,7 @@ export default function AdminNav() {
             className="admin-nav-link"
             style={{ border: 'none', cursor: 'pointer', background: 'var(--color-primary-glow)', color: 'var(--color-primary)' }}
           >
-            📋 氏名のみコピー
+            <ClipboardCopy size={18} style={iconStyle} aria-hidden="true" />氏名のみコピー
           </button>
           <button
             type="button"
@@ -95,7 +110,7 @@ export default function AdminNav() {
             className="admin-nav-link"
             style={{ border: 'none', cursor: 'pointer', background: 'var(--color-primary-glow)', color: 'var(--color-primary)' }}
           >
-            🎓 学籍番号のみコピー
+            <GraduationCap size={18} style={iconStyle} aria-hidden="true" />学籍番号のみコピー
           </button>
         </>
       )}
@@ -104,7 +119,7 @@ export default function AdminNav() {
         className="admin-nav-link"
         style={{ border: 'none', cursor: 'pointer', background: 'rgba(244, 63, 94, 0.15)', color: 'var(--color-danger)', marginLeft: 'auto' }}
       >
-        🚪 ログアウト
+        <LogOut size={18} style={iconStyle} aria-hidden="true" />ログアウト
       </button>
     </div>
   );
