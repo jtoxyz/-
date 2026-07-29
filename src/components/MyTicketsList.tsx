@@ -96,7 +96,7 @@ export default function MyTicketsList() {
           {tickets.map((ticket) => {
             const payment = paymentLabel(ticket);
             return (
-              <Link key={ticket.reservation_id} href={`/my-tickets/${ticket.reservation_id}`} style={{ display: 'block' }}>
+              <Link key={ticket.reservation_id} href={`/my-tickets?reservationId=${encodeURIComponent(ticket.reservation_id)}`} style={{ display: 'block' }}>
                 <div className="glass-card interactive" style={{ padding: '13px 15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 14 }}>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontWeight: 800, marginBottom: 4 }}>{ticket.event_title}</div>
