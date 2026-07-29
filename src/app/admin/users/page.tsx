@@ -1,7 +1,5 @@
 'use client';
 
-export const runtime = 'edge';
-
 import { useEffect, useState } from 'react';
 import { Save, Search, UserRoundCog, X } from 'lucide-react';
 import AdminNav from '@/components/AdminNav';
