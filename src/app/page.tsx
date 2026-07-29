@@ -121,7 +121,7 @@ export default async function Home() {
 
                 <div className="mt-4">
                   {status.active ? (
-                    <Link href={`/reserve/${event.id}`}>
+                    <Link href={`/reserve?id=${encodeURIComponent(event.id)}`}>
                       <button className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                         {status.button}<ArrowRight size={17} aria-hidden="true" />
                       </button>
