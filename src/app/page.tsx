@@ -1,6 +1,7 @@
 export const runtime = 'edge';
 
 import Link from 'next/link';
+import { ArrowRight, CalendarDays, TriangleAlert } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import MyTicketsList from '@/components/MyTicketsList';
 
@@ -68,8 +69,6 @@ export default async function Home() {
   // Fetch public events from Supabase secure RPC
   const { data: events, error } = await supabase.rpc('get_public_events');
 
-  const now = new Date();
-
   const getEventStatus = (event: PublicEvent) => {
     const enabledSlots = event.slots?.filter(s => s.is_enabled) || [];
 
@@ -84,25 +83,25 @@ export default async function Home() {
     // 1. 予約受付中
     const hasReservationActive = enabledSlots.some(s => s.reservation_status === 'available' || s.reservation_status === 'low_remaining');
     if (hasReservationActive) {
-      return { label: '予約受付中', buttonText: '予約フォームへ進む ➔', active: true, badge: 'badge-success' };
+      return { label: '予約受付中', buttonText: '予約フォームへ進む', active: true, badge: 'badge-success' };
     }
 
     // 2. 予約受付前
     const hasReservationUpcoming = enabledSlots.some(s => s.reservation_status === 'before_open');
     if (hasReservationUpcoming) {
-      return { label: '予約受付前', buttonText: '詳細を見る ➔', active: true, badge: 'badge-secondary' };
+      return { label: '予約受付前', buttonText: '詳細を見る', active: true, badge: 'badge-secondary' };
     }
 
     // 3. 当日券受付中
     const hasWalkinActive = enabledSlots.some(s => s.walkin_status === 'walkin_available' || s.walkin_status === 'walkin_low_remaining');
     if (hasWalkinActive) {
-      return { label: '当日券受付中', buttonText: '当日券を取得する ➔', active: true, badge: 'badge-warning' };
+      return { label: '当日券受付中', buttonText: '当日券を取得する', active: true, badge: 'badge-warning' };
     }
 
     // 4. 当日券受付前
     const hasWalkinUpcoming = enabledSlots.some(s => s.walkin_status === 'walkin_upcoming');
     if (hasWalkinUpcoming) {
-      return { label: '当日券受付前', buttonText: '詳細を見る ➔', active: true, badge: 'badge-warning' };
+      return { label: '当日券受付前', buttonText: '詳細を見る', active: true, badge: 'badge-warning' };
     }
 
     // 5. 満席
@@ -153,12 +152,13 @@ export default async function Home() {
       <MyTicketsList />
 
       <h2 style={{ fontSize: '1.4rem', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <span>📅</span> 公開中の企画一覧
+        <CalendarDays size={24} strokeWidth={2} aria-hidden="true" />
+        <span>公開中の企画一覧</span>
       </h2>
 
       {error && (
         <div className="error-banner">
-          <span>⚠️</span>
+          <TriangleAlert size={20} aria-hidden="true" />
           <div>企画一覧の取得に失敗しました。時間をおいて再度お試しください。</div>
         </div>
       )}
@@ -248,8 +248,9 @@ export default async function Home() {
                 <div className="mt-4">
                   {status.active ? (
                     <Link href={`/events/${event.id}`}>
-                      <button className="btn btn-primary">
-                        {status.buttonText}
+                      <button className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                        <span>{status.buttonText}</span>
+                        <ArrowRight size={17} aria-hidden="true" />
                       </button>
                     </Link>
                   ) : (
