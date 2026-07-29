@@ -1,4 +1,4 @@
-name: Student account build and size check
+name: Cloudflare Pages build and size check
 
 on:
   pull_request:
@@ -23,45 +23,39 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Next.js build
+      - name: Build with the same Pages adapter as production
         env:
           NEXT_PUBLIC_SUPABASE_URL: https://nbhpsjhqaakaweeywhxa.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-for-build-only
-        run: npm run build
+          npm_config_legacy_peer_deps: 'true'
+        run: npx --yes --package=@cloudflare/next-on-pages@1.13.16 --package=wrangler@3.114.17 --package=vercel@58.1.0 next-on-pages
 
-      - name: Configure Cloudflare adapter in CI
-        env:
-          CI: 'true'
-        run: npx --yes wrangler@4.110.0 setup --yes
-
-      - name: Build OpenNext Worker
-        env:
-          NEXT_PUBLIC_SUPABASE_URL: https://nbhpsjhqaakaweeywhxa.supabase.co
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-for-build-only
-        run: npx opennextjs-cloudflare build
-
-      - name: Cloudflare dry-run bundle
+      - name: Bundle generated Pages Worker
         run: |
           set -o pipefail
-          npx wrangler deploy --dry-run --outdir bundled 2>&1 | tee wrangler-size.txt
+          npx --yes wrangler@3.114.17 deploy .vercel/output/static/_worker.js/index.js \
+            --name committee-reservation-size-check \
+            --dry-run \
+            --outdir bundled-pages \
+            --compatibility-date 2026-07-29 2>&1 | tee wrangler-pages-size.txt
 
-      - name: Enforce compressed Worker under 3 MiB
+      - name: Enforce compressed Pages Worker under 3 MiB
         run: |
           python - <<'PY'
           import re
           from pathlib import Path
 
-          text = Path('wrangler-size.txt').read_text(encoding='utf-8', errors='replace')
+          text = Path('wrangler-pages-size.txt').read_text(encoding='utf-8', errors='replace')
           matches = re.findall(r'gzip:\s*([0-9.]+)\s*(KiB|MiB|MB|KB|B)', text, flags=re.I)
           if not matches:
-              raise SystemExit('Could not find Wrangler gzip size in output.')
+              raise SystemExit('Could not find the generated Pages Worker gzip size.')
 
           value, unit = matches[-1]
           value = float(value)
           factors = {'b': 1, 'kb': 1000, 'mb': 1000**2, 'kib': 1024, 'mib': 1024**2}
           size = value * factors[unit.lower()]
           limit = 3 * 1024 * 1024
-          print(f'Compressed Worker: {size / 1024 / 1024:.3f} MiB')
+          print(f'Compressed Pages Worker: {size / 1024 / 1024:.3f} MiB')
           if size >= limit:
-              raise SystemExit(f'Compressed Worker is {size / 1024 / 1024:.3f} MiB; it must stay below 3 MiB.')
+              raise SystemExit(f'Compressed Pages Worker is {size / 1024 / 1024:.3f} MiB; it must stay below 3 MiB.')
           PY

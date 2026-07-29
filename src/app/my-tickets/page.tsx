@@ -1,8 +1,6 @@
 'use client';
 
-export const runtime = 'edge';
-
-import { use, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { BadgeCheck, Clock3, ExternalLink, TicketCheck } from 'lucide-react';
 import RichText from '@/components/RichText';
@@ -50,16 +48,25 @@ function safeHttpUrl(value: string | null): string | null {
   }
 }
 
-export default function MyTicketPage({ params }: { params: Promise<{ reservationId: string }> }) {
-  const { reservationId } = use(params);
+export default function MyTicketPage() {
+  const [reservationId, setReservationId] = useState<string | null>(null);
   const [ticket, setTicket] = useState<TicketDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [usingTicket, setUsingTicket] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const loadTicket = async () => {
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get('reservationId');
+    setReservationId(id);
+    if (!id) {
+      setError('チケットが指定されていません。');
+      setLoading(false);
+    }
+  }, []);
+
+  const loadTicket = async (id: string) => {
     const { data, error: rpcError } = await supabase.rpc('get_my_ticket', {
-      p_reservation_id: reservationId,
+      p_reservation_id: id,
     });
     if (rpcError || !data || data.length === 0) {
       setError(rpcError?.message || '本人のチケットが見つからないか、使用期限が終了しています。');
@@ -72,7 +79,7 @@ export default function MyTicketPage({ params }: { params: Promise<{ reservation
   };
 
   useEffect(() => {
-    void loadTicket();
+    if (reservationId) void loadTicket(reservationId);
   }, [reservationId]);
 
   const useAllowed = useMemo(() => {
@@ -86,7 +93,7 @@ export default function MyTicketPage({ params }: { params: Promise<{ reservation
   }, [ticket]);
 
   const handleUse = async () => {
-    if (!ticket || !useAllowed) return;
+    if (!ticket || !reservationId || !useAllowed) return;
     if (!confirm('このチケットを使用済みにしますか？この操作は取り消せません。')) return;
     setUsingTicket(true);
     setError(null);
@@ -94,7 +101,7 @@ export default function MyTicketPage({ params }: { params: Promise<{ reservation
       p_reservation_id: reservationId,
     });
     if (rpcError) setError(rpcError.message || 'チケットを使用できませんでした。');
-    else await loadTicket();
+    else await loadTicket(reservationId);
     setUsingTicket(false);
   };
 

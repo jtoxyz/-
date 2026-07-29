@@ -1,8 +1,6 @@
 'use client';
 
-export const runtime = 'edge';
-
-import { use, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { CalendarDays, Ticket, UserRound } from 'lucide-react';
@@ -20,9 +18,9 @@ import {
 
 type BulkResult = { id: string; slot_label: string };
 
-export default function AccountReservationPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export default function AccountReservationPage() {
   const router = useRouter();
+  const [eventId, setEventId] = useState<string | null>(null);
   const [event, setEvent] = useState<AccountEvent | null>(null);
   const [profile, setProfile] = useState<StudentProfile | null>(null);
   const [slots, setSlots] = useState<AccountEventSlot[]>([]);
@@ -33,6 +31,17 @@ export default function AccountReservationPage({ params }: { params: Promise<{ i
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get('id');
+    setEventId(id);
+    if (!id) {
+      setError('企画が指定されていません。');
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!eventId) return;
+
     const load = async () => {
       const { data: sessionData } = await supabase.auth.getSession();
       const user = sessionData.session?.user;
@@ -40,8 +49,8 @@ export default function AccountReservationPage({ params }: { params: Promise<{ i
 
       const [profileResult, eventResult, slotResult] = await Promise.all([
         supabase.from('user_profiles').select('student_name, student_number, university_email').eq('user_id', user.id).single(),
-        supabase.from('events').select('id, title, description, slot_selection_mode').eq('id', id).eq('is_public', true).single(),
-        supabase.rpc('get_event_slots', { p_event_id: id }),
+        supabase.from('events').select('id, title, description, slot_selection_mode').eq('id', eventId).eq('is_public', true).single(),
+        supabase.rpc('get_event_slots', { p_event_id: eventId }),
       ]);
 
       if (profileResult.error || !profileResult.data) setError('アカウント情報を取得できませんでした。');
@@ -60,8 +69,9 @@ export default function AccountReservationPage({ params }: { params: Promise<{ i
       }
       setLoading(false);
     };
+
     void load();
-  }, [id]);
+  }, [eventId]);
 
   const selectedSlots = useMemo(() => slots.filter((slot) => selected.includes(slot.id)), [slots, selected]);
   const reservable = selectedSlots.length > 0 && selectedSlots.every(canReserveSlot);
@@ -96,7 +106,7 @@ export default function AccountReservationPage({ params }: { params: Promise<{ i
     if (rpcError) setError(rpcError.message || '予約に失敗しました。');
     else {
       const reservationId = String((data as { id?: string } | null)?.id || '');
-      reservationId ? router.push(`/my-tickets/${reservationId}`) : router.push('/#my-tickets');
+      reservationId ? router.push(`/my-tickets?reservationId=${encodeURIComponent(reservationId)}`) : router.push('/#my-tickets');
     }
     setSaving(false);
   };
@@ -112,7 +122,7 @@ export default function AccountReservationPage({ params }: { params: Promise<{ i
     if (rpcError) setError(rpcError.message || '当日券の取得に失敗しました。');
     else {
       const reservationId = String((data as { id?: string } | null)?.id || '');
-      reservationId ? router.push(`/my-tickets/${reservationId}`) : router.push('/#my-tickets');
+      reservationId ? router.push(`/my-tickets?reservationId=${encodeURIComponent(reservationId)}`) : router.push('/#my-tickets');
     }
     setSaving(false);
   };
@@ -128,7 +138,7 @@ export default function AccountReservationPage({ params }: { params: Promise<{ i
       <div className="glass-card" style={{ maxWidth: 620, margin: '20px auto' }}>
         <h1 style={{ textAlign: 'center', marginBottom: 20 }}>予約が完了しました</h1>
         <div style={{ display: 'grid', gap: 10 }}>
-          {results.map((result) => <Link key={result.id} href={`/my-tickets/${result.id}`} className="glass-card interactive" style={{ padding: 14, display: 'flex', justifyContent: 'space-between' }}><span>{result.slot_label}</span><strong>チケットを表示</strong></Link>)}
+          {results.map((result) => <Link key={result.id} href={`/my-tickets?reservationId=${encodeURIComponent(result.id)}`} className="glass-card interactive" style={{ padding: 14, display: 'flex', justifyContent: 'space-between' }}><span>{result.slot_label}</span><strong>チケットを表示</strong></Link>)}
         </div>
         <Link href="/"><button className="btn btn-secondary" style={{ width: '100%', marginTop: 18 }}>企画一覧へ戻る</button></Link>
       </div>

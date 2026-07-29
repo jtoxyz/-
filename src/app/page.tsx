@@ -1,6 +1,6 @@
-export const runtime = 'edge';
-export const revalidate = 0;
+'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, CalendarDays, TriangleAlert } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -64,9 +64,27 @@ function slotSummary(event: PublicEvent): string {
   return slots.length > 0 ? `${slots.length}枠` : '開催枠準備中';
 }
 
-export default async function Home() {
-  const { data, error } = await supabase.rpc('get_public_events');
-  const events = (data as PublicEvent[] | null) || [];
+export default function Home() {
+  const [events, setEvents] = useState<PublicEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadEvents = async () => {
+      const { data, error: rpcError } = await supabase.rpc('get_public_events');
+      if (!active) return;
+      setEvents((data as PublicEvent[] | null) || []);
+      setError(Boolean(rpcError));
+      setLoading(false);
+    };
+
+    void loadEvents();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   return (
     <div>
@@ -81,20 +99,22 @@ export default async function Home() {
         <CalendarDays size={24} aria-hidden="true" />公開中の企画一覧
       </h2>
 
+      {loading && <div style={{ textAlign: 'center', padding: 32 }}><div className="loading-spinner" style={{ margin: '0 auto' }} /></div>}
+
       {error && (
         <div className="error-banner">
           <TriangleAlert size={20} aria-hidden="true" />企画一覧の取得に失敗しました。時間をおいて再度お試しください。
         </div>
       )}
 
-      {!error && events.length === 0 && (
+      {!loading && !error && events.length === 0 && (
         <div className="glass-card text-center" style={{ padding: '40px 20px', color: 'var(--text-secondary)' }}>
           <p style={{ fontSize: '1.15rem', marginBottom: 7 }}>現在公開中の企画はありません</p>
           <p style={{ fontSize: '0.875rem' }}>企画が追加されるまでお待ちください。</p>
         </div>
       )}
 
-      {events.length > 0 && (
+      {!loading && events.length > 0 && (
         <div className="events-grid">
           {events.map((event) => {
             const status = eventStatus(event);
@@ -121,7 +141,7 @@ export default async function Home() {
 
                 <div className="mt-4">
                   {status.active ? (
-                    <Link href={`/reserve/${event.id}`}>
+                    <Link href={`/reserve?id=${encodeURIComponent(event.id)}`}>
                       <button className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                         {status.button}<ArrowRight size={17} aria-hidden="true" />
                       </button>

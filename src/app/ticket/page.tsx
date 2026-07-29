@@ -1,19 +1,24 @@
 'use client';
 
-export const runtime = 'edge';
-
-import { use, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 
-export default function LegacyTicketPage({ params }: { params: Promise<{ publicToken: string }> }) {
-  const { publicToken } = use(params);
+export default function LegacyTicketPage() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
+    const publicToken = new URLSearchParams(window.location.search).get('token');
+
+    if (!publicToken) {
+      setError('チケットが指定されていません。');
+      return () => {
+        active = false;
+      };
+    }
 
     const resolveTicket = async () => {
       const { data, error: rpcError } = await supabase.rpc('get_my_reservation_id_by_token', {
@@ -26,14 +31,14 @@ export default function LegacyTicketPage({ params }: { params: Promise<{ publicT
         return;
       }
 
-      router.replace(`/my-tickets/${data}`);
+      router.replace(`/my-tickets?reservationId=${encodeURIComponent(String(data))}`);
     };
 
     void resolveTicket();
     return () => {
       active = false;
     };
-  }, [publicToken, router]);
+  }, [router]);
 
   if (error) {
     return (
