@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { CalendarDays, Clock3, Tickets } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { getSavedTokens, removeToken } from '@/lib/ticketCache';
 
@@ -125,7 +126,8 @@ export default function MyTicketsList() {
   return (
     <div className="glass-card" style={{ borderColor: 'var(--color-primary-hover)', background: 'rgba(99, 102, 241, 0.05)' }}>
       <h3 style={{ marginBottom: '12px', fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <span>🎟️</span> 予約済みのチケット一覧
+        <Tickets size={22} strokeWidth={2} aria-hidden="true" />
+        <span>予約済みのチケット一覧</span>
       </h3>
       <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>
         このブラウザで予約したチケットです。タップしてチケット画面を表示できます。
@@ -179,8 +181,9 @@ export default function MyTicketsList() {
                     {ticket.event_title}
                   </div>
                   {ticket.slot_label && (
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: '1px' }}>
-                      📅 {ticket.slot_label}
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: '1px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                      <CalendarDays size={13} aria-hidden="true" />
+                      <span>{ticket.slot_label}</span>
                     </div>
                   )}
                   <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
@@ -200,9 +203,13 @@ export default function MyTicketsList() {
                           fontSize: '0.82rem',
                           fontWeight: 800,
                           color: deadline.expired ? 'var(--color-danger)' : 'var(--color-warning)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '5px',
                         }}
                       >
-                        ⏰ {deadline.headline}
+                        <Clock3 size={15} aria-hidden="true" />
+                        <span>{deadline.headline}</span>
                       </div>
                       <div style={{ marginTop: '2px', fontSize: '0.73rem', color: 'var(--text-secondary)' }}>
                         {deadline.detail}
