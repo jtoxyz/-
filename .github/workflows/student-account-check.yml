@@ -11,7 +11,7 @@ permissions:
 jobs:
   build-and-size:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
 
@@ -29,13 +29,21 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-for-build-only
         run: npm run build
 
-      - name: Cloudflare dry-run build
+      - name: Configure Cloudflare adapter in CI
+        env:
+          CI: 'true'
+        run: npx --yes wrangler@4.110.0 setup --yes
+
+      - name: Build OpenNext Worker
         env:
           NEXT_PUBLIC_SUPABASE_URL: https://nbhpsjhqaakaweeywhxa.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-for-build-only
+        run: npx opennextjs-cloudflare build
+
+      - name: Cloudflare dry-run bundle
         run: |
           set -o pipefail
-          npx --yes wrangler@4.110.0 deploy --dry-run --outdir bundled 2>&1 | tee wrangler-size.txt
+          npx wrangler deploy --dry-run --outdir bundled 2>&1 | tee wrangler-size.txt
 
       - name: Enforce compressed Worker under 3 MiB
         run: |
@@ -50,9 +58,8 @@ jobs:
 
           value, unit = matches[-1]
           value = float(value)
-          unit = unit.lower()
           factors = {'b': 1, 'kb': 1000, 'mb': 1000**2, 'kib': 1024, 'mib': 1024**2}
-          size = value * factors[unit]
+          size = value * factors[unit.lower()]
           limit = 3 * 1024 * 1024
           print(f'Compressed Worker: {size / 1024 / 1024:.3f} MiB')
           if size >= limit:
