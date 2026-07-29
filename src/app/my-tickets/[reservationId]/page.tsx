@@ -5,6 +5,7 @@ export const runtime = 'edge';
 import { use, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { BadgeCheck, Clock3, ExternalLink, TicketCheck } from 'lucide-react';
+import RichText from '@/components/RichText';
 import { supabase } from '@/lib/supabase';
 import { formatAccountDate } from '@/lib/studentAccount';
 
@@ -150,7 +151,11 @@ export default function MyTicketPage({ params }: { params: Promise<{ reservation
             <div><small style={{ color: 'var(--text-secondary)' }}>支払い状態</small><div style={{ fontWeight: 800 }}>{paymentText}</div></div>
           </div>
 
-          {ticket.post_reservation_notes && <div className="glass-card" style={{ whiteSpace: 'pre-wrap', lineHeight: 1.75, marginBottom: 18 }}>{ticket.post_reservation_notes}</div>}
+          {ticket.post_reservation_notes && (
+            <div className="glass-card" style={{ marginBottom: 18 }}>
+              <RichText content={ticket.post_reservation_notes} style={{ color: 'var(--text-secondary)', lineHeight: 1.75 }} />
+            </div>
+          )}
           {ticket.use_starts_at && <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: 'var(--text-secondary)', marginBottom: 14 }}><Clock3 size={17} aria-hidden="true" />使用可能：{formatAccountDate(ticket.use_starts_at)} 〜 {formatAccountDate(ticket.use_ends_at)}</div>}
 
           {ticket.status === 'reserved' && (
