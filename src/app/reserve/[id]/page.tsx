@@ -6,6 +6,7 @@ import { use, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { CalendarDays, Ticket, UserRound } from 'lucide-react';
+import RichText from '@/components/RichText';
 import { supabase } from '@/lib/supabase';
 import {
   type AccountEvent,
@@ -139,7 +140,7 @@ export default function AccountReservationPage({ params }: { params: Promise<{ i
       <div style={{ marginBottom: 18 }}><Link href="/">← 企画一覧へ戻る</Link></div>
       <div className="glass-card" style={{ marginBottom: 18 }}>
         <h1 style={{ fontSize: '1.6rem', marginBottom: 10 }}>{event.title}</h1>
-        {event.description && <div style={{ color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', lineHeight: 1.75 }}>{event.description}</div>}
+        {event.description && <RichText content={event.description} style={{ color: 'var(--text-secondary)', lineHeight: 1.75 }} />}
       </div>
 
       <div className="glass-card" style={{ marginBottom: 18, display: 'flex', alignItems: 'center', gap: 12 }}>
