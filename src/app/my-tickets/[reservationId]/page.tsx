@@ -4,7 +4,7 @@ export const runtime = 'edge';
 
 import { use, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { BadgeCheck, Clock3, TicketCheck } from 'lucide-react';
+import { BadgeCheck, Clock3, ExternalLink, TicketCheck } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { formatAccountDate } from '@/lib/studentAccount';
 
@@ -26,12 +26,28 @@ type TicketDetails = {
   post_reservation_notes: string | null;
   is_ticket_use_suspended: boolean;
   auto_suspend_at: string | null;
+  survey_after_reservation_enabled: boolean;
+  survey_after_reservation_url: string | null;
+  survey_after_reservation_message: string | null;
+  survey_after_use_enabled: boolean;
+  survey_after_use_url: string | null;
+  survey_after_use_message: string | null;
   slot_label: string | null;
   slot_starts_at: string | null;
   slot_ends_at: string | null;
   use_starts_at: string | null;
   use_ends_at: string | null;
 };
+
+function safeHttpUrl(value: string | null): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
 
 export default function MyTicketPage({ params }: { params: Promise<{ reservationId: string }> }) {
   const { reservationId } = use(params);
@@ -45,7 +61,7 @@ export default function MyTicketPage({ params }: { params: Promise<{ reservation
       p_reservation_id: reservationId,
     });
     if (rpcError || !data || data.length === 0) {
-      setError(rpcError?.message || '本人のチケットが見つかりません。');
+      setError(rpcError?.message || '本人のチケットが見つからないか、使用期限が終了しています。');
       setTicket(null);
     } else {
       setError(null);
@@ -95,6 +111,13 @@ export default function MyTicketPage({ params }: { params: Promise<{ reservation
         ? '支払期限切れ'
         : '支払い不要';
 
+  const surveyUrl = ticket.status === 'used'
+    ? safeHttpUrl(ticket.survey_after_use_enabled ? ticket.survey_after_use_url : null)
+    : safeHttpUrl(ticket.survey_after_reservation_enabled ? ticket.survey_after_reservation_url : null);
+  const surveyMessage = ticket.status === 'used'
+    ? ticket.survey_after_use_message
+    : ticket.survey_after_reservation_message;
+
   return (
     <div style={{ maxWidth: 720, margin: '0 auto' }}>
       <div style={{ marginBottom: 18 }}><Link href="/#my-tickets">← 自分の予約へ戻る</Link></div>
@@ -128,7 +151,6 @@ export default function MyTicketPage({ params }: { params: Promise<{ reservation
           </div>
 
           {ticket.post_reservation_notes && <div className="glass-card" style={{ whiteSpace: 'pre-wrap', lineHeight: 1.75, marginBottom: 18 }}>{ticket.post_reservation_notes}</div>}
-
           {ticket.use_starts_at && <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: 'var(--text-secondary)', marginBottom: 14 }}><Clock3 size={17} aria-hidden="true" />使用可能：{formatAccountDate(ticket.use_starts_at)} 〜 {formatAccountDate(ticket.use_ends_at)}</div>}
 
           {ticket.status === 'reserved' && (
@@ -137,6 +159,15 @@ export default function MyTicketPage({ params }: { params: Promise<{ reservation
             </button>
           )}
           {ticket.status === 'used' && ticket.used_at && <div style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>使用日時：{formatAccountDate(ticket.used_at)}</div>}
+
+          {surveyUrl && (
+            <div className="glass-card" style={{ marginTop: 18, borderColor: 'var(--card-border-hover)' }}>
+              <p style={{ marginBottom: 12, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', lineHeight: 1.7 }}>{surveyMessage || 'アンケートへのご協力をお願いします。'}</p>
+              <a href={surveyUrl} target="_blank" rel="noopener noreferrer" className="btn btn-secondary" style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+                アンケートを開く<ExternalLink size={16} aria-hidden="true" />
+              </a>
+            </div>
+          )}
         </div>
       </div>
     </div>
