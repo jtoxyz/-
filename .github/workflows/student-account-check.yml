@@ -23,16 +23,19 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install the same Pages adapter versions as production
+        run: npm install --no-save --legacy-peer-deps @cloudflare/next-on-pages@1.13.16 wrangler@3.114.17
+
       - name: Build with the same Pages adapter as production
         env:
           NEXT_PUBLIC_SUPABASE_URL: https://nbhpsjhqaakaweeywhxa.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-for-build-only
-        run: npx --yes @cloudflare/next-on-pages@1.13.16
+        run: npx next-on-pages
 
       - name: Bundle generated Pages Worker
         run: |
           set -o pipefail
-          npx --yes wrangler@3.114.17 deploy .vercel/output/static/_worker.js/index.js \
+          npx wrangler deploy .vercel/output/static/_worker.js/index.js \
             --dry-run \
             --outdir bundled-pages \
             --compatibility-date 2026-07-29 2>&1 | tee wrangler-pages-size.txt
