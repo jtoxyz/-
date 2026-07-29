@@ -46,9 +46,16 @@ export default function AccountReservationPage({ params }: { params: Promise<{ i
       if (profileResult.error || !profileResult.data) setError('アカウント情報を取得できませんでした。');
       else if (eventResult.error || !eventResult.data) setError('企画が見つからないか、公開されていません。');
       else {
+        const loadedEvent = eventResult.data as AccountEvent;
+        const loadedSlots = ((slotResult.data as AccountEventSlot[] | null) || []).filter((slot) => slot.is_enabled);
         setProfile(profileResult.data as StudentProfile);
-        setEvent(eventResult.data as AccountEvent);
-        setSlots(((slotResult.data as AccountEventSlot[] | null) || []).filter((slot) => slot.is_enabled));
+        setEvent(loadedEvent);
+        setSlots(loadedSlots);
+
+        if (loadedEvent.slot_selection_mode === 'single') {
+          const selectable = loadedSlots.filter((slot) => canReserveSlot(slot) || canGetWalkinSlot(slot));
+          if (selectable.length === 1) setSelected([selectable[0].id]);
+        }
       }
       setLoading(false);
     };
