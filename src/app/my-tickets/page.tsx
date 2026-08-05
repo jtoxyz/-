@@ -38,6 +38,15 @@ type TicketDetails = {
   use_ends_at: string | null;
 };
 
+const TICKET_REVEAL_MINUTES = 5;
+
+function formatRemaining(ms: number): string {
+  const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
+
 function safeHttpUrl(value: string | null): string | null {
   if (!value) return null;
   try {
@@ -54,6 +63,7 @@ export default function MyTicketPage() {
   const [loading, setLoading] = useState(true);
   const [usingTicket, setUsingTicket] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [nowTick, setNowTick] = useState(() => Date.now());
 
   useEffect(() => {
     const id = new URLSearchParams(window.location.search).get('reservationId');
@@ -92,9 +102,22 @@ export default function MyTicketPage() {
     return true;
   }, [ticket]);
 
+  const ticketReveal = useMemo(() => {
+    if (!ticket || ticket.status !== 'used' || !ticket.used_at) return null;
+    const expiresAtMs = new Date(ticket.used_at).getTime() + TICKET_REVEAL_MINUTES * 60 * 1000;
+    const remainingMs = expiresAtMs - nowTick;
+    return remainingMs > 0 ? { visible: true as const, remainingMs } : { visible: false as const, remainingMs: 0 };
+  }, [ticket, nowTick]);
+
+  useEffect(() => {
+    if (!ticketReveal?.visible) return;
+    const id = setInterval(() => setNowTick(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [ticketReveal?.visible]);
+
   const handleUse = async () => {
     if (!ticket || !reservationId || !useAllowed) return;
-    if (!confirm('このチケットを使用済みにしますか？この操作は取り消せません。')) return;
+    if (!confirm(`このチケットを使用済みにします。使用後、チケットコードは${TICKET_REVEAL_MINUTES}分間だけ表示され、その後は見られなくなります。この操作は取り消せません。よろしいですか？`)) return;
     setUsingTicket(true);
     setError(null);
     const { error: rpcError } = await supabase.rpc('use_my_ticket', {
@@ -148,10 +171,25 @@ export default function MyTicketPage() {
             <div className="glass-card" style={{ padding: 14 }}><small style={{ color: 'var(--text-secondary)' }}>学籍番号</small><div style={{ fontWeight: 800, marginTop: 4 }}>{ticket.student_number}</div></div>
           </div>
 
-          <div style={{ textAlign: 'center', padding: 18, borderRadius: 12, border: '2px solid var(--color-primary)', background: 'var(--color-primary-glow)', marginBottom: 18 }}>
-            <small style={{ color: 'var(--text-secondary)' }}>チケットコード</small>
-            <div style={{ marginTop: 5, fontSize: '2rem', fontWeight: 900, letterSpacing: '.12em' }}>{ticket.ticket_code}</div>
-          </div>
+          {ticket.status === 'used' && ticketReveal?.visible && (
+            <div style={{ textAlign: 'center', padding: 18, borderRadius: 12, border: '2px solid var(--color-primary)', background: 'var(--color-primary-glow)', marginBottom: 18 }}>
+              <small style={{ color: 'var(--text-secondary)' }}>チケットコード</small>
+              <div style={{ marginTop: 5, fontSize: '2rem', fontWeight: 900, letterSpacing: '.12em' }}>{ticket.ticket_code}</div>
+              <div style={{ marginTop: 8, fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                あと {formatRemaining(ticketReveal.remainingMs)} で表示が終了します
+              </div>
+            </div>
+          )}
+          {ticket.status === 'used' && !ticketReveal?.visible && (
+            <div style={{ textAlign: 'center', padding: 18, borderRadius: 12, border: '2px solid var(--card-border-hover)', color: 'var(--text-secondary)', marginBottom: 18 }}>
+              チケットコードの表示時間は終了しました（使用済み）
+            </div>
+          )}
+          {ticket.status === 'reserved' && (
+            <div style={{ textAlign: 'center', padding: 14, borderRadius: 12, border: '1px dashed var(--card-border-hover)', color: 'var(--text-secondary)', marginBottom: 18, fontSize: '0.85rem' }}>
+              「使用する」を押すとチケットコードが表示されます（表示は{TICKET_REVEAL_MINUTES}分間のみです）
+            </div>
+          )}
 
           <div className="glass-card" style={{ padding: 14, marginBottom: 18, display: 'flex', alignItems: 'center', gap: 9 }}>
             <BadgeCheck size={20} aria-hidden="true" />
