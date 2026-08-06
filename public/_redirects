@@ -2,4 +2,5 @@
 /admin/events/:id/reservations /admin/reservations?eventId=:id 302
 /admin/events/:id /admin/event?id=:id 302
 /events/:id /reserve?id=:id 302
+/tickets/find /tickets/find 200
 /tickets/:token /ticket?token=:token 302

@@ -59,6 +59,10 @@ export default function RootLayout({
                   自分の予約
                 </Link>
                 <span style={{ color: 'var(--card-border)' }}>|</span>
+                <Link href="/tickets/find" style={{ color: 'var(--text-secondary)' }}>
+                  チケットを探す
+                </Link>
+                <span style={{ color: 'var(--card-border)' }}>|</span>
                 <StudentAccountMenu />
                 <span style={{ color: 'var(--card-border)' }}>|</span>
                 <Link href="/admin" style={{ color: 'var(--text-secondary)' }}>
