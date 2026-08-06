@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import AdminReservationsPage from '@/components/admin/AdminReservationsPage';
 
@@ -11,9 +11,7 @@ export default function AdminReservationsStaticPage() {
     setId(new URLSearchParams(window.location.search).get('eventId'));
   }, []);
 
-  const params = useMemo(() => id ? Promise.resolve({ id }) : null, [id]);
-
-  if (!params) {
+  if (!id) {
     return (
       <div className="glass-card text-center" style={{ padding: 36 }}>
         <div className="error-banner">企画が指定されていません。</div>
@@ -22,5 +20,5 @@ export default function AdminReservationsStaticPage() {
     );
   }
 
-  return <AdminReservationsPage params={params} />;
+  return <AdminReservationsPage id={id} />;
 }

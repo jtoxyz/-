@@ -3,7 +3,7 @@
 export const runtime = 'edge';
 
 
-import { use, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import AdminNav from '@/components/AdminNav';
@@ -29,8 +29,7 @@ interface EventSlot {
   is_walkin_enabled: boolean;
 }
 
-export default function AdminPreRegistrationsPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export default function AdminPreRegistrationsPage({ id }: { id: string }) {
   const { loading: authLoading, user } = useAdminAuth();
 
   const [eventTitle, setEventTitle] = useState('');

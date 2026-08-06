@@ -2,7 +2,7 @@
 
 export const runtime = 'edge';
 
-import { use, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import AdminNav from '@/components/AdminNav';
@@ -62,8 +62,7 @@ function formatSlotDateTime(dateStr: string | null): string {
   });
 }
 
-export default function AdminReservationsPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export default function AdminReservationsPage({ id }: { id: string }) {
   const { loading: authLoading, user } = useAdminAuth();
   const [eventTitle, setEventTitle] = useState('');
   const [reservations, setReservations] = useState<ReservationItem[]>([]);

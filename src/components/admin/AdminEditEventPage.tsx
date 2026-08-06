@@ -3,7 +3,7 @@
 export const runtime = 'edge';
 
 
-import { use, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
@@ -52,8 +52,7 @@ function extractTime(isoStr: string | null): string {
   return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-export default function AdminEditEventPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export default function AdminEditEventPage({ id }: { id: string }) {
   const { loading: authLoading, user } = useAdminAuth();
   const router = useRouter();
 
