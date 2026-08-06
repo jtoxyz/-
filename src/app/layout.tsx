@@ -55,10 +55,6 @@ export default function RootLayout({
                 <span>委員会企画予約</span>
               </Link>
               <nav style={{ display: 'flex', gap: '10px', alignItems: 'center', fontSize: '0.85rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                <Link href="/#my-tickets" style={{ color: 'var(--text-secondary)' }}>
-                  自分の予約
-                </Link>
-                <span style={{ color: 'var(--card-border)' }}>|</span>
                 <Link href="/tickets/find" style={{ color: 'var(--text-secondary)' }}>
                   チケットを探す
                 </Link>
