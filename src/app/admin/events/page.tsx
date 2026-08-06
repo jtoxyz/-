@@ -159,7 +159,7 @@ export default function AdminEventsPage() {
       setRestoreFile(null);
       setRestoreData(null);
       setRestoreError(null);
-      router.push(`/admin/events/${newEventId}`);
+      router.push(`/admin/event?id=${newEventId}`);
     } catch (err: any) {
       setRestoreError(`復元に失敗しました: ${err.message}`);
     } finally {
@@ -263,17 +263,17 @@ export default function AdminEventsPage() {
                   </td>
                   <td>
                     <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
-                      <Link href={`/admin/events/${event.id}`}>
+                      <Link href={`/admin/event?id=${event.id}`}>
                         <button className="btn btn-secondary btn-sm" style={{ padding: '6px 12px', fontSize: '0.8rem' }} title="設定を編集">
                           ⚙️ 編集
                         </button>
                       </Link>
-                      <Link href={`/admin/events/${event.id}/pre-registrations`}>
+                      <Link href={`/admin/pre-registrations?eventId=${event.id}`}>
                         <button className="btn btn-secondary btn-sm" style={{ padding: '6px 12px', fontSize: '0.8rem', borderColor: 'var(--color-warning-border)', color: 'var(--color-warning)' }} title="管理者による事前登録">
                           🎟️ 事前登録
                         </button>
                       </Link>
-                      <Link href={`/admin/events/${event.id}/reservations`}>
+                      <Link href={`/admin/reservations?eventId=${event.id}`}>
                         <button className="btn btn-secondary btn-sm" style={{ padding: '6px 12px', fontSize: '0.8rem', borderColor: 'var(--color-primary-hover)' }} title="予約者一覧">
                           👥 予約者 ({totalUsed})
                         </button>
