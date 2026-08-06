@@ -22,6 +22,7 @@ type TicketDetails = {
   event_description: string | null;
   ticket_enabled: boolean;
   use_button_enabled: boolean;
+  ticket_reveal_minutes: number;
   post_reservation_notes: string | null;
   is_ticket_use_suspended: boolean;
   auto_suspend_at: string | null;
@@ -37,8 +38,6 @@ type TicketDetails = {
   use_starts_at: string | null;
   use_ends_at: string | null;
 };
-
-const TICKET_REVEAL_MINUTES = 5;
 
 function formatRemaining(ms: number): string {
   const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
@@ -104,7 +103,7 @@ export default function MyTicketPage() {
 
   const ticketReveal = useMemo(() => {
     if (!ticket || ticket.status !== 'used' || !ticket.used_at) return null;
-    const expiresAtMs = new Date(ticket.used_at).getTime() + TICKET_REVEAL_MINUTES * 60 * 1000;
+    const expiresAtMs = new Date(ticket.used_at).getTime() + ticket.ticket_reveal_minutes * 60 * 1000;
     const remainingMs = expiresAtMs - nowTick;
     return remainingMs > 0 ? { visible: true as const, remainingMs } : { visible: false as const, remainingMs: 0 };
   }, [ticket, nowTick]);
@@ -117,7 +116,7 @@ export default function MyTicketPage() {
 
   const handleUse = async () => {
     if (!ticket || !reservationId || !useAllowed) return;
-    if (!confirm(`このチケットを使用済みにします。使用後、チケットコードは${TICKET_REVEAL_MINUTES}分間だけ表示され、その後は見られなくなります。この操作は取り消せません。よろしいですか？`)) return;
+    if (!confirm(`このチケットを使用済みにします。使用後、チケットコードは${ticket.ticket_reveal_minutes}分間だけ表示され、その後は見られなくなります。この操作は取り消せません。よろしいですか？`)) return;
     setUsingTicket(true);
     setError(null);
     const { error: rpcError } = await supabase.rpc('use_my_ticket', {
@@ -187,7 +186,7 @@ export default function MyTicketPage() {
           )}
           {ticket.status === 'reserved' && (
             <div style={{ textAlign: 'center', padding: 14, borderRadius: 12, border: '1px dashed var(--card-border-hover)', color: 'var(--text-secondary)', marginBottom: 18, fontSize: '0.85rem' }}>
-              「使用する」を押すとチケットコードが表示されます（表示は{TICKET_REVEAL_MINUTES}分間のみです）
+              「使用する」を押すとチケットコードが表示されます（表示は{ticket.ticket_reveal_minutes}分間のみです）
             </div>
           )}
 

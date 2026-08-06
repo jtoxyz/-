@@ -10,8 +10,17 @@ type PaymentEvent = {
   title: string;
   payment_required: boolean | null;
   payment_deadline_minutes: number | null;
+  payment_deadline_mode: 'relative' | 'absolute' | null;
+  payment_due_fixed_at: string | null;
   is_public: boolean | null;
 };
+
+function toDatetimeLocalValue(value: string | null): string {
+  if (!value) return '';
+  const date = new Date(value);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
 
 export default function PaymentSettingsPage() {
   const { loading: authLoading, user } = useAdminAuth();
@@ -26,7 +35,7 @@ export default function PaymentSettingsPage() {
 
     const { data, error: fetchError } = await supabase
       .from('events')
-      .select('id,title,payment_required,payment_deadline_minutes,is_public')
+      .select('id,title,payment_required,payment_deadline_minutes,payment_deadline_mode,payment_due_fixed_at,is_public')
       .order('created_at', { ascending: false });
 
     if (fetchError) {
@@ -49,10 +58,15 @@ export default function PaymentSettingsPage() {
   };
 
   const saveEvent = async (event: PaymentEvent) => {
+    const mode = event.payment_deadline_mode ?? 'relative';
     const minutes = Number(event.payment_deadline_minutes ?? 30);
 
-    if (event.payment_required && (!Number.isInteger(minutes) || minutes < 1)) {
+    if (event.payment_required && mode === 'relative' && (!Number.isInteger(minutes) || minutes < 1)) {
       setError('支払期限は1分以上の整数で入力してください。');
+      return;
+    }
+    if (event.payment_required && mode === 'absolute' && !event.payment_due_fixed_at) {
+      setError('支払期限の日時を指定してください。');
       return;
     }
 
@@ -63,7 +77,9 @@ export default function PaymentSettingsPage() {
       .from('events')
       .update({
         payment_required: Boolean(event.payment_required),
+        payment_deadline_mode: mode,
         payment_deadline_minutes: event.payment_required ? minutes : 30,
+        payment_due_fixed_at: event.payment_required && mode === 'absolute' ? event.payment_due_fixed_at : null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', event.id);
@@ -125,19 +141,62 @@ export default function PaymentSettingsPage() {
                     </div>
 
                     {event.payment_required && (
-                      <div className="form-group" style={{ marginTop: 16, maxWidth: 320 }}>
-                        <label className="form-label" htmlFor={`deadline-${event.id}`}>予約から何分以内に支払うか</label>
-                        <input
-                          id={`deadline-${event.id}`}
-                          type="number"
-                          min="1"
-                          step="1"
-                          className="form-input"
-                          value={event.payment_deadline_minutes ?? 30}
-                          onChange={(e) => updateLocalEvent(event.id, { payment_deadline_minutes: Number(e.target.value) })}
-                          disabled={savingId === event.id}
-                        />
-                        <span className="form-hint">期限切れの未払い予約は自動キャンセルされ、枠が戻ります。</span>
+                      <div style={{ marginTop: 16 }}>
+                        <div className="form-group" style={{ maxWidth: 320 }}>
+                          <label className="form-label">支払期限の指定方法</label>
+                          <div style={{ display: 'flex', gap: 20 }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 500 }}>
+                              <input
+                                type="radio"
+                                name={`deadline-mode-${event.id}`}
+                                checked={(event.payment_deadline_mode ?? 'relative') === 'relative'}
+                                onChange={() => updateLocalEvent(event.id, { payment_deadline_mode: 'relative' })}
+                                disabled={savingId === event.id}
+                              />
+                              予約からの時間
+                            </label>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 500 }}>
+                              <input
+                                type="radio"
+                                name={`deadline-mode-${event.id}`}
+                                checked={event.payment_deadline_mode === 'absolute'}
+                                onChange={() => updateLocalEvent(event.id, { payment_deadline_mode: 'absolute' })}
+                                disabled={savingId === event.id}
+                              />
+                              特定の日時
+                            </label>
+                          </div>
+                        </div>
+
+                        {(event.payment_deadline_mode ?? 'relative') === 'relative' ? (
+                          <div className="form-group" style={{ maxWidth: 320 }}>
+                            <label className="form-label" htmlFor={`deadline-${event.id}`}>予約から何分以内に支払うか</label>
+                            <input
+                              id={`deadline-${event.id}`}
+                              type="number"
+                              min="1"
+                              step="1"
+                              className="form-input"
+                              value={event.payment_deadline_minutes ?? 30}
+                              onChange={(e) => updateLocalEvent(event.id, { payment_deadline_minutes: Number(e.target.value) })}
+                              disabled={savingId === event.id}
+                            />
+                            <span className="form-hint">期限切れの未払い予約は自動キャンセルされ、枠が戻ります。</span>
+                          </div>
+                        ) : (
+                          <div className="form-group" style={{ maxWidth: 320 }}>
+                            <label className="form-label" htmlFor={`deadline-fixed-${event.id}`}>この日時までに支払う（全員共通）</label>
+                            <input
+                              id={`deadline-fixed-${event.id}`}
+                              type="datetime-local"
+                              className="form-input"
+                              value={toDatetimeLocalValue(event.payment_due_fixed_at)}
+                              onChange={(e) => updateLocalEvent(event.id, { payment_due_fixed_at: e.target.value ? new Date(e.target.value).toISOString() : null })}
+                              disabled={savingId === event.id}
+                            />
+                            <span className="form-hint">予約のタイミングに関わらず、全員この日時が期限になります（例：当日払いを想定した開催直前の日時）。期限切れの未払い予約は自動キャンセルされ、枠が戻ります。</span>
+                          </div>
+                        )}
                       </div>
                     )}
 

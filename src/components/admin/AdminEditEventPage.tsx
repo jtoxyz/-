@@ -109,6 +109,7 @@ export default function AdminEditEventPage({ id }: { id: string }) {
   const [reservationEnabled, setReservationEnabled] = useState(true);
   const [ticketEnabled, setTicketEnabled] = useState(false);
   const [useButtonEnabled, setUseButtonEnabled] = useState(false);
+  const [ticketRevealMinutes, setTicketRevealMinutes] = useState('5');
 
   // Allowed domains
   const [allowedDomains, setAllowedDomains] = useState('');
@@ -156,6 +157,7 @@ export default function AdminEditEventPage({ id }: { id: string }) {
         setReservationEnabled(data.reservation_enabled ?? true);
         setTicketEnabled(data.ticket_enabled ?? false);
         setUseButtonEnabled(data.use_button_enabled ?? false);
+        setTicketRevealMinutes(String(data.ticket_reveal_minutes ?? 5));
         setAllowedDomains(Array.isArray(data.allowed_email_domains) ? data.allowed_email_domains.join(', ') : 'ge.osaka-sandai.ac.jp');
         setSlotSelectionMode(data.slot_selection_mode === 'multiple' ? 'multiple' : 'single');
         
@@ -584,6 +586,7 @@ export default function AdminEditEventPage({ id }: { id: string }) {
       reservation_enabled: reservationEnabled,
       ticket_enabled: ticketEnabled,
       use_button_enabled: useButtonEnabled,
+      ticket_reveal_minutes: Math.min(60, Math.max(1, parseInt(ticketRevealMinutes, 10) || 5)),
       allowed_email_domains: domainsArray,
       slot_selection_mode: slotSelectionMode,
       survey_after_reservation_enabled: surveyAfterReservationEnabled,
@@ -1379,6 +1382,21 @@ export default function AdminEditEventPage({ id }: { id: string }) {
                     />
                     「使用する」ボタンを有効にする (店員前でのタップ認証)
                   </label>
+                </div>
+
+                <div className="form-group" style={{ marginLeft: '24px', maxWidth: 220 }}>
+                  <label className="form-label" htmlFor="ticketRevealMinutesEdit">使用後にチケットコードを表示する時間（分）</label>
+                  <input
+                    id="ticketRevealMinutesEdit"
+                    type="number"
+                    className="form-input"
+                    min={1}
+                    max={60}
+                    value={ticketRevealMinutes}
+                    onChange={(e) => setTicketRevealMinutes(e.target.value)}
+                    disabled={saving}
+                  />
+                  <span className="form-hint">「使用する」を押した後、この時間が過ぎるとチケットコードが非表示になります（1〜60分）。</span>
                 </div>
 
                 <div style={{ marginLeft: '24px', padding: '10px 14px', borderRadius: 'var(--radius-sm)', background: 'rgba(99, 102, 241, 0.06)', border: '1px solid rgba(99, 102, 241, 0.15)', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>

@@ -7,8 +7,6 @@ import { supabase } from '@/lib/supabase';
 import { STUDENT_EMAIL_DOMAIN } from '@/lib/config';
 import { type AccountEventSlot, formatAccountDate } from '@/lib/studentAccount';
 
-const TICKET_REVEAL_MINUTES = 5;
-
 type PublicEvent = {
   id: string;
   title: string;
@@ -25,6 +23,7 @@ type FoundTicket = {
   used_at: string | null;
   event_title: string;
   event_description: string | null;
+  ticket_reveal_minutes: number;
   post_reservation_notes: string | null;
   slot_label: string | null;
 };
@@ -81,7 +80,7 @@ export default function FindTicketPage() {
 
   const ticketReveal = useMemo(() => {
     if (!ticket || ticket.status !== 'used' || !ticket.used_at) return null;
-    const expiresAtMs = new Date(ticket.used_at).getTime() + TICKET_REVEAL_MINUTES * 60 * 1000;
+    const expiresAtMs = new Date(ticket.used_at).getTime() + ticket.ticket_reveal_minutes * 60 * 1000;
     const remainingMs = expiresAtMs - nowTick;
     return remainingMs > 0 ? { visible: true as const, remainingMs } : { visible: false as const, remainingMs: 0 };
   }, [ticket, nowTick]);
@@ -125,7 +124,7 @@ export default function FindTicketPage() {
 
   const handleUse = async () => {
     if (!ticket) return;
-    if (!confirm(`このチケットを使用済みにします。使用後、チケットコードは${TICKET_REVEAL_MINUTES}分間だけ表示され、その後は見られなくなります。この操作は取り消せません。よろしいですか？`)) return;
+    if (!confirm(`このチケットを使用済みにします。使用後、チケットコードは${ticket.ticket_reveal_minutes}分間だけ表示され、その後は見られなくなります。この操作は取り消せません。よろしいですか？`)) return;
     setUsingTicket(true);
     setUseError(null);
 
@@ -186,7 +185,7 @@ export default function FindTicketPage() {
             )}
             {ticket.status === 'reserved' && (
               <div style={{ textAlign: 'center', padding: 14, borderRadius: 12, border: '1px dashed var(--card-border-hover)', color: 'var(--text-secondary)', marginBottom: 18, fontSize: '0.85rem' }}>
-                「使用する」を押すとチケットコードが表示されます（表示は{TICKET_REVEAL_MINUTES}分間のみです）
+                「使用する」を押すとチケットコードが表示されます（表示は{ticket.ticket_reveal_minutes}分間のみです）
               </div>
             )}
 

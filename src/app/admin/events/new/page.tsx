@@ -85,6 +85,7 @@ export default function AdminNewEventPage() {
   const [reservationEnabled, setReservationEnabled] = useState(true);
   const [ticketEnabled, setTicketEnabled] = useState(false);
   const [useButtonEnabled, setUseButtonEnabled] = useState(false);
+  const [ticketRevealMinutes, setTicketRevealMinutes] = useState('5');
 
   // Allowed domains
   const [allowedDomains, setAllowedDomains] = useState('ge.osaka-sandai.ac.jp');
@@ -366,6 +367,7 @@ export default function AdminNewEventPage() {
       reservation_enabled: reservationEnabled,
       ticket_enabled: ticketEnabled,
       use_button_enabled: useButtonEnabled,
+      ticket_reveal_minutes: Math.min(60, Math.max(1, parseInt(ticketRevealMinutes, 10) || 5)),
       allowed_email_domains: domainsArray,
       slot_selection_mode: slotSelectionMode,
       survey_after_reservation_enabled: surveyAfterReservationEnabled,
@@ -1120,6 +1122,21 @@ export default function AdminNewEventPage() {
                     「使用する」ボタンを有効にする (店員前でのタップ認証)
                   </label>
                   <span className="form-hint" style={{ marginLeft: '28px' }}>有効にすると、ユーザーが自身で「使用」状態に変更可能になります。</span>
+                </div>
+
+                <div className="form-group" style={{ marginLeft: '24px', maxWidth: 220 }}>
+                  <label className="form-label" htmlFor="ticketRevealMinutes">使用後にチケットコードを表示する時間（分）</label>
+                  <input
+                    id="ticketRevealMinutes"
+                    type="number"
+                    className="form-input"
+                    min={1}
+                    max={60}
+                    value={ticketRevealMinutes}
+                    onChange={(e) => setTicketRevealMinutes(e.target.value)}
+                    disabled={saving}
+                  />
+                  <span className="form-hint">「使用する」を押した後、この時間が過ぎるとチケットコードが非表示になります（1〜60分）。</span>
                 </div>
 
                 <div style={{ marginLeft: '24px', padding: '10px 14px', borderRadius: 'var(--radius-sm)', background: 'rgba(99, 102, 241, 0.06)', border: '1px solid rgba(99, 102, 241, 0.15)', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
