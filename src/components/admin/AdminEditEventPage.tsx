@@ -11,6 +11,22 @@ import AdminNav from '@/components/AdminNav';
 import EventPreviewModal from '@/components/EventPreviewModal';
 import { supabase } from '@/lib/supabase';
 
+function addMinutesToTime(time: string, minutes: number): string {
+  const [h, m] = time.split(':').map(Number);
+  const total = (h * 60 + m + minutes + 24 * 60) % (24 * 60);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(Math.floor(total / 60))}:${pad(total % 60)}`;
+}
+
+function formatSlotDateTime(value: string): string {
+  if (!value) return '未設定';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '未設定';
+  const days = ['日', '月', '火', '水', '木', '金', '土'];
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getMonth() + 1}/${d.getDate()}(${days[d.getDay()]}) ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 function isValidUrl(url: string | null | undefined): boolean {
   if (!url) return true; // Empty is valid since it is optional
   try {
@@ -103,6 +119,7 @@ export default function AdminEditEventPage({ id }: { id: string }) {
   const [slotRows, setSlotRows] = useState<SlotFormRow[]>([]);
   const [initialSlotIds, setInitialSlotIds] = useState<string[]>([]);
   const [slotReservationCounts, setSlotReservationCounts] = useState<Record<string, number>>({});
+  const [showAdvancedTiming, setShowAdvancedTiming] = useState(false);
 
   // Toggles
   const [isPublic, setIsPublic] = useState(false);
@@ -267,13 +284,13 @@ export default function AdminEditEventPage({ id }: { id: string }) {
           updated.reservationEndsAt = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T23:59`;
         }
         
-        // チケット使用 (Ticket usage): Matches event slot hours (e.g. 11:00 - 14:00)
-        if (!updated.ticketUseStartsAt) updated.ticketUseStartsAt = `${value}T11:00`;
-        if (!updated.ticketUseEndsAt) updated.ticketUseEndsAt = `${value}T14:00`;
-        
-        // 当日券 (Walk-in): Starts 30 mins before event slot, ends 30 mins before slot ends (e.g. 10:30 - 13:30)
-        if (!updated.walkinStartsAt) updated.walkinStartsAt = `${value}T10:30`;
-        if (!updated.walkinEndsAt) updated.walkinEndsAt = `${value}T13:30`;
+        // チケット使用 (Ticket usage): Matches this slot's own start/end time.
+        if (!updated.ticketUseStartsAt) updated.ticketUseStartsAt = `${value}T${updated.startTime}`;
+        if (!updated.ticketUseEndsAt) updated.ticketUseEndsAt = `${value}T${updated.endTime}`;
+
+        // 当日券 (Walk-in): Starts 30 mins before event slot, ends 30 mins before slot ends.
+        if (!updated.walkinStartsAt) updated.walkinStartsAt = `${value}T${addMinutesToTime(updated.startTime, -30)}`;
+        if (!updated.walkinEndsAt) updated.walkinEndsAt = `${value}T${addMinutesToTime(updated.endTime, -30)}`;
       }
       return updated;
     }));
@@ -1001,8 +1018,19 @@ export default function AdminEditEventPage({ id }: { id: string }) {
 
             {/* Slot management */}
             <div style={{ marginTop: '20px', background: 'var(--card-bg)', padding: '16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--card-border)' }}>
-              <h4 style={{ fontSize: '0.95rem', marginBottom: '12px', color: 'var(--text-primary)' }}>開催枠の管理</h4>
-              <span className="form-hint" style={{ display: 'block', marginBottom: '12px' }}>各開催枠に、枠名・開催日時・定員を設定できます。少なくとも1つの枠が必要です。</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: '12px' }}>
+                <h4 style={{ fontSize: '0.95rem', margin: 0, color: 'var(--text-primary)' }}>開催枠の管理</h4>
+                <button
+                  type="button"
+                  onClick={() => setShowAdvancedTiming((v) => !v)}
+                  style={{ background: 'none', border: 'none', color: 'var(--color-primary)', fontSize: '0.78rem', cursor: 'pointer', textDecoration: 'underline', whiteSpace: 'nowrap' }}
+                >
+                  {showAdvancedTiming ? '詳細設定を隠す' : '詳細設定を表示'}
+                </button>
+              </div>
+              <span className="form-hint" style={{ display: 'block', marginBottom: '12px' }}>
+                各開催枠に、枠名・開催日時・定員を設定できます。少なくとも1つの枠が必要です。予約締切などは開催日を入れると自動で設定されるので、普段は「詳細設定」を開かなくても大丈夫です。
+              </span>
 
               {slotRows.map((row) => {
                 const resCount = slotReservationCounts[row.id] || 0;
@@ -1103,31 +1131,41 @@ export default function AdminEditEventPage({ id }: { id: string }) {
                             予約受付を有効にする
                           </label>
                         </div>
-                        <span className="form-hint" style={{ display: 'block', marginBottom: '8px' }}>この開催枠に対する通常の事前予約を受け付ける期間を設定します。</span>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
-                          <div>
-                            <label className="form-label" style={{ fontSize: '0.7rem' }}>予約開始日時</label>
-                            <input
-                              type="datetime-local"
-                              className="form-input"
-                              value={row.reservationStartsAt}
-                              onChange={(e) => updateSlotRow(row.id, 'reservationStartsAt', e.target.value)}
-                              disabled={saving || !row.isReservationEnabled}
-                              style={{ width: '100%' }}
-                            />
-                          </div>
-                          <div>
-                            <label className="form-label" style={{ fontSize: '0.7rem' }}>予約終了日時</label>
-                            <input
-                              type="datetime-local"
-                              className="form-input"
-                              value={row.reservationEndsAt}
-                              onChange={(e) => updateSlotRow(row.id, 'reservationEndsAt', e.target.value)}
-                              disabled={saving || !row.isReservationEnabled}
-                              style={{ width: '100%' }}
-                            />
-                          </div>
-                        </div>
+                        {!showAdvancedTiming ? (
+                          row.isReservationEnabled && (
+                            <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                              {formatSlotDateTime(row.reservationStartsAt)} 〜 {formatSlotDateTime(row.reservationEndsAt)}
+                            </div>
+                          )
+                        ) : (
+                          <>
+                            <span className="form-hint" style={{ display: 'block', marginBottom: '8px' }}>この開催枠に対する通常の事前予約を受け付ける期間を設定します。</span>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
+                              <div>
+                                <label className="form-label" style={{ fontSize: '0.7rem' }}>予約開始日時</label>
+                                <input
+                                  type="datetime-local"
+                                  className="form-input"
+                                  value={row.reservationStartsAt}
+                                  onChange={(e) => updateSlotRow(row.id, 'reservationStartsAt', e.target.value)}
+                                  disabled={saving || !row.isReservationEnabled}
+                                  style={{ width: '100%' }}
+                                />
+                              </div>
+                              <div>
+                                <label className="form-label" style={{ fontSize: '0.7rem' }}>予約終了日時</label>
+                                <input
+                                  type="datetime-local"
+                                  className="form-input"
+                                  value={row.reservationEndsAt}
+                                  onChange={(e) => updateSlotRow(row.id, 'reservationEndsAt', e.target.value)}
+                                  disabled={saving || !row.isReservationEnabled}
+                                  style={{ width: '100%' }}
+                                />
+                              </div>
+                            </div>
+                          </>
+                        )}
                       </div>
 
                       {/* 2. チケット使用可能期間 */}
@@ -1145,33 +1183,43 @@ export default function AdminEditEventPage({ id }: { id: string }) {
                             チケット使用を有効にする
                           </label>
                         </div>
-                        <span className="form-hint" style={{ display: 'block', marginBottom: '8px' }}>
-                          取得済みの予約券および当日券を「使用する（引き換え）」ことができる時間帯です。
-                        </span>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
-                          <div>
-                            <label className="form-label" style={{ fontSize: '0.7rem' }}>使用開始日時</label>
-                            <input
-                              type="datetime-local"
-                              className="form-input"
-                              value={row.ticketUseStartsAt}
-                              onChange={(e) => updateSlotRow(row.id, 'ticketUseStartsAt', e.target.value)}
-                              disabled={saving || !row.isTicketUseEnabled}
-                              style={{ width: '100%' }}
-                            />
-                          </div>
-                          <div>
-                            <label className="form-label" style={{ fontSize: '0.7rem' }}>使用終了日時</label>
-                            <input
-                              type="datetime-local"
-                              className="form-input"
-                              value={row.ticketUseEndsAt}
-                              onChange={(e) => updateSlotRow(row.id, 'ticketUseEndsAt', e.target.value)}
-                              disabled={saving || !row.isTicketUseEnabled}
-                              style={{ width: '100%' }}
-                            />
-                          </div>
-                        </div>
+                        {!showAdvancedTiming ? (
+                          row.isTicketUseEnabled && (
+                            <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                              {formatSlotDateTime(row.ticketUseStartsAt)} 〜 {formatSlotDateTime(row.ticketUseEndsAt)}
+                            </div>
+                          )
+                        ) : (
+                          <>
+                            <span className="form-hint" style={{ display: 'block', marginBottom: '8px' }}>
+                              取得済みの予約券および当日券を「使用する（引き換え）」ことができる時間帯です。
+                            </span>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
+                              <div>
+                                <label className="form-label" style={{ fontSize: '0.7rem' }}>使用開始日時</label>
+                                <input
+                                  type="datetime-local"
+                                  className="form-input"
+                                  value={row.ticketUseStartsAt}
+                                  onChange={(e) => updateSlotRow(row.id, 'ticketUseStartsAt', e.target.value)}
+                                  disabled={saving || !row.isTicketUseEnabled}
+                                  style={{ width: '100%' }}
+                                />
+                              </div>
+                              <div>
+                                <label className="form-label" style={{ fontSize: '0.7rem' }}>使用終了日時</label>
+                                <input
+                                  type="datetime-local"
+                                  className="form-input"
+                                  value={row.ticketUseEndsAt}
+                                  onChange={(e) => updateSlotRow(row.id, 'ticketUseEndsAt', e.target.value)}
+                                  disabled={saving || !row.isTicketUseEnabled}
+                                  style={{ width: '100%' }}
+                                />
+                              </div>
+                            </div>
+                          </>
+                        )}
                       </div>
 
                       {/* 3. 当日券発行期間 */}
@@ -1189,46 +1237,57 @@ export default function AdminEditEventPage({ id }: { id: string }) {
                             当日券発行を有効にする
                           </label>
                         </div>
-                        <span className="form-hint" style={{ display: 'block', marginBottom: '8px' }}>
-                          この開催枠で当日券の発行を受け付ける期間と上限数を設定します。
-                        </span>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
-                          <div>
-                            <label className="form-label" style={{ fontSize: '0.7rem' }}>発行開始日時</label>
-                            <input
-                              type="datetime-local"
-                              className="form-input"
-                              value={row.walkinStartsAt}
-                              onChange={(e) => updateSlotRow(row.id, 'walkinStartsAt', e.target.value)}
-                              disabled={saving || !row.isWalkinEnabled}
-                              style={{ width: '100%' }}
-                            />
-                          </div>
-                          <div>
-                            <label className="form-label" style={{ fontSize: '0.7rem' }}>発行終了日時</label>
-                            <input
-                              type="datetime-local"
-                              className="form-input"
-                              value={row.walkinEndsAt}
-                              onChange={(e) => updateSlotRow(row.id, 'walkinEndsAt', e.target.value)}
-                              disabled={saving || !row.isWalkinEnabled}
-                              style={{ width: '100%' }}
-                            />
-                          </div>
-                          <div>
-                            <label className="form-label" style={{ fontSize: '0.7rem' }}>当日券発行上限数（空欄で制限なし）</label>
-                            <input
-                              type="number"
-                              className="form-input"
-                              placeholder="残席すべて"
-                              min={0}
-                              value={row.walkinLimit}
-                              onChange={(e) => updateSlotRow(row.id, 'walkinLimit', e.target.value)}
-                              disabled={saving || !row.isWalkinEnabled}
-                              style={{ width: '100%' }}
-                            />
-                          </div>
-                        </div>
+                        {!showAdvancedTiming ? (
+                          row.isWalkinEnabled && (
+                            <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                              {formatSlotDateTime(row.walkinStartsAt)} 〜 {formatSlotDateTime(row.walkinEndsAt)}
+                              {row.walkinLimit && `　上限${row.walkinLimit}枚`}
+                            </div>
+                          )
+                        ) : (
+                          <>
+                            <span className="form-hint" style={{ display: 'block', marginBottom: '8px' }}>
+                              この開催枠で当日券の発行を受け付ける期間と上限数を設定します。
+                            </span>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
+                              <div>
+                                <label className="form-label" style={{ fontSize: '0.7rem' }}>発行開始日時</label>
+                                <input
+                                  type="datetime-local"
+                                  className="form-input"
+                                  value={row.walkinStartsAt}
+                                  onChange={(e) => updateSlotRow(row.id, 'walkinStartsAt', e.target.value)}
+                                  disabled={saving || !row.isWalkinEnabled}
+                                  style={{ width: '100%' }}
+                                />
+                              </div>
+                              <div>
+                                <label className="form-label" style={{ fontSize: '0.7rem' }}>発行終了日時</label>
+                                <input
+                                  type="datetime-local"
+                                  className="form-input"
+                                  value={row.walkinEndsAt}
+                                  onChange={(e) => updateSlotRow(row.id, 'walkinEndsAt', e.target.value)}
+                                  disabled={saving || !row.isWalkinEnabled}
+                                  style={{ width: '100%' }}
+                                />
+                              </div>
+                              <div>
+                                <label className="form-label" style={{ fontSize: '0.7rem' }}>当日券発行上限数（空欄で制限なし）</label>
+                                <input
+                                  type="number"
+                                  className="form-input"
+                                  placeholder="残席すべて"
+                                  min={0}
+                                  value={row.walkinLimit}
+                                  onChange={(e) => updateSlotRow(row.id, 'walkinLimit', e.target.value)}
+                                  disabled={saving || !row.isWalkinEnabled}
+                                  style={{ width: '100%' }}
+                                />
+                              </div>
+                            </div>
+                          </>
+                        )}
 
                         {/* Config warning */}
                         {row.isWalkinEnabled && row.isReservationEnabled && row.walkinStartsAt && row.reservationEndsAt && (new Date(row.walkinStartsAt) < new Date(row.reservationEndsAt)) && (
