@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { LogOut, UserRound } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
@@ -13,7 +13,6 @@ type Profile = {
 
 export default function StudentAccountMenu() {
   const pathname = usePathname();
-  const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
 
   useEffect(() => {
@@ -53,8 +52,6 @@ export default function StudentAccountMenu() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     setProfile(null);
-    router.replace('/login');
-    router.refresh();
   };
 
   if (!profile) return null;
