@@ -12,7 +12,8 @@ function isExcludedPath(pathname: string): boolean {
     pathname === '/login' ||
     pathname === '/account/setup' ||
     pathname.startsWith('/admin') ||
-    pathname.startsWith('/qr-maker')
+    pathname.startsWith('/qr-maker') ||
+    pathname.startsWith('/tickets/find')
   );
 }
 
