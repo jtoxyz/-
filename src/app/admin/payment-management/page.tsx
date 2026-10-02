@@ -155,8 +155,8 @@ export default function PaymentManagementPage() {
             </div>
 
             {loading ? <div className="loading-spinner" /> : (
-              <div style={{ overflowX: 'auto' }}>
-                <table className="reservations-table-desktop" style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <div className="admin-table-container reservations-table-desktop">
+                <table className="admin-table">
                   <thead><tr><th>氏名</th><th>学籍番号</th><th>枠</th><th>支払い状態</th><th>期限</th><th>支払日時</th><th>操作</th></tr></thead>
                   <tbody>
                     {visibleRows.map((row) => (
