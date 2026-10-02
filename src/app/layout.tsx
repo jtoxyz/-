@@ -13,6 +13,16 @@ export const metadata: Metadata = {
   title: '大学委員会 参加型企画予約システム',
   description: '大阪産業大学の委員会・サークル向け 参加予約＆電子チケット管理システム',
   viewport: 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no',
+  manifest: '/manifest.webmanifest',
+  icons: {
+    icon: { url: '/icon.svg', type: 'image/svg+xml' },
+    apple: { url: '/apple-touch-icon.png', sizes: '180x180' },
+  },
+  appleWebApp: {
+    capable: true,
+    title: '委員会予約',
+    statusBarStyle: 'default',
+  },
 };
 
 export default function RootLayout({
