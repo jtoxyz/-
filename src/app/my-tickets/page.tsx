@@ -6,6 +6,7 @@ import { BadgeCheck, Clock3, ExternalLink, TicketCheck } from 'lucide-react';
 import RichText from '@/components/RichText';
 import { supabase } from '@/lib/supabase';
 import { formatAccountDate } from '@/lib/studentAccount';
+import { type PaymentVisitSlot, fetchMyVisitSlots, formatVisitSlot } from '@/lib/paymentVisit';
 
 type TicketDetails = {
   reservation_id: string;
@@ -59,6 +60,7 @@ function safeHttpUrl(value: string | null): string | null {
 export default function MyTicketPage() {
   const [reservationId, setReservationId] = useState<string | null>(null);
   const [ticket, setTicket] = useState<TicketDetails | null>(null);
+  const [visitSlot, setVisitSlot] = useState<PaymentVisitSlot | null>(null);
   const [loading, setLoading] = useState(true);
   const [usingTicket, setUsingTicket] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -83,6 +85,8 @@ export default function MyTicketPage() {
     } else {
       setError(null);
       setTicket(data[0] as TicketDetails);
+      const visits = await fetchMyVisitSlots([id]);
+      setVisitSlot(visits[id] ?? null);
     }
     setLoading(false);
   };
@@ -192,7 +196,16 @@ export default function MyTicketPage() {
 
           <div className="glass-card" style={{ padding: 14, marginBottom: 18, display: 'flex', alignItems: 'center', gap: 9 }}>
             <BadgeCheck size={20} aria-hidden="true" />
-            <div><small style={{ color: 'var(--text-secondary)' }}>支払い状態</small><div style={{ fontWeight: 800 }}>{paymentText}</div></div>
+            <div>
+              <small style={{ color: 'var(--text-secondary)' }}>支払い状態</small>
+              <div style={{ fontWeight: 800 }}>{paymentText}</div>
+              {visitSlot && ticket.payment_status === 'pending' && (
+                <div style={{ marginTop: 4, fontSize: '0.88rem' }}>
+                  委員会室で支払い：<strong>{formatVisitSlot(visitSlot)}</strong>
+                  {visitSlot.note && <span style={{ color: 'var(--text-secondary)' }}>（{visitSlot.note}）</span>}
+                </div>
+              )}
+            </div>
           </div>
 
           {ticket.post_reservation_notes && (

@@ -3,9 +3,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { CalendarDays, Ticket, UserRound } from 'lucide-react';
+import { Banknote, CalendarDays, Ticket, UserRound } from 'lucide-react';
 import RichText from '@/components/RichText';
 import { supabase } from '@/lib/supabase';
+import { type PaymentVisitSlot, fetchSelectableVisitSlots, formatVisitSlot } from '@/lib/paymentVisit';
 import {
   type AccountEvent,
   type AccountEventSlot,
@@ -26,6 +27,8 @@ export default function AccountReservationPage() {
   const [slots, setSlots] = useState<AccountEventSlot[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [results, setResults] = useState<BulkResult[]>([]);
+  const [visitSlots, setVisitSlots] = useState<PaymentVisitSlot[]>([]);
+  const [visitSlotId, setVisitSlotId] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,7 +52,7 @@ export default function AccountReservationPage() {
 
       const [profileResult, eventResult, slotResult] = await Promise.all([
         supabase.from('user_profiles').select('student_name, student_number, university_email').eq('user_id', user.id).single(),
-        supabase.from('events').select('id, title, description, slot_selection_mode').eq('id', eventId).eq('is_public', true).single(),
+        supabase.from('events').select('id, title, description, slot_selection_mode, payment_required, payment_visit_required').eq('id', eventId).eq('is_public', true).single(),
         supabase.rpc('get_event_slots', { p_event_id: eventId }),
       ]);
 
@@ -61,6 +64,14 @@ export default function AccountReservationPage() {
         setProfile(profileResult.data as StudentProfile);
         setEvent(loadedEvent);
         setSlots(loadedSlots);
+
+        if (loadedEvent.payment_required && loadedEvent.payment_visit_required) {
+          try {
+            setVisitSlots(await fetchSelectableVisitSlots());
+          } catch {
+            setError('支払い日時の候補を取得できませんでした。');
+          }
+        }
 
         if (loadedEvent.slot_selection_mode === 'single') {
           const selectable = loadedSlots.filter((slot) => canReserveSlot(slot) || canGetWalkinSlot(slot));
@@ -74,7 +85,8 @@ export default function AccountReservationPage() {
   }, [eventId]);
 
   const selectedSlots = useMemo(() => slots.filter((slot) => selected.includes(slot.id)), [slots, selected]);
-  const reservable = selectedSlots.length > 0 && selectedSlots.every(canReserveSlot);
+  const visitRequired = Boolean(event?.payment_required && event?.payment_visit_required);
+  const reservable = selectedSlots.length > 0 && selectedSlots.every(canReserveSlot) && (!visitRequired || visitSlotId !== '');
   const walkinAvailable = selectedSlots.length === 1 && canGetWalkinSlot(selectedSlots[0]);
 
   const toggle = (slot: AccountEventSlot) => {
@@ -92,6 +104,7 @@ export default function AccountReservationPage() {
       const { data, error: rpcError } = await supabase.rpc('create_my_reservations_bulk', {
         p_event_id: event.id,
         p_event_slot_ids: selected,
+        p_payment_visit_slot_id: visitRequired ? visitSlotId : null,
       });
       if (rpcError) setError(rpcError.message || '予約に失敗しました。');
       else setResults((data as BulkResult[] | null) || []);
@@ -102,6 +115,7 @@ export default function AccountReservationPage() {
     const { data, error: rpcError } = await supabase.rpc('create_my_reservation', {
       p_event_id: event.id,
       p_event_slot_id: selected[0],
+      p_payment_visit_slot_id: visitRequired ? visitSlotId : null,
     });
     if (rpcError) setError(rpcError.message || '予約に失敗しました。');
     else {
@@ -174,6 +188,27 @@ export default function AccountReservationPage() {
           })}
         </div>
         {slots.length === 0 && <p style={{ color: 'var(--text-secondary)' }}>現在選択できる開催枠はありません。</p>}
+
+        {visitRequired && (
+          <div style={{ marginTop: 22 }}>
+            <h2 style={{ fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}><Banknote size={22} aria-hidden="true" />委員会室に支払いに来る日時を選択</h2>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: 12 }}>
+              選んだ日時に委員会室で支払ってください。時間内に支払いがない場合、予約は自動でキャンセルされます。
+            </p>
+            <div style={{ display: 'grid', gap: 8 }}>
+              {visitSlots.map((visit) => {
+                const active = visitSlotId === visit.id;
+                return (
+                  <button key={visit.id} type="button" onClick={() => setVisitSlotId(visit.id)} disabled={saving} className="glass-card interactive" style={{ textAlign: 'left', width: '100%', padding: 13, borderColor: active ? 'var(--color-primary)' : 'var(--card-border)', background: active ? 'var(--color-primary-glow)' : 'var(--card-bg)' }}>
+                    <strong>{formatVisitSlot(visit)}</strong>
+                    {visit.note && <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 4 }}>{visit.note}</div>}
+                  </button>
+                );
+              })}
+            </div>
+            {visitSlots.length === 0 && <p style={{ color: 'var(--text-secondary)' }}>現在選べる支払い日時がありません。委員会にお問い合わせください。</p>}
+          </div>
+        )}
 
         <div style={{ display: 'grid', gap: 10, marginTop: 20 }}>
           <button type="button" className="btn btn-primary" onClick={reserve} disabled={!reservable || saving}><Ticket size={18} aria-hidden="true" />{saving ? '処理中...' : '選択した枠を予約する'}</button>

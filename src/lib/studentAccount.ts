@@ -9,6 +9,8 @@ export type AccountEvent = {
   title: string;
   description: string | null;
   slot_selection_mode: 'single' | 'multiple';
+  payment_required?: boolean | null;
+  payment_visit_required?: boolean | null;
 };
 
 export type AccountEventSlot = {

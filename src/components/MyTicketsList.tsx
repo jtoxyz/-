@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { CalendarDays, Clock3, Tickets } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { type PaymentVisitSlot, fetchMyVisitSlots, formatVisitSlot } from '@/lib/paymentVisit';
 
 type MyTicket = {
   reservation_id: string;
@@ -29,10 +30,11 @@ function formatDateTime(value: string): string {
   });
 }
 
-function paymentLabel(ticket: MyTicket): string | null {
+function paymentLabel(ticket: MyTicket, visit?: PaymentVisitSlot): string | null {
   if (ticket.payment_status === 'paid') return '支払い済み';
   if (ticket.payment_status === 'expired') return '支払期限切れ';
   if (ticket.payment_status === 'pending') {
+    if (visit) return `委員会室で支払い：${formatVisitSlot(visit)}`;
     return ticket.payment_due_at
       ? `支払待ち：${formatDateTime(ticket.payment_due_at)}まで`
       : '支払い待ち';
@@ -42,6 +44,7 @@ function paymentLabel(ticket: MyTicket): string | null {
 
 export default function MyTicketsList() {
   const [tickets, setTickets] = useState<MyTicket[]>([]);
+  const [visits, setVisits] = useState<Record<string, PaymentVisitSlot>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,8 +60,13 @@ export default function MyTicketsList() {
         setError(rpcError.message || '予約一覧を取得できませんでした。');
         setTickets([]);
       } else {
+        const loaded = (data as MyTicket[] | null) || [];
         setError(null);
-        setTickets((data as MyTicket[] | null) || []);
+        setTickets(loaded);
+        const pendingIds = loaded.filter((t) => t.payment_status === 'pending').map((t) => t.reservation_id);
+        const loadedVisits = await fetchMyVisitSlots(pendingIds);
+        if (!active) return;
+        setVisits(loadedVisits);
       }
       setLoading(false);
     };
@@ -94,7 +102,7 @@ export default function MyTicketsList() {
       {!loading && tickets.length > 0 && (
         <div style={{ display: 'grid', gap: 10 }}>
           {tickets.map((ticket) => {
-            const payment = paymentLabel(ticket);
+            const payment = paymentLabel(ticket, visits[ticket.reservation_id]);
             return (
               <Link key={ticket.reservation_id} href={`/my-tickets?reservationId=${encodeURIComponent(ticket.reservation_id)}`} style={{ display: 'block' }}>
                 <div className="glass-card interactive" style={{ padding: '13px 15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 14 }}>
