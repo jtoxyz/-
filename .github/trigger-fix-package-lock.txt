@@ -1,1 +1,0 @@
-Run the package-lock synchronization workflow for qrcode.react.
