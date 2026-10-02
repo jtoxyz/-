@@ -50,9 +50,9 @@ export function useAdminAuth() {
         }
 
         if (!adminData) {
-          console.warn('Unauthorized admin access attempt. Logging out.');
-          await supabase.auth.signOut();
-          if (!active) return;
+          // Keep the session: a student who opens /admin should stay logged in
+          // to the public site. The admin login page replaces it if needed.
+          console.warn('Unauthorized admin access attempt.');
           setUser(null);
           router.push('/admin/login');
           return;

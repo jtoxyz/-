@@ -50,7 +50,7 @@ export default function StudentAccountMenu() {
   }, [pathname]);
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({ scope: 'local' });
     setProfile(null);
   };
 

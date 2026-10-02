@@ -46,7 +46,7 @@ export default function AdminLoginPage() {
       if (adminError) {
         console.error('Error verifying admin status:', adminError);
         setError('管理者情報の検証中にエラーが発生しました。');
-        await supabase.auth.signOut();
+        await supabase.auth.signOut({ scope: 'local' });
         setLoading(false);
         return;
       }
@@ -54,7 +54,7 @@ export default function AdminLoginPage() {
       if (!adminData) {
         setError('このアカウントには管理者権限がありません。');
         // Sign out immediately to clear session
-        await supabase.auth.signOut();
+        await supabase.auth.signOut({ scope: 'local' });
         setLoading(false);
         return;
       }

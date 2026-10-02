@@ -27,7 +27,7 @@ export default function AdminNav() {
 
   const handleLogout = async () => {
     try {
-      await supabase.auth.signOut();
+      await supabase.auth.signOut({ scope: 'local' });
       router.push('/admin/login');
     } catch (e) {
       console.error('Logout error', e);

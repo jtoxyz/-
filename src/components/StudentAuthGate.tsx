@@ -55,7 +55,20 @@ export default function StudentAuthGate({ children }: { children: React.ReactNod
 
       const email = String(session.user.email || '').trim().toLowerCase();
       if (!STUDENT_EMAIL_PATTERN.test(email)) {
-        await supabase.auth.signOut();
+        // Admins (non-student accounts) may browse the public site; signing them
+        // out here would also kill their admin session.
+        const { data: adminRow } = await supabase
+          .from('admin_users')
+          .select('user_id')
+          .eq('user_id', session.user.id)
+          .maybeSingle();
+        if (!active) return;
+        if (adminRow) {
+          setReady(true);
+          return;
+        }
+
+        await supabase.auth.signOut({ scope: 'local' });
         if (!active) return;
         setReady(false);
         router.replace(loginPath(pathname, 'university-account'));

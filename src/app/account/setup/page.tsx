@@ -42,7 +42,7 @@ export default function AccountSetupPage() {
 
       const accountEmail = String(session.user.email || '').trim().toLowerCase();
       if (!studentNumberFromEmail(accountEmail)) {
-        await supabase.auth.signOut();
+        await supabase.auth.signOut({ scope: 'local' });
         router.replace('/login?reason=university-account');
         return;
       }

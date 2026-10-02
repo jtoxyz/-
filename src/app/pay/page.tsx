@@ -48,7 +48,7 @@ export default function PaymentQrRedeemPage() {
 
       const email = String(session.user.email || '').toLowerCase();
       if (!email.endsWith(`@${UNIVERSITY_DOMAIN}`)) {
-        await supabase.auth.signOut();
+        await supabase.auth.signOut({ scope: 'local' });
         if (mounted) {
           setMessage('大学Googleアカウントでログインしてください。');
           setLoading(false);
