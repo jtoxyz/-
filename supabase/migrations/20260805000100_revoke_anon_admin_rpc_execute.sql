@@ -8,3 +8,9 @@
 revoke execute on function public.admin_set_reservation_payment_status(uuid, boolean) from anon;
 revoke execute on function public.admin_expire_unpaid_reservations() from anon;
 revoke execute on function public.admin_get_current_dynamic_payment_qr(uuid) from anon;
+
+-- anon inherits EXECUTE through the default PUBLIC grant, so revoking from anon
+-- alone is not enough. authenticated keeps its explicit grant (admin UI unchanged).
+revoke execute on function public.admin_set_reservation_payment_status(uuid, boolean) from public;
+revoke execute on function public.admin_expire_unpaid_reservations() from public;
+revoke execute on function public.admin_get_current_dynamic_payment_qr(uuid) from public;
