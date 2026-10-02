@@ -228,8 +228,8 @@ export default function PaymentVisitsPage() {
                     {slotRows.length === 0 ? (
                       <p style={{ color: 'var(--text-secondary)', margin: 0 }}>この枠を選んだ予約はありません。</p>
                     ) : (
-                      <div style={{ overflowX: 'auto' }}>
-                        <table className="reservations-table-desktop" style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <div className="admin-table-container reservations-table-desktop">
+                        <table className="admin-table">
                           <thead><tr><th>氏名</th><th>学籍番号</th><th>企画</th><th>支払い状態</th><th>操作</th></tr></thead>
                           <tbody>
                             {slotRows.map((row) => (
@@ -288,8 +288,8 @@ export default function PaymentVisitsPage() {
             {upcoming.length === 0 ? (
               <p style={{ color: 'var(--text-secondary)' }}>これからの受付枠はありません。</p>
             ) : (
-              <div style={{ overflowX: 'auto' }}>
-                <table className="reservations-table-desktop" style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <div className="admin-table-container reservations-table-desktop">
+                <table className="admin-table">
                   <thead><tr><th>日時</th><th>メモ</th><th>予約人数</th><th>状態</th><th>操作</th></tr></thead>
                   <tbody>
                     {upcoming.map((slot) => (
