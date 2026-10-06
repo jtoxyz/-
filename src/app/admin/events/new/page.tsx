@@ -7,6 +7,7 @@ import { useAdminAuth } from '@/hooks/useAdminAuth';
 import AdminNav from '@/components/AdminNav';
 import EventPreviewModal from '@/components/EventPreviewModal';
 import { supabase } from '@/lib/supabase';
+import PaymentVisitSettings from '@/components/admin/PaymentVisitSettings';
 
 interface SlotFormRow {
   id: string; // temp client-side ID
@@ -116,6 +117,8 @@ export default function AdminNewEventPage() {
   );
 
   const [surveyAfterUseEnabled, setSurveyAfterUseEnabled] = useState(false);
+  const [paymentRequired, setPaymentRequired] = useState(false);
+  const [paymentVisitRequired, setPaymentVisitRequired] = useState(false);
   const [surveyAfterUseUrl, setSurveyAfterUseUrl] = useState('');
   const [surveyAfterUseMessage, setSurveyAfterUseMessage] = useState(
     'ご参加ありがとうございました。今後の企画改善のため、アンケートにご協力ください。'
@@ -394,6 +397,8 @@ export default function AdminNewEventPage() {
       survey_after_use_enabled: surveyAfterUseEnabled,
       survey_after_use_url: surveyAfterUseUrl.trim() || null,
       survey_after_use_message: surveyAfterUseMessage.trim() || null,
+      payment_required: paymentRequired,
+      payment_visit_required: paymentRequired && paymentVisitRequired,
       is_reservation_suspended: isReservationSuspended,
       is_walkin_suspended: isWalkinSuspended,
       is_ticket_use_suspended: isTicketUseSuspended,
@@ -1305,10 +1310,24 @@ export default function AdminNewEventPage() {
             )}
           </div>
 
+          {/* Section: Payment */}
+          <div className="glass-card" style={{ marginBottom: '24px' }}>
+            <h3 style={{ fontSize: '1.1rem', marginBottom: '16px', color: 'var(--color-primary)' }}>
+              5. 支払い（委員会室での受け取り）
+            </h3>
+            <PaymentVisitSettings
+              paymentRequired={paymentRequired}
+              onPaymentRequiredChange={setPaymentRequired}
+              visitRequired={paymentVisitRequired}
+              onVisitRequiredChange={setPaymentVisitRequired}
+              disabled={saving}
+            />
+          </div>
+
           {/* Section: Status */}
           <div className="glass-card" style={{ marginBottom: '24px' }}>
             <h3 style={{ fontSize: '1.1rem', marginBottom: '16px', color: 'var(--color-primary)' }}>
-              5. 公開・一時停止設定
+              6. 公開・一時停止設定
             </h3>
             
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
