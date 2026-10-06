@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Banknote, CalendarDays, Ticket, UserRound } from 'lucide-react';
 import RichText from '@/components/RichText';
 import { supabase } from '@/lib/supabase';
-import { type PaymentVisitSlot, fetchSelectableVisitSlots, formatVisitSlot } from '@/lib/paymentVisit';
+import { type PaymentVisitSlot, VISIT_WINDOW_OPTIONS, fetchSelectableVisitSlots, formatVisitSlot } from '@/lib/paymentVisit';
 import {
   type AccountEvent,
   type AccountEventSlot,
@@ -52,7 +52,7 @@ export default function AccountReservationPage() {
 
       const [profileResult, eventResult, slotResult] = await Promise.all([
         supabase.from('user_profiles').select('student_name, student_number, university_email').eq('user_id', user.id).single(),
-        supabase.from('events').select('id, title, description, slot_selection_mode, payment_required, payment_visit_required').eq('id', eventId).eq('is_public', true).single(),
+        supabase.from('events').select('id, title, description, slot_selection_mode, payment_required, payment_visit_required, payment_visit_window_days').eq('id', eventId).eq('is_public', true).single(),
         supabase.rpc('get_event_slots', { p_event_id: eventId }),
       ]);
 
@@ -67,7 +67,7 @@ export default function AccountReservationPage() {
 
         if (loadedEvent.payment_required && loadedEvent.payment_visit_required) {
           try {
-            setVisitSlots(await fetchSelectableVisitSlots());
+            setVisitSlots(await fetchSelectableVisitSlots(loadedEvent.payment_visit_window_days ?? null));
           } catch {
             setError('支払い日時の候補を取得できませんでした。');
           }
@@ -194,6 +194,7 @@ export default function AccountReservationPage() {
             <h2 style={{ fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}><Banknote size={22} aria-hidden="true" />委員会室に支払いに来る日時を選択</h2>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: 12 }}>
               選んだ日時に委員会室で支払ってください。時間内に支払いがない場合、予約は自動でキャンセルされます。
+              {event.payment_visit_window_days != null && `選べるのは${VISIT_WINDOW_OPTIONS.find((o) => o.value === event.payment_visit_window_days)?.label ?? `${event.payment_visit_window_days}日後まで`}の日時です。`}
             </p>
             <div style={{ display: 'grid', gap: 8 }}>
               {visitSlots.map((visit) => {
@@ -206,7 +207,7 @@ export default function AccountReservationPage() {
                 );
               })}
             </div>
-            {visitSlots.length === 0 && <p style={{ color: 'var(--text-secondary)' }}>現在選べる支払い日時がありません。委員会にお問い合わせください。</p>}
+            {visitSlots.length === 0 && <p style={{ color: 'var(--text-secondary)' }}>今は選べる支払い日時がないため予約できません。委員会にお問い合わせください。</p>}
           </div>
         )}
 

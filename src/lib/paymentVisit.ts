@@ -25,14 +25,33 @@ export function jstDateKey(value: string | Date): string {
   return new Date(value).toLocaleDateString('sv-SE', { timeZone: TIME_ZONE });
 }
 
-/** 予約で選べる来室枠（有効かつ終了前）を開始順に取得する */
-export async function fetchSelectableVisitSlots(): Promise<PaymentVisitSlot[]> {
-  const { data, error } = await supabase
+/** 選択範囲の上限：今日（JST）から windowDays 日後の翌0時。null は制限なし。DB の resolve_payment_visit_slot と同じ基準。 */
+export function visitWindowLimit(windowDays: number | null | undefined, now = new Date()): Date | null {
+  if (windowDays === null || windowDays === undefined) return null;
+  const limit = new Date(`${jstDateKey(now)}T00:00:00+09:00`);
+  limit.setUTCDate(limit.getUTCDate() + windowDays + 1);
+  return limit;
+}
+
+export const VISIT_WINDOW_OPTIONS: { value: number | null; label: string }[] = [
+  { value: 0, label: '予約した日のうち' },
+  { value: 1, label: '予約した日の翌日まで' },
+  { value: 2, label: '2日後まで' },
+  { value: 3, label: '3日後まで' },
+  { value: 7, label: '1週間後まで' },
+  { value: null, label: '制限なし' },
+];
+
+/** 予約で選べる来室枠（有効・終了前・選択範囲内）を開始順に取得する */
+export async function fetchSelectableVisitSlots(windowDays: number | null = null): Promise<PaymentVisitSlot[]> {
+  let query = supabase
     .from('payment_visit_slots')
     .select('id,starts_at,ends_at,note,is_active')
     .eq('is_active', true)
-    .gt('ends_at', new Date().toISOString())
-    .order('starts_at', { ascending: true });
+    .gt('ends_at', new Date().toISOString());
+  const limit = visitWindowLimit(windowDays);
+  if (limit) query = query.lt('starts_at', limit.toISOString());
+  const { data, error } = await query.order('starts_at', { ascending: true });
   if (error) throw error;
   return (data as PaymentVisitSlot[]) || [];
 }

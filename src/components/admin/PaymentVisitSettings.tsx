@@ -3,13 +3,15 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
-import { type PaymentVisitSlot, formatVisitSlot, jstDateKey } from '@/lib/paymentVisit';
+import { type PaymentVisitSlot, VISIT_WINDOW_OPTIONS, formatVisitSlot, jstDateKey } from '@/lib/paymentVisit';
 
 type Props = {
   paymentRequired: boolean;
   onPaymentRequiredChange: (value: boolean) => void;
   visitRequired: boolean;
   onVisitRequiredChange: (value: boolean) => void;
+  windowDays: number | null;
+  onWindowDaysChange: (value: number | null) => void;
   disabled?: boolean;
 };
 
@@ -23,6 +25,8 @@ export default function PaymentVisitSettings({
   onPaymentRequiredChange,
   visitRequired,
   onVisitRequiredChange,
+  windowDays,
+  onWindowDaysChange,
   disabled = false,
 }: Props) {
   const [slots, setSlots] = useState<PaymentVisitSlot[]>([]);
@@ -87,6 +91,22 @@ export default function PaymentVisitSettings({
           <span className="form-hint">
             ONにすると、学生は予約するときに下の受付枠から来室日時を1つ選びます。選んだ枠の終了時刻までに支払いがない予約は自動でキャンセルされます。
           </span>
+        </div>
+      )}
+
+      {paymentRequired && visitRequired && (
+        <div className="form-group" style={{ maxWidth: 360 }}>
+          <label className="form-label" htmlFor="pv-window">選べる来室日時の範囲</label>
+          <select
+            id="pv-window"
+            className="form-input"
+            value={windowDays === null ? 'none' : String(windowDays)}
+            onChange={(e) => onWindowDaysChange(e.target.value === 'none' ? null : Number(e.target.value))}
+            disabled={disabled}
+          >
+            {VISIT_WINDOW_OPTIONS.map((o) => <option key={o.label} value={o.value === null ? 'none' : String(o.value)}>{o.label}</option>)}
+          </select>
+          <span className="form-hint">例：「翌日まで」なら、10/6に予約した人は10/7までに始まる受付枠だけ選べます。範囲内に受付枠がない日は予約できないので、毎日枠を用意してください。</span>
         </div>
       )}
 

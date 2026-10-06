@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import AdminNav from '@/components/AdminNav';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { supabase } from '@/lib/supabase';
+import { VISIT_WINDOW_OPTIONS } from '@/lib/paymentVisit';
 
 type PaymentEvent = {
   id: string;
@@ -13,6 +14,7 @@ type PaymentEvent = {
   payment_deadline_mode: 'relative' | 'absolute' | null;
   payment_due_fixed_at: string | null;
   payment_visit_required: boolean | null;
+  payment_visit_window_days: number | null;
   is_public: boolean | null;
 };
 
@@ -36,7 +38,7 @@ export default function PaymentSettingsPage() {
 
     const { data, error: fetchError } = await supabase
       .from('events')
-      .select('id,title,payment_required,payment_deadline_minutes,payment_deadline_mode,payment_due_fixed_at,payment_visit_required,is_public')
+      .select('id,title,payment_required,payment_deadline_minutes,payment_deadline_mode,payment_due_fixed_at,payment_visit_required,payment_visit_window_days,is_public')
       .order('created_at', { ascending: false });
 
     if (fetchError) {
@@ -82,6 +84,7 @@ export default function PaymentSettingsPage() {
         payment_deadline_minutes: event.payment_required ? minutes : 30,
         payment_due_fixed_at: event.payment_required && mode === 'absolute' ? event.payment_due_fixed_at : null,
         payment_visit_required: Boolean(event.payment_required && event.payment_visit_required),
+        payment_visit_window_days: event.payment_visit_window_days,
         updated_at: new Date().toISOString(),
       })
       .eq('id', event.id);
@@ -154,6 +157,20 @@ export default function PaymentSettingsPage() {
                             />
                             予約時に委員会室で支払う日時を選ばせる
                           </label>
+                          {event.payment_visit_required && (
+                            <div style={{ marginTop: 10, maxWidth: 360 }}>
+                              <label className="form-label" htmlFor={`visit-window-${event.id}`}>選べる来室日時の範囲</label>
+                              <select
+                                id={`visit-window-${event.id}`}
+                                className="form-input"
+                                value={event.payment_visit_window_days === null ? 'none' : String(event.payment_visit_window_days)}
+                                onChange={(e) => updateLocalEvent(event.id, { payment_visit_window_days: e.target.value === 'none' ? null : Number(e.target.value) })}
+                                disabled={savingId === event.id}
+                              >
+                                {VISIT_WINDOW_OPTIONS.map((o) => <option key={o.label} value={o.value === null ? 'none' : String(o.value)}>{o.label}</option>)}
+                              </select>
+                            </div>
+                          )}
                           <span className="form-hint">
                             ONにすると、予約時に「委員会室 支払い受付」で登録した日時から選ぶのが必須になり、選んだ枠の終了時刻が支払期限になります（下の期限設定より優先）。下の期限設定は当日券などに使われます。
                           </span>

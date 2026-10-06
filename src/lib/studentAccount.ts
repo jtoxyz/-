@@ -11,6 +11,7 @@ export type AccountEvent = {
   slot_selection_mode: 'single' | 'multiple';
   payment_required?: boolean | null;
   payment_visit_required?: boolean | null;
+  payment_visit_window_days?: number | null;
 };
 
 export type AccountEventSlot = {

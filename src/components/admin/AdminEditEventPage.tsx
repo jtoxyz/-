@@ -140,6 +140,7 @@ export default function AdminEditEventPage({ id }: { id: string }) {
   const [surveyAfterUseEnabled, setSurveyAfterUseEnabled] = useState(false);
   const [paymentRequired, setPaymentRequired] = useState(false);
   const [paymentVisitRequired, setPaymentVisitRequired] = useState(false);
+  const [paymentVisitWindowDays, setPaymentVisitWindowDays] = useState<number | null>(1);
   const [surveyAfterUseUrl, setSurveyAfterUseUrl] = useState('');
   const [surveyAfterUseMessage, setSurveyAfterUseMessage] = useState('');
 
@@ -190,6 +191,7 @@ export default function AdminEditEventPage({ id }: { id: string }) {
         setSurveyAfterUseEnabled(data.survey_after_use_enabled ?? false);
         setPaymentRequired(data.payment_required ?? false);
         setPaymentVisitRequired(data.payment_visit_required ?? false);
+        setPaymentVisitWindowDays(data.payment_visit_window_days === undefined ? 1 : data.payment_visit_window_days);
         setSurveyAfterUseUrl(data.survey_after_use_url || '');
         setSurveyAfterUseMessage(data.survey_after_use_message || 'ご参加ありがとうございました。今後の企画改善のため、アンケートにご協力ください。');
 
@@ -619,6 +621,7 @@ export default function AdminEditEventPage({ id }: { id: string }) {
       survey_after_use_message: surveyAfterUseMessage.trim() || null,
       payment_required: paymentRequired,
       payment_visit_required: paymentRequired && paymentVisitRequired,
+      payment_visit_window_days: paymentVisitWindowDays,
       is_reservation_suspended: isReservationSuspended,
       is_walkin_suspended: isWalkinSuspended,
       is_ticket_use_suspended: isTicketUseSuspended,
@@ -1581,6 +1584,8 @@ export default function AdminEditEventPage({ id }: { id: string }) {
               onPaymentRequiredChange={setPaymentRequired}
               visitRequired={paymentVisitRequired}
               onVisitRequiredChange={setPaymentVisitRequired}
+              windowDays={paymentVisitWindowDays}
+              onWindowDaysChange={setPaymentVisitWindowDays}
               disabled={saving}
             />
           </div>
