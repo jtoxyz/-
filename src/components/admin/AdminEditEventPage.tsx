@@ -94,6 +94,10 @@ export default function AdminEditEventPage({ id }: { id: string }) {
   const [useStartsAt, setUseStartsAt] = useState('');
   const [useEndsAt, setUseEndsAt] = useState('');
 
+  // 予約受付期間は企画全体で共通（保存時に全開催枠へ同じ値を書き込む）
+  const [reservationStartsAt, setReservationStartsAt] = useState('');
+  const [reservationEndsAt, setReservationEndsAt] = useState('');
+
   // Slot states
   const [slotSelectionMode, setSlotSelectionMode] = useState<'single' | 'multiple'>('single');
   interface SlotFormRow {
@@ -102,8 +106,6 @@ export default function AdminEditEventPage({ id }: { id: string }) {
     date: string; // 開催日 (YYYY-MM-DD)
     startTime: string; // 開始時刻 (HH:mm)
     endTime: string; // 終了時刻 (HH:mm)
-    reservationStartsAt: string; // 通常予約開始日時 (datetime-local string)
-    reservationEndsAt: string; // 通常予約終了日時 (datetime-local string)
     ticketUseStartsAt: string; // チケット使用開始日時 (datetime-local string)
     ticketUseEndsAt: string; // チケット使用終了日時 (datetime-local string)
     walkinStartsAt: string; // 当日券発行開始日時 (datetime-local string)
@@ -212,14 +214,17 @@ export default function AdminEditEventPage({ id }: { id: string }) {
           .order('sort_order', { ascending: true });
 
         if (!slotsError && slotsData) {
+          // 以前は枠ごとに期間を持っていたので、企画に未設定なら枠の値から引き継ぐ
+          const slotWithWindow = slotsData.find((s) => s.reservation_starts_at || s.reservation_ends_at);
+          setReservationStartsAt(formatIsoToLocalString(data.reservation_starts_at ?? slotWithWindow?.reservation_starts_at ?? null));
+          setReservationEndsAt(formatIsoToLocalString(data.reservation_ends_at ?? slotWithWindow?.reservation_ends_at ?? null));
+
           const loadedRows: SlotFormRow[] = slotsData.map((s) => ({
             id: s.id,
             label: s.label,
             date: extractDate(s.starts_at),
             startTime: extractTime(s.starts_at),
             endTime: extractTime(s.ends_at),
-            reservationStartsAt: formatIsoToLocalString(s.reservation_starts_at),
-            reservationEndsAt: formatIsoToLocalString(s.reservation_ends_at),
             ticketUseStartsAt: formatIsoToLocalString(s.ticket_use_starts_at || s.reservation_use_starts_at || data.use_starts_at || s.starts_at),
             ticketUseEndsAt: formatIsoToLocalString(s.ticket_use_ends_at || s.reservation_use_ends_at || data.use_ends_at || s.ends_at),
             walkinStartsAt: formatIsoToLocalString(s.walkin_starts_at || s.walkin_use_starts_at || s.starts_at),
@@ -276,21 +281,7 @@ export default function AdminEditEventPage({ id }: { id: string }) {
       if (field === 'date' && typeof value === 'string' && value) {
         if (!updated.startTime) updated.startTime = '11:00';
         if (!updated.endTime) updated.endTime = '14:00';
-        
-        // 通常予約 (Normal Reservation): Starts 10 days before at 09:00, Ends 3 days before at 23:59
-        if (!updated.reservationStartsAt) {
-          const d = new Date(value);
-          d.setDate(d.getDate() - 10);
-          const pad = (n: number) => n.toString().padStart(2, '0');
-          updated.reservationStartsAt = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T09:00`;
-        }
-        if (!updated.reservationEndsAt) {
-          const d = new Date(value);
-          d.setDate(d.getDate() - 3);
-          const pad = (n: number) => n.toString().padStart(2, '0');
-          updated.reservationEndsAt = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T23:59`;
-        }
-        
+
         // チケット使用 (Ticket usage): Matches this slot's own start/end time.
         if (!updated.ticketUseStartsAt) updated.ticketUseStartsAt = `${value}T${updated.startTime}`;
         if (!updated.ticketUseEndsAt) updated.ticketUseEndsAt = `${value}T${updated.endTime}`;
@@ -310,8 +301,6 @@ export default function AdminEditEventPage({ id }: { id: string }) {
       date: '',
       startTime: '',
       endTime: '',
-      reservationStartsAt: '',
-      reservationEndsAt: '',
       ticketUseStartsAt: '',
       ticketUseEndsAt: '',
       walkinStartsAt: '',
@@ -458,6 +447,20 @@ export default function AdminEditEventPage({ id }: { id: string }) {
       return;
     }
 
+    // 予約受付期間（企画全体）
+    if (slotRows.some((row) => row.isReservationEnabled)) {
+      if (!reservationStartsAt || !reservationEndsAt) {
+        setError('予約受付期間の開始日時と終了日時を入力してください。');
+        setSaving(false);
+        return;
+      }
+      if (reservationEndsAt <= reservationStartsAt) {
+        setError('予約受付期間の終了日時は開始日時より後に設定してください。');
+        setSaving(false);
+        return;
+      }
+    }
+
     // Date/time and capacity validation
     for (const row of slotRows) {
       const slotName = row.label || '無題の枠';
@@ -480,25 +483,6 @@ export default function AdminEditEventPage({ id }: { id: string }) {
         setError(`開催枠「${slotName}」で、終了時刻は開始時刻より後に設定してください。`);
         setSaving(false);
         return;
-      }
-
-      // Reservation timing validation
-      if (row.isReservationEnabled) {
-        if (!row.reservationStartsAt) {
-          setError(`開催枠「${slotName}」の通常予約開始日時を入力してください。`);
-          setSaving(false);
-          return;
-        }
-        if (!row.reservationEndsAt) {
-          setError(`開催枠「${slotName}」の通常予約終了日時を入力してください。`);
-          setSaving(false);
-          return;
-        }
-        if (row.reservationEndsAt <= row.reservationStartsAt) {
-          setError(`開催枠「${slotName}」で、通常予約の終了日時は開始日時より後に設定してください。`);
-          setSaving(false);
-          return;
-        }
       }
 
       // Ticket use timing validation
@@ -602,8 +586,8 @@ export default function AdminEditEventPage({ id }: { id: string }) {
       capacity: firstSlot.capacity,
       starts_at: combineDateTime(firstSlot.date, firstSlot.startTime),
       ends_at: combineDateTime(firstSlot.date, firstSlot.endTime),
-      reservation_starts_at: null,
-      reservation_ends_at: null,
+      reservation_starts_at: parseToIso(reservationStartsAt),
+      reservation_ends_at: parseToIso(reservationEndsAt),
       use_starts_at: useStartsAt ? new Date(useStartsAt).toISOString() : null,
       use_ends_at: useEndsAt ? new Date(useEndsAt).toISOString() : null,
       is_public: isPublic,
@@ -671,8 +655,8 @@ export default function AdminEditEventPage({ id }: { id: string }) {
           ends_at: combineDateTime(row.date, row.endTime),
           reservation_capacity: Number(row.capacity),
           total_capacity: Number(row.totalCapacity),
-          reservation_starts_at: parseToIso(row.reservationStartsAt),
-          reservation_ends_at: parseToIso(row.reservationEndsAt),
+          reservation_starts_at: parseToIso(reservationStartsAt),
+          reservation_ends_at: parseToIso(reservationEndsAt),
           ticket_use_starts_at: parseToIso(row.ticketUseStartsAt),
           ticket_use_ends_at: parseToIso(row.ticketUseEndsAt),
           walkin_starts_at: parseToIso(row.walkinStartsAt),
@@ -966,6 +950,40 @@ export default function AdminEditEventPage({ id }: { id: string }) {
               2. 日程・受付時間設定
             </h3>
 
+            {/* 予約受付期間（企画全体で共通） */}
+            <div className="form-group" style={{ background: 'var(--card-bg)', padding: '16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--card-border)' }}>
+              <label className="form-label" style={{ marginBottom: '8px' }}>予約受付期間（企画全体で共通）</label>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
+                <div>
+                  <label className="form-label" htmlFor="reservationStartsAt" style={{ fontSize: '0.75rem' }}>受付開始日時</label>
+                  <input
+                    id="reservationStartsAt"
+                    type="datetime-local"
+                    className="form-input"
+                    value={reservationStartsAt}
+                    onChange={(e) => setReservationStartsAt(e.target.value)}
+                    disabled={saving}
+                    style={{ width: '100%' }}
+                  />
+                </div>
+                <div>
+                  <label className="form-label" htmlFor="reservationEndsAt" style={{ fontSize: '0.75rem' }}>受付終了日時</label>
+                  <input
+                    id="reservationEndsAt"
+                    type="datetime-local"
+                    className="form-input"
+                    value={reservationEndsAt}
+                    onChange={(e) => setReservationEndsAt(e.target.value)}
+                    disabled={saving}
+                    style={{ width: '100%' }}
+                  />
+                </div>
+              </div>
+              <span className="form-hint" style={{ marginTop: '8px' }}>
+                この期間中、すべての開催枠で事前予約を受け付けます。予約を受け付けない枠は、下の各枠で「この枠で予約を受け付ける」を外してください。
+              </span>
+            </div>
+
             {/* Slot selection mode */}
             <div className="form-group" style={{ marginTop: '16px' }}>
               <label className="form-label">枠選択モード</label>
@@ -1039,7 +1057,7 @@ export default function AdminEditEventPage({ id }: { id: string }) {
                 </button>
               </div>
               <span className="form-hint" style={{ display: 'block', marginBottom: '12px' }}>
-                各開催枠に、枠名・開催日時・定員を設定できます。少なくとも1つの枠が必要です。予約締切などは開催日を入れると自動で設定されるので、普段は「詳細設定」を開かなくても大丈夫です。
+                各開催枠に、枠名・開催日時・定員を設定できます。少なくとも1つの枠が必要です。チケット使用時間や当日券の時間は開催日を入れると自動で設定されるので、普段は「詳細設定」を開かなくても大丈夫です。
               </span>
 
               {slotRows.map((row) => {
@@ -1126,56 +1144,18 @@ export default function AdminEditEventPage({ id }: { id: string }) {
                       borderRadius: 'var(--radius-sm)',
                       background: 'var(--card-bg)'
                     }}>
-                      {/* 1. 通常予約受付期間 */}
+                      {/* 1. 事前予約（期間は企画全体の「予約受付期間」） */}
                       <div style={{ paddingBottom: '12px', borderBottom: '1px dashed var(--card-border)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                          <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-primary)' }}>通常予約受付期間</span>
-                          <label className="form-checkbox-label" style={{ fontSize: '0.75rem' }}>
-                            <input
-                              type="checkbox"
-                              className="form-checkbox"
-                              checked={row.isReservationEnabled}
-                              onChange={(e) => updateSlotRow(row.id, 'isReservationEnabled', e.target.checked)}
-                              disabled={saving}
-                            />
-                            予約受付を有効にする
-                          </label>
-                        </div>
-                        {!showAdvancedTiming ? (
-                          row.isReservationEnabled && (
-                            <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-                              {formatSlotDateTime(row.reservationStartsAt)} 〜 {formatSlotDateTime(row.reservationEndsAt)}
-                            </div>
-                          )
-                        ) : (
-                          <>
-                            <span className="form-hint" style={{ display: 'block', marginBottom: '8px' }}>この開催枠に対する通常の事前予約を受け付ける期間を設定します。</span>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
-                              <div>
-                                <label className="form-label" style={{ fontSize: '0.7rem' }}>予約開始日時</label>
-                                <input
-                                  type="datetime-local"
-                                  className="form-input"
-                                  value={row.reservationStartsAt}
-                                  onChange={(e) => updateSlotRow(row.id, 'reservationStartsAt', e.target.value)}
-                                  disabled={saving || !row.isReservationEnabled}
-                                  style={{ width: '100%' }}
-                                />
-                              </div>
-                              <div>
-                                <label className="form-label" style={{ fontSize: '0.7rem' }}>予約終了日時</label>
-                                <input
-                                  type="datetime-local"
-                                  className="form-input"
-                                  value={row.reservationEndsAt}
-                                  onChange={(e) => updateSlotRow(row.id, 'reservationEndsAt', e.target.value)}
-                                  disabled={saving || !row.isReservationEnabled}
-                                  style={{ width: '100%' }}
-                                />
-                              </div>
-                            </div>
-                          </>
-                        )}
+                        <label className="form-checkbox-label" style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-primary)' }}>
+                          <input
+                            type="checkbox"
+                            className="form-checkbox"
+                            checked={row.isReservationEnabled}
+                            onChange={(e) => updateSlotRow(row.id, 'isReservationEnabled', e.target.checked)}
+                            disabled={saving}
+                          />
+                          この枠で予約を受け付ける
+                        </label>
                       </div>
 
                       {/* 2. チケット使用可能期間 */}
@@ -1300,7 +1280,7 @@ export default function AdminEditEventPage({ id }: { id: string }) {
                         )}
 
                         {/* Config warning */}
-                        {row.isWalkinEnabled && row.isReservationEnabled && row.walkinStartsAt && row.reservationEndsAt && (new Date(row.walkinStartsAt) < new Date(row.reservationEndsAt)) && (
+                        {row.isWalkinEnabled && row.isReservationEnabled && row.walkinStartsAt && reservationEndsAt && (new Date(row.walkinStartsAt) < new Date(reservationEndsAt)) && (
                           <div style={{
                             marginTop: '12px',
                             padding: '8px 12px',
@@ -1821,8 +1801,8 @@ export default function AdminEditEventPage({ id }: { id: string }) {
             isReservationEnabled: row.isReservationEnabled,
             isWalkinEnabled: row.isWalkinEnabled,
             isTicketUseEnabled: row.isTicketUseEnabled,
-            reservationStartsAt: row.reservationStartsAt,
-            reservationEndsAt: row.reservationEndsAt,
+            reservationStartsAt,
+            reservationEndsAt,
             walkinStartsAt: row.walkinStartsAt,
             walkinEndsAt: row.walkinEndsAt,
             ticketUseStartsAt: row.ticketUseStartsAt,
