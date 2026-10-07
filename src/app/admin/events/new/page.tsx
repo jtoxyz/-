@@ -74,6 +74,7 @@ export default function AdminNewEventPage() {
   // 予約受付期間は企画全体で共通（保存時に全開催枠へ同じ値を書き込む）
   const [reservationStartsAt, setReservationStartsAt] = useState('');
   const [reservationEndsAt, setReservationEndsAt] = useState('');
+  const [blockWeekendHolidayReservations, setBlockWeekendHolidayReservations] = useState(false);
 
   // Slot selection mode
   const [slotSelectionMode, setSlotSelectionMode] = useState<'single' | 'multiple'>('single');
@@ -363,6 +364,7 @@ export default function AdminNewEventPage() {
       ends_at: combineDateTime(firstSlot.date, firstSlot.endTime),
       reservation_starts_at: parseToIso(reservationStartsAt),
       reservation_ends_at: parseToIso(reservationEndsAt),
+      block_weekend_holiday_reservations: blockWeekendHolidayReservations,
       use_starts_at: useStartsAt ? new Date(useStartsAt).toISOString() : null,
       use_ends_at: useEndsAt ? new Date(useEndsAt).toISOString() : null,
       is_public: isPublic,
@@ -719,6 +721,19 @@ export default function AdminNewEventPage() {
               </div>
               <span className="form-hint" style={{ marginTop: '8px' }}>
                 この期間中、すべての開催枠で事前予約を受け付けます。予約を受け付けない枠は、下の各枠で「この枠で予約を受け付ける」を外してください。
+              </span>
+              <label className="form-checkbox-label" style={{ marginTop: '12px' }}>
+                <input
+                  type="checkbox"
+                  className="form-checkbox"
+                  checked={blockWeekendHolidayReservations}
+                  onChange={(e) => setBlockWeekendHolidayReservations(e.target.checked)}
+                  disabled={saving}
+                />
+                土日祝日は予約を受け付けない
+              </label>
+              <span className="form-hint">
+                ONにすると、受付期間中でも土曜・日曜・祝日（日本時間）は予約できません。当日券は対象外です。
               </span>
             </div>
 

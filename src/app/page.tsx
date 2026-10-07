@@ -45,6 +45,9 @@ function eventStatus(event: PublicEvent) {
   if (slots.some((slot) => ['walkin_available', 'walkin_low_remaining'].includes(slot.walkin_status))) {
     return { label: '当日券受付中', button: '当日券を取得する', badge: 'badge-warning', active: true };
   }
+  if (slots.some((slot) => slot.reservation_status === 'holiday_closed')) {
+    return { label: '土日祝は受付休み', button: '詳細を見る', badge: 'badge-secondary', active: true };
+  }
   if (slots.some((slot) => slot.reservation_status === 'before_open' || slot.walkin_status === 'walkin_upcoming')) {
     return { label: '受付前', button: '詳細を見る', badge: 'badge-secondary', active: true };
   }

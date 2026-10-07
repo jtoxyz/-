@@ -51,6 +51,7 @@ export function canGetWalkinSlot(slot: AccountEventSlot): boolean {
 export function accountSlotStatus(slot: AccountEventSlot): string {
   if (canReserveSlot(slot)) return slot.reservation_status === 'low_remaining' ? '予約：残りわずか' : '予約受付中';
   if (canGetWalkinSlot(slot)) return slot.walkin_status === 'walkin_low_remaining' ? '当日券：残りわずか' : '当日券受付中';
+  if (slot.reservation_status === 'holiday_closed') return '土日祝は予約受付休み';
   if (slot.reservation_status === 'before_open') return '予約受付前';
   if (slot.walkin_status === 'walkin_upcoming') return '当日券受付前';
   if (slot.reservation_status === 'full' || slot.walkin_status === 'walkin_full') return '満席';
