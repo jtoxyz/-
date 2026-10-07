@@ -138,7 +138,7 @@ export default function AdminNewEventPage() {
   const [lowRemainingThresholdType, setLowRemainingThresholdType] = useState<'count' | 'percent'>('count');
 
   // Slot row helpers
-  const updateSlotRow = (slotId: string, field: keyof SlotFormRow, value: any) => {
+  const updateSlotRow = <K extends keyof SlotFormRow>(slotId: string, field: K, value: SlotFormRow[K]) => {
     setSlotRows((prev) => prev.map((row) => {
       if (row.id !== slotId) return row;
       const updated = { ...row, [field]: value };

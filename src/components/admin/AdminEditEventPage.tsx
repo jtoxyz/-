@@ -272,7 +272,7 @@ export default function AdminEditEventPage({ id }: { id: string }) {
   }, [id, authLoading, user]);
 
   // Slot row helpers
-  const updateSlotRow = (slotId: string, field: keyof SlotFormRow, value: any) => {
+  const updateSlotRow = <K extends keyof SlotFormRow>(slotId: string, field: K, value: SlotFormRow[K]) => {
     setSlotRows((prev) => prev.map((row) => {
       if (row.id !== slotId) return row;
       const updated = { ...row, [field]: value };
@@ -390,10 +390,11 @@ export default function AdminEditEventPage({ id }: { id: string }) {
       alert('企画が正常に完全削除されました。');
       router.push('/admin/events');
 
-    } catch (err: any) {
+    } catch (err) {
       console.error('Event delete failed:', err);
-      setError(err.message || '企画の削除中に予期しないエラーが発生しました。');
-      alert(err.message || '企画の削除中に予期しないエラーが発生しました。');
+      const message = (err instanceof Error && err.message) || '企画の削除中に予期しないエラーが発生しました。';
+      setError(message);
+      alert(message);
       setDeleting(false);
     }
   };
@@ -420,9 +421,9 @@ export default function AdminEditEventPage({ id }: { id: string }) {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       setShowBackupModal(false);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Backup export failed:', err);
-      setError('バックアップの取得に失敗しました: ' + (err.message || '不明なエラー'));
+      setError('バックアップの取得に失敗しました: ' + ((err instanceof Error && err.message) || '不明なエラー'));
     } finally {
       setExportingBackup(false);
     }
