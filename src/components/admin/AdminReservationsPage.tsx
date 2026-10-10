@@ -198,12 +198,12 @@ export default function AdminReservationsPage({ id }: { id: string }) {
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12, marginTop: 20 }}>
-              <div className="glass-card"><small>有効発行数</small><div style={{ fontSize: 28, fontWeight: 700 }}>{activeBookings}</div><small>未使用＋使用済み</small></div>
-              <div className="glass-card"><small>未使用数</small><div style={{ fontSize: 28, fontWeight: 700 }}>{unusedTickets}</div><small>これから使用可能</small></div>
-              <div className="glass-card"><small>使用済み数</small><div style={{ fontSize: 28, fontWeight: 700 }}>{usedTickets}</div><small>すでに使用済み</small></div>
-              <div className="glass-card"><small>キャンセル数</small><div style={{ fontSize: 28, fontWeight: 700 }}>{cancelledBookings}</div><small>有効数には含まない</small></div>
-              <div className="glass-card"><small>総記録件数</small><div style={{ fontSize: 28, fontWeight: 700 }}>{reservations.length}</div><small>有効＋キャンセル</small></div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 12, marginTop: 20 }}>
+              <div className="glass-card" style={{ margin: 0 }}><small>有効発行数</small><div style={{ fontSize: 28, fontWeight: 700 }}>{activeBookings}</div><small>未使用＋使用済み</small></div>
+              <div className="glass-card" style={{ margin: 0 }}><small>未使用数</small><div style={{ fontSize: 28, fontWeight: 700 }}>{unusedTickets}</div><small>これから使用可能</small></div>
+              <div className="glass-card" style={{ margin: 0 }}><small>使用済み数</small><div style={{ fontSize: 28, fontWeight: 700 }}>{usedTickets}</div><small>すでに使用済み</small></div>
+              <div className="glass-card" style={{ margin: 0 }}><small>キャンセル数</small><div style={{ fontSize: 28, fontWeight: 700 }}>{cancelledBookings}</div><small>有効数には含まない</small></div>
+              <div className="glass-card" style={{ margin: 0 }}><small>総記録件数</small><div style={{ fontSize: 28, fontWeight: 700 }}>{reservations.length}</div><small>有効＋キャンセル</small></div>
             </div>
 
             <div style={{ display: 'flex', gap: 12, marginTop: 24, flexWrap: 'wrap' }}>
@@ -221,7 +221,7 @@ export default function AdminReservationsPage({ id }: { id: string }) {
               <p style={{ marginTop: 0, opacity: 0.75 }}>実際の発行数、事前確保数、現在発行できる残りを分けて表示します。</p>
 
               <div className="admin-table-container">
-                <table className="admin-table">
+                <table className="admin-table admin-table-stack">
                   <thead><tr><th>開催枠</th><th>全体定員</th><th>予約券</th><th>当日券</th><th>全体</th></tr></thead>
                   <tbody>
                     {slots.map((s) => {
@@ -238,34 +238,34 @@ export default function AdminReservationsPage({ id }: { id: string }) {
 
                       return (
                         <tr key={s.id}>
-                          <td>
+                          <td className="admin-table-stack-title">
                             <strong>{s.label}</strong>
                             <div style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>
                               {formatSlotDateTime(s.starts_at)}〜{s.ends_at ? new Date(s.ends_at).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tokyo' }) : '-'}
                             </div>
                           </td>
-                          <td><strong>{s.total_capacity}人</strong></td>
-                          <td>
+                          <td data-label="全体定員"><strong>{s.total_capacity}人</strong></td>
+                          <td data-label="予約券"><div>
                             <div><strong>発行済み {reservationIssued}人</strong></div>
                             {reservationHeld > 0 && <div style={{ marginTop: 4 }}>事前確保 {reservationHeld}人</div>}
                             <div style={{ marginTop: 4 }}>予約枠上限 {s.reservation_capacity}人</div>
                             <div style={{ marginTop: 5, fontWeight: 700 }}>予約枠残り {reservationCapacityRemaining}人</div>
-                          </td>
-                          <td>
+                          </div></td>
+                          <td data-label="当日券"><div>
                             <div><strong>発行済み {walkinIssued}人</strong></div>
                             {walkinHeld > 0 && <div style={{ marginTop: 4 }}>事前確保 {walkinHeld}人</div>}
                             <div style={{ marginTop: 4 }}>
                               {s.walkin_limit == null ? `動的上限（現在最大 ${dynamicWalkinCapacity}人）` : `固定上限 ${s.walkin_limit}人`}
                             </div>
                             <div style={{ marginTop: 5, fontWeight: 700 }}>今から発行可能 {s.remaining_walkin_slots}人</div>
-                          </td>
-                          <td style={{ minWidth: 180 }}>
+                          </div></td>
+                          <td data-label="全体" style={{ minWidth: 180 }}><div style={{ flex: 1, maxWidth: 220 }}>
                             <div><strong>占有 {occupied}人 / {s.total_capacity}人</strong></div>
                             <div style={{ marginTop: 6, height: 8, borderRadius: 999, background: 'rgba(255,255,255,0.1)', overflow: 'hidden' }}>
                               <div style={{ width: `${usageRate}%`, height: '100%', background: 'var(--color-primary)', borderRadius: 999 }} />
                             </div>
                             <div style={{ marginTop: 5, fontSize: 12 }}>全体残り {totalRemaining}人（{usageRate.toFixed(1)}%）</div>
-                          </td>
+                          </div></td>
                         </tr>
                       );
                     })}
@@ -280,19 +280,19 @@ export default function AdminReservationsPage({ id }: { id: string }) {
           )}
 
           <div className="admin-table-container reservations-table-desktop" style={{ marginTop: 20 }}>
-            <table className="admin-table">
+            <table className="admin-table admin-table-stack">
               <thead><tr><th>予約日時</th><th>券種</th><th>氏名</th><th>学籍番号</th><th>開催枠</th><th>大学メールアドレス</th><th>状態</th><th>操作</th></tr></thead>
               <tbody>
                 {filteredReservations.map((res) => (
                   <tr key={res.id} style={{ opacity: res.status === 'cancelled' ? 0.4 : 1 }}>
-                    <td>{formatDateTime(res.created_at)}</td>
-                    <td>{res.ticket_type === 'walkin' ? '当日券' : '予約券'}</td>
-                    <td>{res.student_name}</td>
-                    <td>{res.student_number}</td>
-                    <td>{res.event_slots?.label || '-'}</td>
-                    <td>{res.university_email}</td>
-                    <td>{res.status === 'reserved' ? '有効' : res.status === 'used' ? '使用済み' : 'キャンセル'}</td>
-                    <td>{res.status !== 'cancelled' && <button className="btn btn-secondary btn-sm" onClick={() => handleCancelReservation(res.id)} disabled={cancellingId === res.id}>❌ 取消</button>}</td>
+                    <td data-label="予約日時">{formatDateTime(res.created_at)}</td>
+                    <td data-label="券種">{res.ticket_type === 'walkin' ? '当日券' : '予約券'}</td>
+                    <td data-label="氏名">{res.student_name}</td>
+                    <td data-label="学籍番号">{res.student_number}</td>
+                    <td data-label="開催枠">{res.event_slots?.label || '-'}</td>
+                    <td data-label="メール">{res.university_email}</td>
+                    <td data-label="状態">{res.status === 'reserved' ? '有効' : res.status === 'used' ? '使用済み' : 'キャンセル'}</td>
+                    <td className="admin-table-stack-actions">{res.status !== 'cancelled' && <button className="btn btn-secondary btn-sm" onClick={() => handleCancelReservation(res.id)} disabled={cancellingId === res.id}>❌ 取消</button>}</td>
                   </tr>
                 ))}
               </tbody>

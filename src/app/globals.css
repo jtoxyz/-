@@ -313,6 +313,13 @@ a:hover {
   margin-bottom: 20px;
 }
 
+/* スマホではカードの中のカードの余白を詰めて、中身の幅を確保する */
+@media (max-width: 767px) {
+  .glass-card .glass-card {
+    padding: 16px;
+  }
+}
+
 .glass-card.interactive:hover {
   border-color: var(--card-border-hover);
   transform: translateY(-2px);
