@@ -1,13 +1,31 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
+import AdminNav from '@/components/AdminNav';
+import { supabase } from '@/lib/supabase';
 
 export default function QrMakerPage() {
   const [url, setUrl] = useState('');
   const [size, setSize] = useState(512);
   const svgWrapRef = useRef<HTMLDivElement>(null);
   const value = useMemo(() => url.trim(), [url]);
+  // 管理画面のメニューから開いたときに一覧が消えないよう、管理者には管理メニューを出す（ログインなしでも使える）
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    const checkAdmin = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return;
+      const { data } = await supabase.from('admin_users').select('user_id').eq('user_id', session.user.id).maybeSingle();
+      if (active) setIsAdmin(Boolean(data));
+    };
+    void checkAdmin();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const downloadSvg = () => {
     const svg = svgWrapRef.current?.querySelector('svg');
@@ -46,8 +64,8 @@ export default function QrMakerPage() {
     image.src = objectUrl;
   };
 
-  return (
-    <main style={{ maxWidth: 860, margin: '0 auto', paddingTop: 16 }}>
+  const content = (
+    <main style={isAdmin ? { maxWidth: 860 } : { maxWidth: 860, margin: '0 auto', paddingTop: 16 }}>
       <div className="glass-card">
         <h1 style={{ marginTop: 0 }}>URLからQRコード作成</h1>
         <p style={{ color: 'var(--text-secondary)', lineHeight: 1.7 }}>
@@ -92,5 +110,16 @@ export default function QrMakerPage() {
         )}
       </div>
     </main>
+  );
+
+  if (!isAdmin) return content;
+
+  return (
+    <div className="admin-mode">
+      <div className="admin-layout-sidebar">
+        <AdminNav />
+        {content}
+      </div>
+    </div>
   );
 }

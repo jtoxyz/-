@@ -408,6 +408,13 @@ a:hover {
   width: auto;
 }
 
+/* 印刷時は管理メニューを出さない */
+@media print {
+  .admin-navbar {
+    display: none !important;
+  }
+}
+
 /* 説明文の装飾ボタン：スマホでも横に並べる */
 .format-toolbar .btn {
   width: auto;
