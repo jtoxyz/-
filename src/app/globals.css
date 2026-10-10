@@ -554,6 +554,11 @@ a:hover {
   color: var(--color-warning);
   border-color: var(--color-warning-border);
 }
+.badge-secondary {
+  background: rgba(100, 116, 139, 0.12);
+  color: var(--text-secondary);
+  border-color: var(--card-border);
+}
 
 /* Lists & Event Cards */
 .event-info-grid {

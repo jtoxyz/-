@@ -182,7 +182,7 @@ export default function AccountReservationPage() {
             const selectable = canReserveSlot(slot) || canGetWalkinSlot(slot);
             return (
               <button key={slot.id} type="button" onClick={() => toggle(slot)} disabled={!selectable || saving} className="glass-card interactive" style={{ textAlign: 'left', width: '100%', padding: 15, opacity: selectable ? 1 : 0.55, borderColor: active ? 'var(--color-primary)' : 'var(--card-border)', background: active ? 'var(--color-primary-glow)' : 'var(--card-bg)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}><div><strong>{slot.label}</strong><div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 4 }}>{formatAccountDate(slot.starts_at)} 〜 {formatAccountDate(slot.ends_at)}</div></div><span className={`badge ${selectable ? 'badge-success' : 'badge-secondary'}`}>{accountSlotStatus(slot)}</span></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}><div><strong>{slot.label}</strong><div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 4 }}>{formatAccountDate(slot.starts_at)} 〜 {formatAccountDate(slot.ends_at)}</div></div><span className={`badge ${selectable ? 'badge-success' : 'badge-secondary'}`}>{accountSlotStatus(slot)}</span></div>
               </button>
             );
           })}
