@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import AdminNav from '@/components/AdminNav';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
-import { supabase } from '@/lib/supabase';
+import { adminSupabase as supabase } from '@/lib/supabase';
 
 type EventItem = { id: string; title: string; payment_required: boolean | null };
 type DailyQr = {

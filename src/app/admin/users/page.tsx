@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Save, Search, UserRoundCog, X } from 'lucide-react';
 import AdminNav from '@/components/AdminNav';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
-import { supabase } from '@/lib/supabase';
+import { adminSupabase as supabase } from '@/lib/supabase';
 
 type UserProfileRow = {
   user_id: string;

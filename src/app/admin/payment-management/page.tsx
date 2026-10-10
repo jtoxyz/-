@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import AdminNav from '@/components/AdminNav';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
-import { supabase } from '@/lib/supabase';
+import { adminSupabase as supabase } from '@/lib/supabase';
 
 type PaymentStatus = 'not_required' | 'pending' | 'paid' | 'expired';
 type EventItem = { id: string; title: string };

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import AdminNav from '@/components/AdminNav';
-import { supabase } from '@/lib/supabase';
+import { adminSupabase as supabase } from '@/lib/supabase';
 
 export default function QrMakerPage() {
   const [url, setUrl] = useState('');

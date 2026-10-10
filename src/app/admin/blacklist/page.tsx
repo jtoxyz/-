@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import AdminNav from '@/components/AdminNav';
-import { supabase } from '@/lib/supabase';
+import { adminSupabase as supabase } from '@/lib/supabase';
 
 interface BlacklistEntry {
   id: string;

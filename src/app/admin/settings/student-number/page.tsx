@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react';
 import AdminNav from '@/components/AdminNav';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
-import { supabase } from '@/lib/supabase';
+import { adminSupabase as supabase } from '@/lib/supabase';
 
 export default function StudentNumberSettingsPage() {
   const { loading: authLoading, user } = useAdminAuth();

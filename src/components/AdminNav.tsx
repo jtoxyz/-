@@ -17,7 +17,7 @@ import {
   RefreshCw,
   Users,
 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { adminSupabase as supabase } from '@/lib/supabase';
 
 const iconStyle = { marginRight: '6px', verticalAlign: 'middle' } as const;
 

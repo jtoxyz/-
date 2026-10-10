@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase';
+import { adminSupabase as supabase } from '@/lib/supabase';
 import { type PaymentVisitSlot, VISIT_WINDOW_OPTIONS, formatVisitSlot, jstDateKey } from '@/lib/paymentVisit';
 
 type Props = {

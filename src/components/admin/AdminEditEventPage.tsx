@@ -9,7 +9,7 @@ import Link from 'next/link';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import AdminNav from '@/components/AdminNav';
 import EventPreviewModal from '@/components/EventPreviewModal';
-import { supabase } from '@/lib/supabase';
+import { adminSupabase as supabase } from '@/lib/supabase';
 import PaymentVisitSettings from '@/components/admin/PaymentVisitSettings';
 import { applySlotTimingChange } from '@/lib/slotTiming';
 

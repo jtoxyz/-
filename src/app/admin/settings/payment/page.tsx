@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import AdminNav from '@/components/AdminNav';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
-import { supabase } from '@/lib/supabase';
+import { adminSupabase as supabase } from '@/lib/supabase';
 import { VISIT_WINDOW_OPTIONS } from '@/lib/paymentVisit';
 
 type PaymentEvent = {
