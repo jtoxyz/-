@@ -82,7 +82,7 @@ export default function PaymentQrRedeemPage() {
   }, []);
 
   return (
-    <main style={{ maxWidth: 620, margin: '0 auto', padding: '48px 20px' }}>
+    <main style={{ maxWidth: 620, margin: '0 auto', paddingTop: 24 }}>
       <div className="glass-card" style={{ textAlign: 'center' }}>
         <h1 style={{ marginTop: 0 }}>{success ? '支払い確認完了' : '支払い確認'}</h1>
         {loading && <div className="loading-spinner" style={{ margin: '24px auto' }} />}

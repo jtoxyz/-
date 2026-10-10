@@ -164,7 +164,7 @@ export default function AdminDailyPaymentQrPage() {
               <section className="glass-card payment-qr-print-area" style={{ marginTop: 24, textAlign: 'center' }}>
                 <h2 style={{ marginTop: 0 }}>{selectedEvent?.title || '支払い確認'}</h2>
                 <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>{validDate} 専用</div>
-                <div ref={qrRef} style={{ display: 'inline-flex', padding: 20, background: '#fff', borderRadius: 16 }}>
+                <div ref={qrRef} className="qr-frame">
                   <QRCodeSVG value={paymentUrl} size={360} level="M" includeMargin />
                 </div>
                 <p style={{ marginTop: 16, lineHeight: 1.7 }}>

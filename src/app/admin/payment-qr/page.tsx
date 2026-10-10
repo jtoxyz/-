@@ -124,7 +124,7 @@ export default function AdminPaymentQrPage() {
               <div className="glass-card" style={{ marginTop: 20, textAlign: 'center' }}>
                 <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 14 }}>現在有効な一回限りQR</div>
                 {paymentUrl && (
-                  <div style={{ display: 'inline-flex', padding: 18, background: '#fff', borderRadius: 16 }}>
+                  <div className="qr-frame">
                     <QRCodeSVG value={paymentUrl} size={320} level="M" includeMargin />
                   </div>
                 )}

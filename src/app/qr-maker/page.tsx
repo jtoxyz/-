@@ -47,7 +47,7 @@ export default function QrMakerPage() {
   };
 
   return (
-    <main style={{ maxWidth: 860, margin: '0 auto', padding: '40px 20px' }}>
+    <main style={{ maxWidth: 860, margin: '0 auto', paddingTop: 16 }}>
       <div className="glass-card">
         <h1 style={{ marginTop: 0 }}>URLからQRコード作成</h1>
         <p style={{ color: 'var(--text-secondary)', lineHeight: 1.7 }}>
@@ -78,7 +78,7 @@ export default function QrMakerPage() {
 
         {value ? (
           <section style={{ textAlign: 'center', marginTop: 24 }}>
-            <div ref={svgWrapRef} style={{ display: 'inline-flex', padding: 20, background: '#fff', borderRadius: 16 }}>
+            <div ref={svgWrapRef} className="qr-frame">
               <QRCodeSVG value={value} size={Math.min(size, 520)} level="M" includeMargin />
             </div>
             <div style={{ display: 'flex', justifyContent: 'center', gap: 12, flexWrap: 'wrap', marginTop: 20 }}>

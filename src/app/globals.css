@@ -825,6 +825,27 @@ a:hover {
   font-weight: 600;
 }
 
+/* QRコード：画面幅に収まるよう縮める（保存・印刷するSVGの寸法は変えない） */
+.qr-frame {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 20px;
+  background: #fff;
+  border-radius: 16px;
+}
+.qr-frame svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+@media (max-width: 767px) {
+  .qr-frame {
+    padding: 12px;
+  }
+}
+
 /* Utilities */
 .text-center { text-align: center; }
 .text-right { text-align: right; }
