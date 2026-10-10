@@ -106,7 +106,7 @@ export default function PaymentVisitSettings({
           >
             {VISIT_WINDOW_OPTIONS.map((o) => <option key={o.label} value={o.value === null ? 'none' : String(o.value)}>{o.label}</option>)}
           </select>
-          <span className="form-hint">例：「翌日まで」なら、10/6に予約した人は10/7までに始まる受付枠だけ選べます。範囲内に受付枠がない日は予約できないので、毎日枠を用意してください。</span>
+          <span className="form-hint">例：「次の受付日まで」なら、予約した日の残りの枠と、その次に受付枠がある日の枠を選べます。金曜に予約した人は、土日に枠がなければ月曜（祝日で枠がなければその次の受付日）の枠まで選べます。受付枠が1つもないと予約できません。</span>
         </div>
       )}
 
