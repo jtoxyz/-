@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Banknote, CalendarDays, Ticket, UserRound } from 'lucide-react';
 import RichText from '@/components/RichText';
 import { supabase } from '@/lib/supabase';
+import { PAYMENT_ROOM_LABEL } from '@/lib/config';
 import { type PaymentVisitSlot, fetchSelectableVisitSlots, formatVisitSlot, visitWindowNotice } from '@/lib/paymentVisit';
 import {
   type AccountEvent,
@@ -193,9 +194,9 @@ export default function AccountReservationPage() {
 
         {visitRequired && (
           <div style={{ marginTop: 22 }}>
-            <h2 style={{ fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}><Banknote size={22} aria-hidden="true" />委員会室に支払いに来る日時を選択</h2>
+            <h2 style={{ fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}><Banknote size={22} aria-hidden="true" />{PAYMENT_ROOM_LABEL}に支払いに来る日時を選択</h2>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: 12 }}>
-              選んだ日時に委員会室で支払ってください。時間内に支払いがない場合、予約は自動でキャンセルされます。
+              選んだ日時に{PAYMENT_ROOM_LABEL}で支払ってください。時間内に支払いがない場合、予約は自動でキャンセルされます。
               {visitWindowNotice(event.payment_visit_window_days)}
             </p>
             <div style={{ display: 'grid', gap: 8 }}>

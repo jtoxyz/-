@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { CalendarDays, Clock3, Tickets } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { PAYMENT_ROOM_LABEL } from '@/lib/config';
 import { type PaymentVisitSlot, fetchMyVisitSlots, formatVisitSlot } from '@/lib/paymentVisit';
 
 type MyTicket = {
@@ -34,7 +35,7 @@ function paymentLabel(ticket: MyTicket, visit?: PaymentVisitSlot): string | null
   if (ticket.payment_status === 'paid') return '支払い済み';
   if (ticket.payment_status === 'expired') return '支払期限切れ';
   if (ticket.payment_status === 'pending') {
-    if (visit) return `委員会室で支払い：${formatVisitSlot(visit)}`;
+    if (visit) return `${PAYMENT_ROOM_LABEL}で支払い：${formatVisitSlot(visit)}`;
     return ticket.payment_due_at
       ? `支払待ち：${formatDateTime(ticket.payment_due_at)}まで`
       : '支払い待ち';
