@@ -848,6 +848,12 @@ a:hover {
     font-weight: 600;
     text-align: left;
   }
+  .admin-table-stack td.admin-table-stack-title {
+    display: block;
+    padding-bottom: 6px;
+    font-size: 1rem;
+    text-align: left;
+  }
   .admin-table-stack td.admin-table-stack-actions {
     justify-content: flex-end;
     padding-top: 8px;
@@ -952,6 +958,25 @@ a:hover {
 .admin-nav-link:hover, .admin-nav-link.active {
   color: var(--nav-link-active-text);
   background: var(--color-primary);
+}
+
+/* 管理画面のタブ（スマホでは2列×2段） */
+.admin-tabs {
+  display: flex;
+}
+.admin-tab {
+  flex: 1;
+  padding: 16px 24px;
+}
+@media (max-width: 767px) {
+  .admin-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .admin-tab {
+    padding: 12px 8px;
+    font-size: 0.9rem;
+  }
 }
 
 /* Grid Layouts */

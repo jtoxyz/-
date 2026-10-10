@@ -201,7 +201,7 @@ export default function AdminEventsPage() {
     
     return (
       <div className="admin-table-container">
-        <table className="admin-table">
+        <table className="admin-table admin-table-stack">
           <thead>
             <tr>
               <th>企画名</th>
@@ -232,7 +232,7 @@ export default function AdminEventsPage() {
 
               return (
                 <tr key={event.id}>
-                  <td style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
+                  <td className="admin-table-stack-title" style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
                     {event.title}
                     {!hasSlots && (
                       <span className="badge badge-danger" style={{ marginLeft: '8px', background: 'var(--color-danger)', color: 'var(--text-primary)' }}>
@@ -240,29 +240,31 @@ export default function AdminEventsPage() {
                       </span>
                     )}
                   </td>
-                  <td>{formatDateTime(event.starts_at)}</td>
-                  <td>
+                  <td data-label="開催日時">{formatDateTime(event.starts_at)}</td>
+                  <td data-label="公開設定">
                     {event.is_public ? (
                       <span className="badge badge-success">公開中</span>
                     ) : (
                       <span className="badge badge-danger">非公開</span>
                     )}
                   </td>
-                  <td>
+                  <td data-label="予約受付">
                     {event.reservation_enabled ? (
                       <span className="badge badge-success">受付中</span>
                     ) : (
                       <span className="badge badge-danger">停止</span>
                     )}
                   </td>
-                  <td>
-                    <span style={{ fontWeight: 700, color: totalUsed >= totalCapacity ? 'var(--color-danger)' : 'var(--color-success)' }}>
-                      {totalUsed}
+                  <td data-label="予約状況">
+                    <span>
+                      <span style={{ fontWeight: 700, color: totalUsed >= totalCapacity ? 'var(--color-danger)' : 'var(--color-success)' }}>
+                        {totalUsed}
+                      </span>
+                      <span style={{ color: 'var(--text-muted)' }}> / {totalCapacity}</span>
                     </span>
-                    <span style={{ color: 'var(--text-muted)' }}> / {totalCapacity}</span>
                   </td>
-                  <td>
-                    <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                  <td className="admin-table-stack-actions">
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
                       <Link href={`/admin/event?id=${event.id}`}>
                         <button className="btn btn-secondary btn-sm" style={{ padding: '6px 12px', fontSize: '0.8rem' }} title="設定を編集">
                           ⚙️ 編集
@@ -339,20 +341,19 @@ export default function AdminEventsPage() {
         </div>
       ) : (
         <div className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
-          <div style={{ display: 'flex', borderBottom: '1px solid var(--color-surface-hover)', backgroundColor: 'var(--color-surface)' }}>
+          <div className="admin-tabs" style={{ borderBottom: '1px solid var(--color-surface-hover)', backgroundColor: 'var(--color-surface)' }}>
             {(['active', 'upcoming', 'draft', 'ended'] as const).map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
+                className="admin-tab"
                 style={{
-                  padding: '16px 24px',
                   background: 'none',
                   border: 'none',
                   borderBottom: activeTab === tab ? '2px solid var(--color-primary)' : '2px solid transparent',
                   color: activeTab === tab ? 'var(--color-primary)' : 'var(--text-secondary)',
                   fontWeight: activeTab === tab ? 700 : 400,
                   cursor: 'pointer',
-                  flex: 1,
                   transition: 'all 0.2s'
                 }}
               >
