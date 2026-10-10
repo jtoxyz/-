@@ -16,6 +16,8 @@ interface EventAdminItem {
   ticket_enabled: boolean;
   starts_at: string | null;
   ends_at: string | null;
+  reservation_starts_at: string | null;
+  reservation_ends_at: string | null;
   reservations: { id: string; status: string, ticket_type: string }[];
   admin_pre_registrations: { id: string; status: string, ticket_type: string }[];
   event_slots?: { id: string; total_capacity: number }[];
@@ -187,9 +189,18 @@ export default function AdminEventsPage() {
 
   const now = new Date();
   
+  // 開催日前でも、予約の受付期間中なら「開催中・受付中」に入れる
+  const isReservationOpen = (e: EventAdminItem) =>
+    e.reservation_enabled &&
+    !!e.reservation_starts_at && new Date(e.reservation_starts_at) <= now &&
+    (!e.reservation_ends_at || new Date(e.reservation_ends_at) >= now);
+  const isActive = (e: EventAdminItem) =>
+    e.is_public && (!e.ends_at || new Date(e.ends_at) >= now) &&
+    ((!!e.starts_at && new Date(e.starts_at) <= now) || isReservationOpen(e));
+
   const categorizedEvents = {
-    active: events.filter(e => e.is_public && e.starts_at && new Date(e.starts_at) <= now && (!e.ends_at || new Date(e.ends_at) >= now)),
-    upcoming: events.filter(e => e.is_public && e.starts_at && new Date(e.starts_at) > now),
+    active: events.filter(isActive),
+    upcoming: events.filter(e => e.is_public && e.starts_at && new Date(e.starts_at) > now && !isActive(e)),
     draft: events.filter(e => !e.is_public),
     ended: events.filter(e => e.is_public && e.ends_at && new Date(e.ends_at) < now)
   };
