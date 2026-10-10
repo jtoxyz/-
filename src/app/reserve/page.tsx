@@ -88,6 +88,8 @@ export default function AccountReservationPage() {
   const visitRequired = Boolean(event?.payment_required && event?.payment_visit_required);
   const reservable = selectedSlots.length > 0 && selectedSlots.every(canReserveSlot) && (!visitRequired || visitSlotId !== '');
   const walkinAvailable = selectedSlots.length === 1 && canGetWalkinSlot(selectedSlots[0]);
+  // 当日券を受け付ける枠が1つもない企画では、当日券ボタン自体を出さない
+  const hasWalkinSlots = slots.some((slot) => slot.is_enabled && slot.is_walkin_enabled);
 
   const toggle = (slot: AccountEventSlot) => {
     if (!event || (!canReserveSlot(slot) && !canGetWalkinSlot(slot))) return;
@@ -213,7 +215,7 @@ export default function AccountReservationPage() {
 
         <div style={{ display: 'grid', gap: 10, marginTop: 20 }}>
           <button type="button" className="btn btn-primary" onClick={reserve} disabled={!reservable || saving}><Ticket size={18} aria-hidden="true" />{saving ? '処理中...' : '選択した枠を予約する'}</button>
-          <button type="button" className="btn btn-secondary" onClick={getWalkin} disabled={!walkinAvailable || saving}>{saving ? '処理中...' : '選択した枠の当日券を取得する'}</button>
+          {hasWalkinSlots && <button type="button" className="btn btn-secondary" onClick={getWalkin} disabled={!walkinAvailable || saving}>{saving ? '処理中...' : '選択した枠の当日券を取得する'}</button>}
         </div>
       </div>
     </div>
