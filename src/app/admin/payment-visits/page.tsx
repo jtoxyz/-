@@ -190,7 +190,7 @@ export default function PaymentVisitsPage() {
     <div className="admin-mode">
       <div className="admin-layout-sidebar">
         <AdminNav />
-        <main style={{ display: 'grid', gap: 20 }}>
+        <main style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 20 }}>
           {error && <div className="error-banner">{error}</div>}
 
           <div className="glass-card">
@@ -207,15 +207,15 @@ export default function PaymentVisitsPage() {
               <button className="btn btn-secondary btn-sm" onClick={() => setDateKey(jstDateKey(new Date()))}>今日</button>
             </div>
 
-            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 18 }}>
-              <div className="glass-card" style={{ padding: '12px 18px' }}><small style={{ color: 'var(--text-secondary)' }}>来室予定</small><div style={{ fontSize: '1.6rem', fontWeight: 900 }}>{summary.total}人</div></div>
-              <div className="glass-card" style={{ padding: '12px 18px' }}><small style={{ color: 'var(--text-secondary)' }}>支払い済み</small><div style={{ fontSize: '1.6rem', fontWeight: 900 }}>{summary.paid}人</div></div>
-              <div className="glass-card" style={{ padding: '12px 18px' }}><small style={{ color: 'var(--text-secondary)' }}>未払い</small><div style={{ fontSize: '1.6rem', fontWeight: 900 }}>{summary.pending}人</div></div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10, maxWidth: 480, marginBottom: 18 }}>
+              <div className="glass-card" style={{ padding: '12px 10px', margin: 0 }}><small style={{ color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>来室予定</small><div style={{ fontSize: '1.6rem', fontWeight: 900 }}>{summary.total}人</div></div>
+              <div className="glass-card" style={{ padding: '12px 10px', margin: 0 }}><small style={{ color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>支払い済み</small><div style={{ fontSize: '1.6rem', fontWeight: 900 }}>{summary.paid}人</div></div>
+              <div className="glass-card" style={{ padding: '12px 10px', margin: 0 }}><small style={{ color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>未払い</small><div style={{ fontSize: '1.6rem', fontWeight: 900 }}>{summary.pending}人</div></div>
             </div>
 
             {daySlots.length === 0 && <p style={{ color: 'var(--text-secondary)' }}>この日の受付枠はありません。</p>}
 
-            <div style={{ display: 'grid', gap: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 16 }}>
               {daySlots.map((slot) => {
                 const slotRows = rows.filter((row) => row.payment_visit_slot_id === slot.id);
                 const count = slotRows.filter(isCounted).length;
@@ -229,16 +229,16 @@ export default function PaymentVisitsPage() {
                       <p style={{ color: 'var(--text-secondary)', margin: 0 }}>この枠を選んだ予約はありません。</p>
                     ) : (
                       <div className="admin-table-container reservations-table-desktop">
-                        <table className="admin-table">
+                        <table className="admin-table admin-table-stack">
                           <thead><tr><th>氏名</th><th>学籍番号</th><th>企画</th><th>支払い状態</th><th>操作</th></tr></thead>
                           <tbody>
                             {slotRows.map((row) => (
                               <tr key={row.id} style={{ opacity: row.status === 'cancelled' ? 0.5 : 1 }}>
-                                <td>{row.student_name}</td>
-                                <td>{row.student_number}</td>
-                                <td>{row.events?.title || '―'}</td>
-                                <td><strong>{paymentLabels[row.payment_status]}</strong>{row.status === 'cancelled' ? '（キャンセル済み）' : ''}</td>
-                                <td>
+                                <td data-label="氏名">{row.student_name}</td>
+                                <td data-label="学籍番号">{row.student_number}</td>
+                                <td data-label="企画">{row.events?.title || '―'}</td>
+                                <td data-label="支払い状態"><strong>{paymentLabels[row.payment_status]}</strong>{row.status === 'cancelled' ? '（キャンセル済み）' : ''}</td>
+                                <td className="admin-table-stack-actions">
                                   {row.status !== 'cancelled' && row.payment_status !== 'not_required' && (
                                     row.payment_status === 'paid'
                                       ? <button className="btn btn-secondary btn-sm" disabled={updatingId === row.id} onClick={() => setPaid(row.id, false)}>未払いに戻す</button>
@@ -289,16 +289,16 @@ export default function PaymentVisitsPage() {
               <p style={{ color: 'var(--text-secondary)' }}>これからの受付枠はありません。</p>
             ) : (
               <div className="admin-table-container reservations-table-desktop">
-                <table className="admin-table">
+                <table className="admin-table admin-table-stack">
                   <thead><tr><th>日時</th><th>メモ</th><th>予約人数</th><th>状態</th><th>操作</th></tr></thead>
                   <tbody>
                     {upcoming.map((slot) => (
                       <tr key={slot.id} style={{ opacity: slot.is_active ? 1 : 0.55 }}>
-                        <td>{formatVisitSlot(slot)}</td>
-                        <td>{slot.note || '―'}</td>
-                        <td>{upcomingCounts[slot.id] || 0}人</td>
-                        <td>{slot.is_active ? '受付中' : '受付停止'}</td>
-                        <td style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        <td data-label="日時">{formatVisitSlot(slot)}</td>
+                        <td data-label="メモ">{slot.note || '―'}</td>
+                        <td data-label="予約人数">{upcomingCounts[slot.id] || 0}人</td>
+                        <td data-label="状態">{slot.is_active ? '受付中' : '受付停止'}</td>
+                        <td className="admin-table-stack-actions" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                           <button className="btn btn-secondary btn-sm" onClick={() => toggleActive(slot)}>{slot.is_active ? '受付停止' : '受付再開'}</button>
                           <button className="btn btn-danger btn-sm" onClick={() => deleteSlot(slot)}>削除</button>
                         </td>

@@ -780,6 +780,51 @@ a:hover {
   background: var(--table-row-hover-bg);
 }
 
+/* スマホでは表の1行をカード状に縦並びにする（各セルの data-label を見出しとして表示） */
+@media (max-width: 767px) {
+  .admin-table-stack thead {
+    display: none;
+  }
+  .admin-table-stack,
+  .admin-table-stack tbody,
+  .admin-table-stack tr {
+    display: block;
+    width: 100%;
+  }
+  .admin-table-stack tr {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--card-border);
+  }
+  .admin-table-stack tr:last-child {
+    border-bottom: none;
+  }
+  .admin-table-stack td {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    padding: 4px 0;
+    border-bottom: none;
+    text-align: right;
+    overflow-wrap: anywhere;
+  }
+  .admin-table-stack td[data-label]::before {
+    content: attr(data-label);
+    flex-shrink: 0;
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-align: left;
+  }
+  .admin-table-stack td.admin-table-stack-actions {
+    justify-content: flex-end;
+    padding-top: 8px;
+  }
+  .admin-table-stack td.admin-table-stack-actions:empty {
+    display: none;
+  }
+}
+
 /* Loading/Error states */
 .loading-spinner {
   width: 40px;
