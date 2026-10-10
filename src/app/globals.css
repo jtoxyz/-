@@ -326,6 +326,12 @@ a:hover {
   box-shadow: var(--shadow-lg), var(--color-primary-glow) 0px 8px 30px;
 }
 
+/* ボタンとして使うカードは、文字色と文字サイズをページに合わせる（ブラウザ標準の黒く小さい文字にしない） */
+button.glass-card {
+  color: var(--text-primary);
+  font: inherit;
+}
+
 /* Typography elements */
 .page-title {
   font-size: 2.2rem;
