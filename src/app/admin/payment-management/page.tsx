@@ -137,7 +137,7 @@ export default function PaymentManagementPage() {
             {error && <div className="error-banner" style={{ marginBottom: 16 }}>{error}</div>}
 
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'end', marginBottom: 18 }}>
-              <div className="form-group" style={{ minWidth: 280, margin: 0 }}>
+              <div className="form-group" style={{ flex: '1 1 280px', maxWidth: 520, minWidth: 0, margin: 0 }}>
                 <label className="form-label">企画</label>
                 <select className="form-input" value={eventId} onChange={(e) => setEventId(e.target.value)}>
                   {events.map((event) => <option key={event.id} value={event.id}>{event.title}</option>)}
@@ -156,18 +156,18 @@ export default function PaymentManagementPage() {
 
             {loading ? <div className="loading-spinner" /> : (
               <div className="admin-table-container reservations-table-desktop">
-                <table className="admin-table">
+                <table className="admin-table admin-table-stack">
                   <thead><tr><th>氏名</th><th>学籍番号</th><th>枠</th><th>支払い状態</th><th>期限</th><th>支払日時</th><th>操作</th></tr></thead>
                   <tbody>
                     {visibleRows.map((row) => (
                       <tr key={row.id} style={{ opacity: row.status === 'cancelled' ? 0.5 : 1 }}>
-                        <td>{row.student_name}</td>
-                        <td>{row.student_number}</td>
-                        <td>{row.event_slots?.label || '―'}</td>
-                        <td><strong>{labels[row.payment_status]}</strong>{row.status === 'cancelled' ? '（キャンセル済み）' : ''}</td>
-                        <td>{formatDate(row.payment_due_at)}</td>
-                        <td>{formatDate(row.paid_at)}</td>
-                        <td>
+                        <td data-label="氏名">{row.student_name}</td>
+                        <td data-label="学籍番号">{row.student_number}</td>
+                        <td data-label="枠">{row.event_slots?.label || '―'}</td>
+                        <td data-label="支払い状態"><span><strong>{labels[row.payment_status]}</strong>{row.status === 'cancelled' ? '（キャンセル済み）' : ''}</span></td>
+                        <td data-label="期限">{formatDate(row.payment_due_at)}</td>
+                        <td data-label="支払日時">{formatDate(row.paid_at)}</td>
+                        <td className="admin-table-stack-actions">
                           {row.payment_status !== 'not_required' && row.status !== 'cancelled' && (
                             row.payment_status === 'paid' ?
                               <button className="btn btn-secondary btn-sm" disabled={updatingId === row.id} onClick={() => setPaid(row.id, false)}>未払いに戻す</button> :

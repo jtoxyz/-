@@ -237,7 +237,7 @@ export default function PaymentVisitsPage() {
                                 <td data-label="氏名">{row.student_name}</td>
                                 <td data-label="学籍番号">{row.student_number}</td>
                                 <td data-label="企画">{row.events?.title || '―'}</td>
-                                <td data-label="支払い状態"><strong>{paymentLabels[row.payment_status]}</strong>{row.status === 'cancelled' ? '（キャンセル済み）' : ''}</td>
+                                <td data-label="支払い状態"><span><strong>{paymentLabels[row.payment_status]}</strong>{row.status === 'cancelled' ? '（キャンセル済み）' : ''}</span></td>
                                 <td className="admin-table-stack-actions">
                                   {row.status !== 'cancelled' && row.payment_status !== 'not_required' && (
                                     row.payment_status === 'paid'
