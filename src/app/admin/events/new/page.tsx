@@ -8,6 +8,7 @@ import AdminNav from '@/components/AdminNav';
 import EventPreviewModal from '@/components/EventPreviewModal';
 import { supabase } from '@/lib/supabase';
 import PaymentVisitSettings from '@/components/admin/PaymentVisitSettings';
+import { applySlotTimingChange } from '@/lib/slotTiming';
 
 interface SlotFormRow {
   id: string; // temp client-side ID
@@ -34,13 +35,6 @@ function formatSlotDateTime(value: string): string {
   const days = ['日', '月', '火', '水', '木', '金', '土'];
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getMonth() + 1}/${d.getDate()}(${days[d.getDay()]}) ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
-function addMinutesToTime(time: string, minutes: number): string {
-  const [h, m] = time.split(':').map(Number);
-  const total = (h * 60 + m + minutes + 24 * 60) % (24 * 60);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${pad(Math.floor(total / 60))}:${pad(total % 60)}`;
 }
 
 function isValidUrl(url: string | null | undefined): boolean {
@@ -140,25 +134,7 @@ export default function AdminNewEventPage() {
 
   // Slot row helpers
   const updateSlotRow = <K extends keyof SlotFormRow>(slotId: string, field: K, value: SlotFormRow[K]) => {
-    setSlotRows((prev) => prev.map((row) => {
-      if (row.id !== slotId) return row;
-      const updated = { ...row, [field]: value };
-      
-      // If date changes, automatically set up initial default times for separate timing windows
-      if (field === 'date' && typeof value === 'string' && value) {
-        if (!updated.startTime) updated.startTime = '11:00';
-        if (!updated.endTime) updated.endTime = '14:00';
-
-        // チケット使用 (Ticket usage): Matches this slot's own start/end time.
-        if (!updated.ticketUseStartsAt) updated.ticketUseStartsAt = `${value}T${updated.startTime}`;
-        if (!updated.ticketUseEndsAt) updated.ticketUseEndsAt = `${value}T${updated.endTime}`;
-
-        // 当日券 (Walk-in): Starts 30 mins before event slot, ends 30 mins before slot ends.
-        if (!updated.walkinStartsAt) updated.walkinStartsAt = `${value}T${addMinutesToTime(updated.startTime, -30)}`;
-        if (!updated.walkinEndsAt) updated.walkinEndsAt = `${value}T${addMinutesToTime(updated.endTime, -30)}`;
-      }
-      return updated;
-    }));
+    setSlotRows((prev) => prev.map((row) => (row.id === slotId ? applySlotTimingChange(row, field, value) : row)));
   };
 
   const addSlotRow = () => {
