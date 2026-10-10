@@ -115,19 +115,19 @@ export default function AdminUsersPage() {
               <div style={{ textAlign: 'center', padding: 36, color: 'var(--text-secondary)' }}>該当する利用者はいません。</div>
             ) : (
               <div className="admin-table-container">
-                <table className="admin-table">
+                <table className="admin-table admin-table-stack">
                   <thead><tr><th>氏名</th><th>学籍番号</th><th>大学メール</th><th>予約記録</th><th>有効予約</th><th>登録日</th><th>最終氏名変更</th><th>操作</th></tr></thead>
                   <tbody>
                     {profiles.map((profile) => (
                       <tr key={profile.user_id}>
-                        <td><strong>{profile.student_name}</strong></td>
-                        <td>{profile.student_number}</td>
-                        <td>{profile.university_email}</td>
-                        <td>{profile.reservation_count}</td>
-                        <td>{profile.active_reservation_count}</td>
-                        <td>{formatDate(profile.created_at)}</td>
-                        <td>{formatDate(profile.name_updated_at)}</td>
-                        <td><button type="button" className="btn btn-secondary btn-sm" onClick={() => startEdit(profile)}>氏名を修正</button></td>
+                        <td className="admin-table-stack-title"><strong>{profile.student_name}</strong></td>
+                        <td data-label="学籍番号">{profile.student_number}</td>
+                        <td data-label="大学メール">{profile.university_email}</td>
+                        <td data-label="予約記録">{profile.reservation_count}</td>
+                        <td data-label="有効予約">{profile.active_reservation_count}</td>
+                        <td data-label="登録日">{formatDate(profile.created_at)}</td>
+                        <td data-label="最終氏名変更">{formatDate(profile.name_updated_at)}</td>
+                        <td className="admin-table-stack-actions"><button type="button" className="btn btn-secondary btn-sm" onClick={() => startEdit(profile)}>氏名を修正</button></td>
                       </tr>
                     ))}
                   </tbody>

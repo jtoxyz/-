@@ -249,7 +249,7 @@ export default function AdminPreRegistrationsPage({ id }: { id: string }) {
             </div>
           ) : (
             <div className="admin-table-container">
-              <table className="admin-table">
+              <table className="admin-table admin-table-stack">
                 <thead>
                   <tr>
                     <th>登録日時</th>
@@ -264,12 +264,12 @@ export default function AdminPreRegistrationsPage({ id }: { id: string }) {
                 <tbody>
                   {preRegistrations.map((pr) => (
                     <tr key={pr.id} style={{ opacity: pr.status === 'cancelled' ? 0.5 : 1 }}>
-                      <td>{new Date(pr.created_at).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}</td>
-                      <td>{pr.event_slots?.label || '-'}</td>
-                      <td>{pr.ticket_type === 'walkin' ? '当日券' : '予約券'}</td>
-                      <td style={{ fontWeight: 700 }}>{pr.student_name}</td>
-                      <td>{pr.student_number}</td>
-                      <td>
+                      <td data-label="登録日時">{new Date(pr.created_at).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}</td>
+                      <td data-label="枠名">{pr.event_slots?.label || '-'}</td>
+                      <td data-label="券種">{pr.ticket_type === 'walkin' ? '当日券' : '予約券'}</td>
+                      <td data-label="氏名" style={{ fontWeight: 700 }}>{pr.student_name}</td>
+                      <td data-label="学籍番号">{pr.student_number}</td>
+                      <td data-label="状態"><div>
                         {pr.status === 'reserved' && <span className="badge badge-warning">未発券 (待機中)</span>}
                         {pr.status === 'active' && <span className="badge badge-success">発券済み</span>}
                         {pr.status === 'activation_failed' && <span className="badge badge-danger">発券失敗</span>}
@@ -279,8 +279,8 @@ export default function AdminPreRegistrationsPage({ id }: { id: string }) {
                             {pr.activation_error}
                           </div>
                         )}
-                      </td>
-                      <td>
+                      </div></td>
+                      <td className="admin-table-stack-actions">
                         {pr.status !== 'cancelled' && pr.status !== 'active' && (
                           <button
                             className="btn btn-secondary btn-sm"

@@ -246,7 +246,7 @@ export default function AdminBlacklistPage() {
                   placeholder="学籍番号・メール・理由で検索"
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  style={{ minWidth: 250 }}
+                  style={{ flex: '1 1 250px', minWidth: 0 }}
                 />
                 <label className="form-checkbox-label">
                   <input
@@ -261,7 +261,7 @@ export default function AdminBlacklistPage() {
             </div>
 
             <div className="admin-table-container" style={{ marginTop: 16 }}>
-              <table className="admin-table">
+              <table className="admin-table admin-table-stack">
                 <thead>
                   <tr>
                     <th>状態</th>
@@ -276,13 +276,13 @@ export default function AdminBlacklistPage() {
                 <tbody>
                   {filteredEntries.map((entry) => (
                     <tr key={entry.id} style={{ opacity: entry.active ? 1 : 0.55 }}>
-                      <td>{entry.active ? '利用停止中' : '解除済み'}</td>
-                      <td>{entry.student_number || '-'}</td>
-                      <td>{entry.university_email || '-'}</td>
-                      <td style={{ whiteSpace: 'pre-wrap', minWidth: 260 }}>{entry.reason}</td>
-                      <td>{formatDateTime(entry.created_at)}</td>
-                      <td>{entry.expires_at ? formatDateTime(entry.expires_at) : '期限なし'}</td>
-                      <td>
+                      <td data-label="状態">{entry.active ? '利用停止中' : '解除済み'}</td>
+                      <td data-label="学籍番号">{entry.student_number || '-'}</td>
+                      <td data-label="大学メール">{entry.university_email || '-'}</td>
+                      <td data-label="理由" style={{ whiteSpace: 'pre-wrap', minWidth: 260 }}>{entry.reason}</td>
+                      <td data-label="登録日時">{formatDateTime(entry.created_at)}</td>
+                      <td data-label="解除予定">{entry.expires_at ? formatDateTime(entry.expires_at) : '期限なし'}</td>
+                      <td className="admin-table-stack-actions">
                         {entry.active ? (
                           <button className="btn btn-secondary btn-sm" type="button" onClick={() => handleDeactivate(entry)}>
                             解除
