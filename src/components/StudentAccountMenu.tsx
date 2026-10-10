@@ -56,25 +56,29 @@ export default function StudentAccountMenu() {
 
   if (!profile) return null;
 
+  // 区切り線もここで出す（未ログイン・管理画面では区切り線が二重にならないように）
   return (
-    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-      <Link
-        href="/"
-        title={`${profile.student_name}（${profile.student_number}）`}
-        style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: 'var(--text-secondary)', maxWidth: 160 }}
-      >
-        <UserRound size={17} aria-hidden="true" />
-        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{profile.student_name}</span>
-      </Link>
-      <button
-        type="button"
-        onClick={handleLogout}
-        title="ログアウト"
-        aria-label="ログアウト"
-        style={{ border: 0, background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer', display: 'inline-flex', padding: 4 }}
-      >
-        <LogOut size={17} aria-hidden="true" />
-      </button>
-    </div>
+    <>
+      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+        <Link
+          href="/"
+          title={`${profile.student_name}（${profile.student_number}）`}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: 'var(--text-secondary)', maxWidth: 160 }}
+        >
+          <UserRound size={17} aria-hidden="true" />
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{profile.student_name}</span>
+        </Link>
+        <button
+          type="button"
+          onClick={handleLogout}
+          title="ログアウト"
+          aria-label="ログアウト"
+          style={{ border: 0, background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer', display: 'inline-flex', padding: 4 }}
+        >
+          <LogOut size={17} aria-hidden="true" />
+        </button>
+      </div>
+      <span className="header-nav-sep">|</span>
+    </>
   );
 }

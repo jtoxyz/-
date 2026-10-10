@@ -64,17 +64,16 @@ export default function RootLayout({
                 <Ticket size={23} strokeWidth={2.2} aria-hidden="true" />
                 <span>委員会企画予約</span>
               </Link>
-              <nav style={{ display: 'flex', gap: '10px', alignItems: 'center', fontSize: '0.85rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              <nav className="header-nav">
                 <Link href="/tickets/find" style={{ color: 'var(--text-secondary)' }}>
                   チケットを探す
                 </Link>
-                <span style={{ color: 'var(--card-border)' }}>|</span>
+                <span className="header-nav-sep">|</span>
                 <StudentAccountMenu />
-                <span style={{ color: 'var(--card-border)' }}>|</span>
                 <Link href="/admin" style={{ color: 'var(--text-secondary)' }}>
                   管理画面
                 </Link>
-                <span style={{ color: 'var(--card-border)' }}>|</span>
+                <span className="header-nav-sep">|</span>
                 <ThemeSwitcher />
               </nav>
             </div>

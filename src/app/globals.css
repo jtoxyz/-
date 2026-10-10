@@ -484,6 +484,38 @@ a:hover {
   align-items: center;
   gap: 8px;
 }
+.header-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  font-size: 0.85rem;
+}
+.header-nav-sep {
+  color: var(--card-border);
+}
+/* スマホ：ロゴは1行に収め、メニューは入りきらなければ次の行へ回す（区切り線は出さない） */
+@media (max-width: 767px) {
+  .header {
+    padding: 10px 16px;
+  }
+  .header-container {
+    flex-wrap: wrap;
+    gap: 6px 12px;
+  }
+  .header-logo {
+    font-size: 1.1rem;
+    white-space: nowrap;
+  }
+  .header-nav {
+    flex: 1 1 auto;
+    gap: 6px 16px;
+  }
+  .header-nav-sep {
+    display: none;
+  }
+}
 .footer {
   border-top: 1px solid var(--card-border);
   padding: 32px 20px;
