@@ -408,6 +408,22 @@ a:hover {
   width: auto;
 }
 
+/* 説明文の装飾ボタン：スマホでも横に並べる */
+.format-toolbar .btn {
+  width: auto;
+}
+
+/* 企画作成・編集の開催枠：入れ子の枠が深いので、スマホでは余白を詰める */
+@media (max-width: 767px) {
+  .slot-panel {
+    padding: 10px !important;
+  }
+  .slot-row,
+  .slot-timing {
+    padding: 12px !important;
+  }
+}
+
 /* Forms */
 .form-group {
   margin-bottom: 20px;

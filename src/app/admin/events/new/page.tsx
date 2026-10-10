@@ -495,7 +495,7 @@ export default function AdminNewEventPage() {
               <label className="form-label" htmlFor="description" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
                 <span>説明文（専用タグやMarkdown記法が使用可能です）</span>
               </label>
-              <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
+              <div className="format-toolbar" style={{ display: 'flex', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
                 <button type="button" className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '0.8rem', color: 'var(--color-danger)', borderColor: 'var(--color-danger)' }} onClick={() => {
                   const el = document.getElementById('description') as HTMLTextAreaElement;
                   if (!el) return;
@@ -572,7 +572,7 @@ export default function AdminNewEventPage() {
 
             <div className="form-group">
               <label className="form-label" htmlFor="postReservationNotes">予約完了後の注意事項（利用者のチケット画面上部に表示）</label>
-              <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
+              <div className="format-toolbar" style={{ display: 'flex', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
                 <button type="button" className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '0.8rem', color: 'var(--color-danger)', borderColor: 'var(--color-danger)' }} onClick={() => {
                   const el = document.getElementById('postReservationNotes') as HTMLTextAreaElement;
                   if (!el) return;
@@ -774,7 +774,7 @@ export default function AdminNewEventPage() {
             </div>
 
             {/* Slot management */}
-            <div style={{ marginTop: '20px', background: 'var(--card-bg)', padding: '16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--card-border)' }}>
+            <div className="slot-panel" style={{ marginTop: '20px', background: 'var(--card-bg)', padding: '16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--card-border)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: '12px' }}>
                 <h4 style={{ fontSize: '0.95rem', margin: 0, color: 'var(--text-primary)' }}>開催枠の管理</h4>
                 <button
@@ -792,6 +792,7 @@ export default function AdminNewEventPage() {
               {slotRows.map((row) => (
                 <div
                   key={row.id}
+                  className="slot-row"
                   style={{
                     marginBottom: '12px',
                     padding: '16px',
@@ -859,7 +860,7 @@ export default function AdminNewEventPage() {
                   </div>
 
                   {/* Row 3.5 (New): Timings & Limits Configuration */}
-                  <div style={{
+                  <div className="slot-timing" style={{
                     display: 'flex',
                     flexDirection: 'column',
                     gap: '16px',
@@ -885,7 +886,7 @@ export default function AdminNewEventPage() {
 
                     {/* 2. チケット使用可能期間 */}
                     <div style={{ paddingBottom: '12px', borderBottom: '1px dashed var(--card-border)' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '4px 12px', marginBottom: '8px' }}>
                         <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-success)' }}>チケット使用可能期間</span>
                         <label className="form-checkbox-label" style={{ fontSize: '0.75rem' }}>
                           <input
@@ -939,7 +940,7 @@ export default function AdminNewEventPage() {
 
                     {/* 3. 当日券発行期間 */}
                     <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '4px 12px', marginBottom: '8px' }}>
                         <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-warning)' }}>当日券発行期間＆上限</span>
                         <label className="form-checkbox-label" style={{ fontSize: '0.75rem' }}>
                           <input
@@ -1059,7 +1060,7 @@ export default function AdminNewEventPage() {
                   </div>
 
                   {/* Row 5: 複製・削除ボタン */}
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: '12px' }}>
                     <button
                       type="button"
                       onClick={() => duplicateSlotRow(row.id)}
