@@ -1,12 +1,22 @@
 import { supabase } from '@/lib/supabase';
+import { PAYMENT_ROOM_LABEL } from '@/lib/config';
 
 export type PaymentVisitSlot = {
   id: string;
   starts_at: string;
   ends_at: string;
   note: string | null;
+  /** 支払い場所。null なら PAYMENT_ROOM_LABEL（既定の場所） */
+  location: string | null;
   is_active: boolean;
 };
+
+export const VISIT_SLOT_COLUMNS = 'id,starts_at,ends_at,note,location,is_active';
+
+/** その枠で支払いを受け付ける場所 */
+export function visitSlotPlace(slot: Pick<PaymentVisitSlot, 'location'>): string {
+  return slot.location?.trim() || PAYMENT_ROOM_LABEL;
+}
 
 const TIME_ZONE = 'Asia/Tokyo';
 
@@ -65,7 +75,7 @@ export function visitWindowNotice(windowDays: number | null | undefined): string
 export async function fetchSelectableVisitSlots(windowDays: number | null = null): Promise<PaymentVisitSlot[]> {
   const { data, error } = await supabase
     .from('payment_visit_slots')
-    .select('id,starts_at,ends_at,note,is_active')
+    .select(VISIT_SLOT_COLUMNS)
     .eq('is_active', true)
     .gt('ends_at', new Date().toISOString())
     .order('starts_at', { ascending: true });
@@ -78,7 +88,7 @@ export async function fetchMyVisitSlots(reservationIds: string[]): Promise<Recor
   if (reservationIds.length === 0) return {};
   const { data, error } = await supabase
     .from('reservations')
-    .select('id,payment_visit_slots(id,starts_at,ends_at,note,is_active)')
+    .select(`id,payment_visit_slots(${VISIT_SLOT_COLUMNS})`)
     .in('id', reservationIds)
     .not('payment_visit_slot_id', 'is', null);
   if (error) return {};

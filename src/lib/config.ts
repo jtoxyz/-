@@ -13,5 +13,6 @@ export const ALLOWED_EMAIL_DOMAINS = (
 export const STUDENT_EMAIL_DOMAIN =
   process.env.NEXT_PUBLIC_STUDENT_EMAIL_DOMAIN || 'ge.osaka-sandai.ac.jp';
 
-// 学生向け画面に出す支払い場所。「委員会室」だけでは場所が伝わらないため建物と階まで書く
-export const PAYMENT_ROOM_LABEL = '学生会館6階学生健康保険委員会';
+// 学生向け画面に出す支払い場所の既定値。「委員会室」だけでは場所が伝わらないため建物と階まで書く。
+// 受付枠ごとに場所を変えるときは payment_visit_slots.location に書く（2026/10/13までの枠は学生会館6階学生健康保険委員会）
+export const PAYMENT_ROOM_LABEL = '学生会館3階';
