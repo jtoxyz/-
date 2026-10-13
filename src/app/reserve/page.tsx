@@ -3,11 +3,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Banknote, CalendarDays, Ticket, UserRound } from 'lucide-react';
+import { Banknote, CalendarDays, MapPin, Ticket, UserRound } from 'lucide-react';
 import RichText from '@/components/RichText';
 import { supabase } from '@/lib/supabase';
-import { PAYMENT_ROOM_LABEL } from '@/lib/config';
-import { type PaymentVisitSlot, fetchSelectableVisitSlots, formatVisitSlot, visitWindowNotice } from '@/lib/paymentVisit';
+import { type PaymentVisitSlot, fetchSelectableVisitSlots, formatVisitSlot, visitSlotPlace, visitWindowNotice } from '@/lib/paymentVisit';
 import {
   type AccountEvent,
   type AccountEventSlot,
@@ -91,6 +90,9 @@ export default function AccountReservationPage() {
   const walkinAvailable = selectedSlots.length === 1 && canGetWalkinSlot(selectedSlots[0]);
   // 当日券を受け付ける枠が1つもない企画では、当日券ボタン自体を出さない
   const hasWalkinSlots = slots.some((slot) => slot.is_enabled && slot.is_walkin_enabled);
+  // 支払い場所は受付枠ごとに決まる。候補の中で場所が1つだけなら見出しに出す
+  const visitPlaces = [...new Set(visitSlots.map(visitSlotPlace))];
+  const selectedVisit = visitSlots.find((visit) => visit.id === visitSlotId);
 
   const toggle = (slot: AccountEventSlot) => {
     if (!event || (!canReserveSlot(slot) && !canGetWalkinSlot(slot))) return;
@@ -194,9 +196,12 @@ export default function AccountReservationPage() {
 
         {visitRequired && (
           <div style={{ marginTop: 22 }}>
-            <h2 style={{ fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}><Banknote size={22} aria-hidden="true" />{PAYMENT_ROOM_LABEL}に支払いに来る日時を選択</h2>
+            <h2 style={{ fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}><Banknote size={22} aria-hidden="true" />支払いに来る日時を選択</h2>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: 12 }}>
-              選んだ日時に{PAYMENT_ROOM_LABEL}で支払ってください。時間内に支払いがない場合、予約は自動でキャンセルされます。
+              {visitPlaces.length > 1
+                ? '支払い場所は日によって違います。各日時に書いてある場所で支払ってください。'
+                : `選んだ日時に${visitPlaces[0] ?? ''}で支払ってください。`}
+              時間内に支払いがない場合、予約は自動でキャンセルされます。
               {visitWindowNotice(event.payment_visit_window_days)}
             </p>
             <div style={{ display: 'grid', gap: 8 }}>
@@ -205,12 +210,14 @@ export default function AccountReservationPage() {
                 return (
                   <button key={visit.id} type="button" onClick={() => setVisitSlotId(visit.id)} disabled={saving} className="glass-card interactive" style={{ textAlign: 'left', width: '100%', padding: 13, borderColor: active ? 'var(--color-primary)' : 'var(--card-border)', background: active ? 'var(--color-primary-glow)' : 'var(--card-bg)' }}>
                     <strong>{formatVisitSlot(visit)}</strong>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.88rem', fontWeight: 700, marginTop: 4 }}><MapPin size={15} aria-hidden="true" />{visitSlotPlace(visit)}</div>
                     {visit.note && <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 4 }}>{visit.note}</div>}
                   </button>
                 );
               })}
             </div>
             {visitSlots.length === 0 && <p style={{ color: 'var(--text-secondary)' }}>今は選べる支払い日時がないため予約できません。委員会にお問い合わせください。</p>}
+            {selectedVisit && <p style={{ marginTop: 12, fontWeight: 700 }}>支払い場所：{visitSlotPlace(selectedVisit)}（{formatVisitSlot(selectedVisit)}）</p>}
           </div>
         )}
 

@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { adminSupabase as supabase } from '@/lib/supabase';
-import { type PaymentVisitSlot, VISIT_WINDOW_OPTIONS, formatVisitSlot, jstDateKey } from '@/lib/paymentVisit';
+import { PAYMENT_ROOM_LABEL } from '@/lib/config';
+import { type PaymentVisitSlot, VISIT_SLOT_COLUMNS, VISIT_WINDOW_OPTIONS, formatVisitSlot, jstDateKey, visitSlotPlace } from '@/lib/paymentVisit';
 
 type Props = {
   paymentRequired: boolean;
@@ -35,12 +36,13 @@ export default function PaymentVisitSettings({
   const [newStart, setNewStart] = useState('12:30');
   const [newEnd, setNewEnd] = useState('13:00');
   const [newNote, setNewNote] = useState('');
+  const [newLocation, setNewLocation] = useState('');
   const [adding, setAdding] = useState(false);
 
   const loadSlots = useCallback(async () => {
     const { data, error: fetchError } = await supabase
       .from('payment_visit_slots')
-      .select('id,starts_at,ends_at,note,is_active')
+      .select(VISIT_SLOT_COLUMNS)
       .eq('is_active', true)
       .gt('ends_at', new Date().toISOString())
       .order('starts_at', { ascending: true });
@@ -63,7 +65,7 @@ export default function PaymentVisitSettings({
     setError(null);
     const { error: insertError } = await supabase
       .from('payment_visit_slots')
-      .insert({ starts_at: startsAt, ends_at: endsAt, note: newNote.trim() || null });
+      .insert({ starts_at: startsAt, ends_at: endsAt, note: newNote.trim() || null, location: newLocation.trim() || null });
     if (insertError) setError(insertError.message);
     else {
       setNewNote('');
@@ -129,7 +131,7 @@ export default function PaymentVisitSettings({
             <ul style={{ margin: '0 0 14px', paddingLeft: 20, lineHeight: 1.8 }}>
               {slots.map((slot) => (
                 <li key={slot.id}>
-                  {formatVisitSlot(slot)}
+                  {formatVisitSlot(slot)} {visitSlotPlace(slot)}
                   {slot.note && <span style={{ color: 'var(--text-secondary)' }}>（{slot.note}）</span>}
                 </li>
               ))}
@@ -152,6 +154,10 @@ export default function PaymentVisitSettings({
             <div className="form-group" style={{ margin: 0, flex: '1 1 160px' }}>
               <label className="form-label" htmlFor="pv-note">メモ（任意）</label>
               <input id="pv-note" type="text" className="form-input" placeholder="例：昼休み" value={newNote} onChange={(e) => setNewNote(e.target.value)} disabled={disabled || adding} />
+            </div>
+            <div className="form-group" style={{ margin: 0, flex: '1 1 160px' }}>
+              <label className="form-label" htmlFor="pv-location">支払い場所（空欄なら{PAYMENT_ROOM_LABEL}）</label>
+              <input id="pv-location" type="text" className="form-input" placeholder={PAYMENT_ROOM_LABEL} value={newLocation} onChange={(e) => setNewLocation(e.target.value)} disabled={disabled || adding} />
             </div>
             <button type="button" className="btn btn-secondary" onClick={addSlot} disabled={disabled || adding}>
               {adding ? '追加中...' : '受付枠を追加'}

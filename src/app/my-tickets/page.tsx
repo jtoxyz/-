@@ -5,9 +5,8 @@ import Link from 'next/link';
 import { BadgeCheck, Clock3, ExternalLink, TicketCheck } from 'lucide-react';
 import RichText from '@/components/RichText';
 import { supabase } from '@/lib/supabase';
-import { PAYMENT_ROOM_LABEL } from '@/lib/config';
 import { formatAccountDate } from '@/lib/studentAccount';
-import { type PaymentVisitSlot, fetchMyVisitSlots, formatVisitSlot } from '@/lib/paymentVisit';
+import { type PaymentVisitSlot, fetchMyVisitSlots, formatVisitSlot, visitSlotPlace } from '@/lib/paymentVisit';
 
 type TicketDetails = {
   reservation_id: string;
@@ -202,7 +201,7 @@ export default function MyTicketPage() {
               <div style={{ fontWeight: 800 }}>{paymentText}</div>
               {visitSlot && ticket.payment_status === 'pending' && (
                 <div style={{ marginTop: 4, fontSize: '0.88rem' }}>
-                  {PAYMENT_ROOM_LABEL}で支払い：<strong>{formatVisitSlot(visitSlot)}</strong>
+                  <strong>{visitSlotPlace(visitSlot)}</strong>で支払い：<strong>{formatVisitSlot(visitSlot)}</strong>
                   {visitSlot.note && <span style={{ color: 'var(--text-secondary)' }}>（{visitSlot.note}）</span>}
                 </div>
               )}

@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import AdminNav from '@/components/AdminNav';
+import { PAYMENT_ROOM_LABEL } from '@/lib/config';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { adminSupabase as supabase } from '@/lib/supabase';
-import { type PaymentVisitSlot, formatVisitSlot, jstDateKey } from '@/lib/paymentVisit';
+import { type PaymentVisitSlot, VISIT_SLOT_COLUMNS, formatVisitSlot, jstDateKey, visitSlotPlace } from '@/lib/paymentVisit';
 
 type VisitReservation = {
   id: string;
@@ -53,12 +54,13 @@ export default function PaymentVisitsPage() {
   const [newStart, setNewStart] = useState('12:30');
   const [newEnd, setNewEnd] = useState('13:00');
   const [newNote, setNewNote] = useState('');
+  const [newLocation, setNewLocation] = useState('');
   const [saving, setSaving] = useState(false);
 
   const loadDay = useCallback(async (key: string) => {
     const { data: slotData, error: slotError } = await supabase
       .from('payment_visit_slots')
-      .select('id,starts_at,ends_at,note,is_active')
+      .select(VISIT_SLOT_COLUMNS)
       .gte('starts_at', jstIso(key, '00:00'))
       .lt('starts_at', jstIso(shiftDate(key, 1), '00:00'))
       .order('starts_at', { ascending: true });
@@ -82,7 +84,7 @@ export default function PaymentVisitsPage() {
   const loadUpcoming = useCallback(async () => {
     const { data, error: fetchError } = await supabase
       .from('payment_visit_slots')
-      .select('id,starts_at,ends_at,note,is_active')
+      .select(VISIT_SLOT_COLUMNS)
       .gt('ends_at', new Date().toISOString())
       .order('starts_at', { ascending: true });
     if (fetchError) throw fetchError;
@@ -150,13 +152,25 @@ export default function PaymentVisitsPage() {
     setError(null);
     const { error: insertError } = await supabase
       .from('payment_visit_slots')
-      .insert({ starts_at: startsAt, ends_at: endsAt, note: newNote.trim() || null });
+      .insert({ starts_at: startsAt, ends_at: endsAt, note: newNote.trim() || null, location: newLocation.trim() || null });
     if (insertError) setError(insertError.message);
     else {
       setNewNote('');
       await reload();
     }
     setSaving(false);
+  };
+
+  const editLocation = async (slot: PaymentVisitSlot) => {
+    const input = window.prompt(`${formatVisitSlot(slot)} の支払い場所（空欄にすると「${PAYMENT_ROOM_LABEL}」）`, slot.location || '');
+    if (input === null) return;
+    setError(null);
+    const { error: updateError } = await supabase
+      .from('payment_visit_slots')
+      .update({ location: input.trim() || null })
+      .eq('id', slot.id);
+    if (updateError) setError(updateError.message);
+    else await reload();
   };
 
   const toggleActive = async (slot: PaymentVisitSlot) => {
@@ -222,7 +236,7 @@ export default function PaymentVisitsPage() {
                 return (
                   <div key={slot.id} className="glass-card" style={{ padding: 16 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 10 }}>
-                      <strong style={{ fontSize: '1.05rem' }}>{formatVisitSlot(slot)}{slot.note && <span style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>（{slot.note}）</span>}</strong>
+                      <strong style={{ fontSize: '1.05rem' }}>{formatVisitSlot(slot)} {visitSlotPlace(slot)}{slot.note && <span style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>（{slot.note}）</span>}</strong>
                       <span className="badge badge-success">{count}人</span>
                     </div>
                     {slotRows.length === 0 ? (
@@ -279,6 +293,10 @@ export default function PaymentVisitsPage() {
                 <label className="form-label" htmlFor="visit-note">メモ（任意・学生にも表示）</label>
                 <input id="visit-note" type="text" className="form-input" placeholder="例：昼休み" value={newNote} onChange={(e) => setNewNote(e.target.value)} />
               </div>
+              <div className="form-group" style={{ margin: 0, flex: '1 1 200px' }}>
+                <label className="form-label" htmlFor="visit-location">支払い場所（空欄なら{PAYMENT_ROOM_LABEL}）</label>
+                <input id="visit-location" type="text" className="form-input" placeholder={PAYMENT_ROOM_LABEL} value={newLocation} onChange={(e) => setNewLocation(e.target.value)} />
+              </div>
               <button className="btn btn-primary" onClick={addSlot} disabled={saving}>{saving ? '追加中...' : '追加する'}</button>
             </div>
           </div>
@@ -290,15 +308,17 @@ export default function PaymentVisitsPage() {
             ) : (
               <div className="admin-table-container reservations-table-desktop">
                 <table className="admin-table admin-table-stack">
-                  <thead><tr><th>日時</th><th>メモ</th><th>予約人数</th><th>状態</th><th>操作</th></tr></thead>
+                  <thead><tr><th>日時</th><th>場所</th><th>メモ</th><th>予約人数</th><th>状態</th><th>操作</th></tr></thead>
                   <tbody>
                     {upcoming.map((slot) => (
                       <tr key={slot.id} style={{ opacity: slot.is_active ? 1 : 0.55 }}>
                         <td data-label="日時">{formatVisitSlot(slot)}</td>
+                        <td data-label="場所">{visitSlotPlace(slot)}</td>
                         <td data-label="メモ">{slot.note || '―'}</td>
                         <td data-label="予約人数">{upcomingCounts[slot.id] || 0}人</td>
                         <td data-label="状態">{slot.is_active ? '受付中' : '受付停止'}</td>
                         <td className="admin-table-stack-actions" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                          <button className="btn btn-secondary btn-sm" onClick={() => editLocation(slot)}>場所を変更</button>
                           <button className="btn btn-secondary btn-sm" onClick={() => toggleActive(slot)}>{slot.is_active ? '受付停止' : '受付再開'}</button>
                           <button className="btn btn-danger btn-sm" onClick={() => deleteSlot(slot)}>削除</button>
                         </td>
