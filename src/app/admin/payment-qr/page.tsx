@@ -9,14 +9,32 @@ import { adminSupabase as supabase } from '@/lib/supabase';
 type EventItem = { id: string; title: string; payment_required: boolean | null };
 type CurrentQr = { qr_id: string; qr_token: string; created_at: string };
 
+const LANE_STORAGE_KEY = 'payment-qr-lane';
+
+/** この端末専用の QR を出すための端末ID。端末（ブラウザ）ごとに一度だけ作って保存する。 */
+function getDeviceLane(): string {
+  try {
+    const saved = localStorage.getItem(LANE_STORAGE_KEY);
+    if (saved && saved.length >= 8) return saved;
+  } catch {}
+  const lane = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+  try {
+    localStorage.setItem(LANE_STORAGE_KEY, lane);
+  } catch {}
+  return lane;
+}
+
 export default function AdminPaymentQrPage() {
   const { loading: authLoading, user } = useAdminAuth();
   const [events, setEvents] = useState<EventItem[]>([]);
   const [eventId, setEventId] = useState('');
   const [current, setCurrent] = useState<CurrentQr | null>(null);
   const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 端末IDはブラウザでしか作れない。最初の描画は読み込み中表示なので、サーバー側では空のままでよい
+  const [lane] = useState(() => (typeof window === 'undefined' ? '' : getDeviceLane()));
 
   const paymentUrl = useMemo(() => {
     if (!current || typeof window === 'undefined') return '';
@@ -42,14 +60,16 @@ export default function AdminPaymentQrPage() {
     setLoading(false);
   };
 
-  const loadCurrent = async (targetEventId: string) => {
-    if (!targetEventId) {
+  // この端末専用の QR を取得する（未読み取りの QR がなければ DB 側で発行される）
+  const loadCurrent = async (targetEventId: string, deviceLane: string) => {
+    if (!targetEventId || !deviceLane) {
       setCurrent(null);
       return;
     }
 
-    const { data, error: rpcError } = await supabase.rpc('admin_get_current_dynamic_payment_qr', {
+    const { data, error: rpcError } = await supabase.rpc('admin_get_lane_payment_qr', {
       p_event_id: targetEventId,
+      p_lane: deviceLane,
     });
 
     if (rpcError) {
@@ -57,6 +77,7 @@ export default function AdminPaymentQrPage() {
       return;
     }
 
+    setError(null);
     const row = Array.isArray(data) ? data[0] : data;
     setCurrent((row as CurrentQr | undefined) || null);
   };
@@ -66,31 +87,11 @@ export default function AdminPaymentQrPage() {
   }, [authLoading, user]);
 
   useEffect(() => {
-    if (!eventId) return;
-    void loadCurrent(eventId);
-    const timer = window.setInterval(() => void loadCurrent(eventId), 500);
+    if (!eventId || !lane) return;
+    void loadCurrent(eventId, lane);
+    const timer = window.setInterval(() => void loadCurrent(eventId, lane), 500);
     return () => window.clearInterval(timer);
-  }, [eventId]);
-
-  const createDynamic = async () => {
-    if (!eventId) return;
-    setCreating(true);
-    setError(null);
-    const { data, error: rpcError } = await supabase.rpc('admin_create_payment_qr', {
-      p_event_id: eventId,
-      p_mode: 'dynamic',
-      p_valid_date: null,
-      p_dynamic_seconds: 90,
-    });
-
-    if (rpcError) {
-      setError(rpcError.message);
-    } else {
-      const row = Array.isArray(data) ? data[0] : data;
-      if (row) setCurrent({ qr_id: row.qr_id, qr_token: row.qr_token, created_at: row.valid_from });
-    }
-    setCreating(false);
-  };
+  }, [eventId, lane]);
 
   if (authLoading || loading) {
     return <div style={{ textAlign: 'center', padding: 60 }}><div className="loading-spinner" /></div>;
@@ -104,7 +105,8 @@ export default function AdminPaymentQrPage() {
           <div className="glass-card">
             <h1 style={{ marginTop: 0 }}>動的支払いQR</h1>
             <p style={{ color: 'var(--text-secondary)', lineHeight: 1.7 }}>
-              QRは一回限りです。学生が読み取った瞬間（ログイン前）に次のQRへ切り替わります。読み取った人は10分以内にログインすれば支払いが確定します。この画面は0.5秒ごとに最新のQRを確認しています。
+              この端末専用のQRです。複数のスマホで開くと、スマホごとに別々のQRが表示されるので、何台でも同時に受け付けられます。
+              QRは一回限りで、学生が読み取った瞬間（ログイン前）にこの端末だけ次のQRへ切り替わります。読み取った人は10分以内にログインすれば支払いが確定します。
             </p>
 
             {error && <div className="error-banner" style={{ marginBottom: 16 }}>{error}</div>}
@@ -117,12 +119,10 @@ export default function AdminPaymentQrPage() {
             </div>
 
             {!current ? (
-              <button className="btn btn-primary" onClick={createDynamic} disabled={creating || !eventId}>
-                {creating ? '発行中…' : '最初の動的QRを発行'}
-              </button>
+              <div style={{ textAlign: 'center', padding: 24 }}><div className="loading-spinner" /></div>
             ) : (
               <div className="glass-card" style={{ marginTop: 20, textAlign: 'center' }}>
-                <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 14 }}>現在有効な一回限りQR</div>
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 14 }}>この端末専用の一回限りQR（端末ID: {lane.slice(0, 4).toUpperCase()}）</div>
                 {paymentUrl && (
                   <div className="qr-frame">
                     <QRCodeSVG value={paymentUrl} size={320} level="M" includeMargin />
