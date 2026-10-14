@@ -104,7 +104,7 @@ export default function AdminPaymentQrPage() {
           <div className="glass-card">
             <h1 style={{ marginTop: 0 }}>動的支払いQR</h1>
             <p style={{ color: 'var(--text-secondary)', lineHeight: 1.7 }}>
-              QRは一回限りです。1人の支払い確認が成功した瞬間に無効化され、次のQRが自動発行されます。この画面は0.5秒ごとに最新QRへ切り替わります。
+              QRは一回限りです。学生が読み取った瞬間（ログイン前）に次のQRへ切り替わります。読み取った人は10分以内にログインすれば支払いが確定します。この画面は0.5秒ごとに最新のQRを確認しています。
             </p>
 
             {error && <div className="error-banner" style={{ marginBottom: 16 }}>{error}</div>}

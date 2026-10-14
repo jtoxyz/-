@@ -13,7 +13,9 @@ function isExcludedPath(pathname: string): boolean {
     pathname === '/account/setup' ||
     pathname.startsWith('/admin') ||
     pathname.startsWith('/qr-maker') ||
-    pathname.startsWith('/tickets/find')
+    pathname.startsWith('/tickets/find') ||
+    // 支払いQRはログイン前に読み取り済みにする必要があるため、ログインは /pay 側で行う
+    pathname.startsWith('/pay')
   );
 }
 

@@ -23,14 +23,22 @@ export default function PaymentQrRedeemPage() {
     const redeem = async () => {
       const token = new URLSearchParams(window.location.search).get('token') || '';
       if (!token) {
-        setMessage('QRコードの情報が不足しています。もう一度QRコードを読み取ってください。');
+        setMessage('委員会で表示されるQRコードを読み取ると、支払い確認ができます。支払い状況は「マイチケット」で確認できます。');
         setLoading(false);
         return;
       }
 
-      const { data: { session } } = await supabase.auth.getSession();
+      // 読み取った時点で QR を「読み取り済み」にし、管理画面を次の QR に切り替える（ログイン前でも行う）
+      const { error: claimError } = await supabase.rpc('claim_payment_qr', { p_token: token });
+      if (!mounted) return;
+      if (claimError) {
+        setMessage(claimError.message || 'このQRコードは使用できません。');
+        setLoading(false);
+        return;
+      }
 
-      if (!session) {
+      const startLogin = async () => {
+        setMessage('QRコードを読み取りました。大学Googleアカウントでログインすると支払い確認が完了します（10分以内）。');
         const redirectTo = `${window.location.origin}/pay?token=${encodeURIComponent(token)}`;
         const { error } = await supabase.auth.signInWithOAuth({
           provider: 'google',
@@ -43,16 +51,19 @@ export default function PaymentQrRedeemPage() {
           setMessage(`大学Googleログインを開始できませんでした: ${error.message}`);
           setLoading(false);
         }
+      };
+
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!session) {
+        await startLogin();
         return;
       }
 
       const email = String(session.user.email || '').toLowerCase();
       if (!email.endsWith(`@${UNIVERSITY_DOMAIN}`)) {
         await supabase.auth.signOut({ scope: 'local' });
-        if (mounted) {
-          setMessage('大学Googleアカウントでログインしてください。');
-          setLoading(false);
-        }
+        if (mounted) await startLogin();
         return;
       }
 
@@ -74,6 +85,8 @@ export default function PaymentQrRedeemPage() {
 
       setSuccess(true);
       setMessage(`「${result.event_title}」の支払い確認が完了しました。`);
+      // 開き直しや再読み込みで同じ QR をもう一度使おうとしないよう、URL からトークンを外す
+      window.history.replaceState(null, '', '/pay');
       setLoading(false);
     };
 
@@ -89,7 +102,7 @@ export default function PaymentQrRedeemPage() {
         <p style={{ lineHeight: 1.8, fontSize: '1.05rem' }}>{message}</p>
         {!loading && !success && (
           <p style={{ color: 'var(--text-secondary)', lineHeight: 1.7 }}>
-            動的QRは一回限りです。別の人が先に使用した場合は、表示されている新しいQRを読み直してください。
+            QRコードは一回限りです。うまくいかない場合は、画面に表示されている新しいQRコードを読み取ってください。
           </p>
         )}
       </div>
