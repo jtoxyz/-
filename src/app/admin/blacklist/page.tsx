@@ -14,6 +14,7 @@ interface BlacklistEntry {
   expires_at: string | null;
   created_at: string;
   removed_at: string | null;
+  noshow_count_at_removal: number | null;
 }
 
 function normalizeStudentNumber(value: string): string {
@@ -76,7 +77,7 @@ export default function AdminBlacklistPage() {
       setError(null);
       const { data, error: loadError } = await supabase
         .from('user_blacklist')
-        .select('id, student_number, university_email, reason, active, expires_at, created_at, removed_at')
+        .select('id, student_number, university_email, reason, active, expires_at, created_at, removed_at, noshow_count_at_removal')
         .order('created_at', { ascending: false });
 
       if (loadError) throw loadError;
@@ -263,7 +264,7 @@ export default function AdminBlacklistPage() {
           <div className="glass-card" style={{ marginBottom: 24 }}>
             <h2 style={{ fontSize: '1.1rem', marginBottom: 6 }}>イエローリスト（支払いに来なかった人）</h2>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: 0, lineHeight: 1.7 }}>
-              予約した支払い日時に来ず、自動キャンセルになった回数を全企画で数えています。2回でイエローリストになり、本人の予約サイトに警告が出ます。3回目で自動的にブラックリストへ登録されます。
+              予約した支払い日時に来ず、自動キャンセルになった回数を全企画で数えています。2回でイエローリストになり、本人の予約サイトに警告が出ます。3回目で自動的にブラックリストへ登録されます。ブラックリストを解除すると回数は0に戻ります（解除前の回数は、下の登録一覧で「解除済みも表示」にすると確認できます）。
             </p>
             <div className="admin-table-container">
               <table className="admin-table admin-table-stack">
@@ -333,7 +334,19 @@ export default function AdminBlacklistPage() {
                 <tbody>
                   {filteredEntries.map((entry) => (
                     <tr key={entry.id} style={{ opacity: entry.active ? 1 : 0.55 }}>
-                      <td data-label="状態">{entry.active ? '利用停止中' : '解除済み'}</td>
+                      <td data-label="状態">
+                        {entry.active ? '利用停止中' : (
+                          <span>
+                            解除済み
+                            {entry.removed_at && <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{formatDateTime(entry.removed_at)}</span>}
+                            {entry.noshow_count_at_removal !== null && (
+                              <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                                来なかった回数：解除時 {entry.noshow_count_at_removal}回（0回にリセット済み）
+                              </span>
+                            )}
+                          </span>
+                        )}
+                      </td>
                       <td data-label="学籍番号">{entry.student_number || '-'}</td>
                       <td data-label="大学メール">{entry.university_email || '-'}</td>
                       <td data-label="理由" style={{ whiteSpace: 'pre-wrap', minWidth: 260 }}>{entry.reason}</td>
