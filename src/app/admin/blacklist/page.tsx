@@ -38,6 +38,15 @@ function formatDateTime(value: string | null): string {
   });
 }
 
+type NoShowUser = {
+  student_number: string;
+  student_name: string | null;
+  university_email: string | null;
+  noshow_count: number;
+  last_noshow_at: string | null;
+  is_blacklisted: boolean;
+};
+
 export default function AdminBlacklistPage() {
   const { loading: authLoading, user } = useAdminAuth();
   const [entries, setEntries] = useState<BlacklistEntry[]>([]);
@@ -50,6 +59,17 @@ export default function AdminBlacklistPage() {
   const [expiresAt, setExpiresAt] = useState('');
   const [showInactive, setShowInactive] = useState(false);
   const [search, setSearch] = useState('');
+  const [noShowUsers, setNoShowUsers] = useState<NoShowUser[]>([]);
+
+  // 支払いに2回以上来なかった人（2回：イエローリスト、3回で自動的にブラックリスト）
+  const loadNoShowUsers = async () => {
+    const { data, error: rpcError } = await supabase.rpc('admin_list_noshow_users');
+    if (rpcError) {
+      setError(rpcError.message);
+      return;
+    }
+    setNoShowUsers((data as NoShowUser[]) || []);
+  };
 
   const loadEntries = async () => {
     try {
@@ -70,7 +90,10 @@ export default function AdminBlacklistPage() {
   };
 
   useEffect(() => {
-    if (!authLoading && user) void loadEntries();
+    if (!authLoading && user) {
+      void loadEntries();
+      void loadNoShowUsers();
+    }
   }, [authLoading, user]);
 
   const filteredEntries = useMemo(() => {
@@ -236,6 +259,40 @@ export default function AdminBlacklistPage() {
               {saving ? '登録中...' : 'ブラックリストへ登録'}
             </button>
           </form>
+
+          <div className="glass-card" style={{ marginBottom: 24 }}>
+            <h2 style={{ fontSize: '1.1rem', marginBottom: 6 }}>イエローリスト（支払いに来なかった人）</h2>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: 0, lineHeight: 1.7 }}>
+              予約した支払い日時に来ず、自動キャンセルになった回数を全企画で数えています。2回でイエローリストになり、本人の予約サイトに警告が出ます。3回目で自動的にブラックリストへ登録されます。
+            </p>
+            <div className="admin-table-container">
+              <table className="admin-table admin-table-stack">
+                <thead>
+                  <tr>
+                    <th>状態</th>
+                    <th>氏名</th>
+                    <th>学籍番号</th>
+                    <th>来なかった回数</th>
+                    <th>最後に来なかった日時</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {noShowUsers.map((row) => (
+                    <tr key={row.student_number}>
+                      <td data-label="状態"><strong>{row.is_blacklisted ? 'ブラックリスト' : 'イエローリスト'}</strong></td>
+                      <td data-label="氏名">{row.student_name || '-'}</td>
+                      <td data-label="学籍番号">{row.student_number}</td>
+                      <td data-label="来なかった回数">{row.noshow_count}回</td>
+                      <td data-label="最後に来なかった日時">{formatDateTime(row.last_noshow_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {noShowUsers.length === 0 && (
+              <p style={{ textAlign: 'center', color: 'var(--text-secondary)', marginTop: 16 }}>該当する人はいません。</p>
+            )}
+          </div>
 
           <div className="glass-card">
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>

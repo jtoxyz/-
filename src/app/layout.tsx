@@ -8,6 +8,7 @@ import DisplayEnhancer from '@/components/DisplayEnhancer';
 import UiIconNormalizer from '@/components/UiIconNormalizer';
 import StudentAuthGate from '@/components/StudentAuthGate';
 import StudentAccountMenu from '@/components/StudentAccountMenu';
+import NoShowNotice from '@/components/NoShowNotice';
 
 export const metadata: Metadata = {
   title: '大学委員会 参加型企画予約システム',
@@ -80,7 +81,7 @@ export default function RootLayout({
           </header>
 
           <main className="main-content">
-            <StudentAuthGate>{children}</StudentAuthGate>
+            <StudentAuthGate><NoShowNotice />{children}</StudentAuthGate>
           </main>
 
           <footer className="footer">
