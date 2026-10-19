@@ -257,33 +257,36 @@ export default function PaymentManagementPage() {
             </div>
 
             <div className="glass-card" style={{ padding: 16, marginBottom: 18 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
                 <div>
                   <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>今日（{formatDayKey(todayKey)}）支払いに来た人</div>
-                  <div style={{ fontSize: '2rem', fontWeight: 800, lineHeight: 1.2 }}>{paidDays[0]?.count ?? 0}人</div>
+                  <div style={{ fontSize: '2.4rem', fontWeight: 800, lineHeight: 1.1 }}>{paidDays[0]?.count ?? 0}人</div>
                 </div>
                 <button className="btn btn-secondary btn-sm" onClick={() => void loadRows(eventId)} disabled={loading}>最新にする</button>
               </div>
-              <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: '6px 0 10px' }}>
-                支払いが確定した日で数えています（予約で選んだ支払い日とは関係なく、その日に支払った人数）。日付を押すと、その日に支払った人の一覧になります。
-              </div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {paidDays.map(({ key, count }) => (
-                  <button
-                    key={key}
-                    className={`btn ${paidDayFilter === key ? 'btn-primary' : 'btn-secondary'} btn-sm`}
-                    onClick={() => {
-                      const next = paidDayFilter === key ? null : key;
-                      setPaidDayFilter(next);
-                      setDayFilter('all');
-                      setSlotFilter('all');
-                      setFilter(next ? 'paid' : 'all');
-                    }}
-                  >
-                    {key === todayKey ? `今日 ${formatDayKey(key)}` : formatDayKey(key)}：{count}人
-                  </button>
-                ))}
-              </div>
+              {paidDays.length > 1 && (
+                <details style={{ marginTop: 10 }}>
+                  <summary style={{ cursor: 'pointer', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>過去の日ごとの人数</summary>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
+                    {paidDays.map(({ key, count }) => (
+                      <button
+                        key={key}
+                        className={`btn ${paidDayFilter === key ? 'btn-primary' : 'btn-secondary'} btn-sm`}
+                        onClick={() => {
+                          const next = paidDayFilter === key ? null : key;
+                          setPaidDayFilter(next);
+                          setDayFilter('all');
+                          setSlotFilter('all');
+                          setFilter(next ? 'paid' : 'all');
+                        }}
+                      >
+                        {key === todayKey ? `今日 ${formatDayKey(key)}` : formatDayKey(key)}：{count}人
+                      </button>
+                    ))}
+                  </div>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '8px 0 0' }}>支払いが確定した日で数えています。日付を押すと、その日に支払った人の一覧になります。</p>
+                </details>
+              )}
               {paidDayFilter && <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: '8px 0 0' }}>{formatDayKey(paidDayFilter)} に支払った人だけを表示中です。もう一度押すと解除します。</p>}
             </div>
 

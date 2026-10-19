@@ -15,6 +15,7 @@ interface ReservationItem {
   student_number: string;
   university_email: string;
   status: 'reserved' | 'used' | 'cancelled';
+  payment_status: 'not_required' | 'pending' | 'paid' | 'expired';
   ticket_type: 'reservation' | 'walkin';
   ticket_code: string;
   used_at: string | null;
@@ -181,6 +182,14 @@ export default function AdminReservationsPage({ id }: { id: string }) {
   const unusedTickets = reservations.filter((r) => r.status === 'reserved').length;
   const usedTickets = reservations.filter((r) => r.status === 'used').length;
   const cancelledBookings = reservations.filter((r) => r.status === 'cancelled').length;
+  const activeRows = reservations.filter((r) => r.status === 'reserved' || r.status === 'used');
+  const paymentRequired = reservations.some((r) => r.payment_status && r.payment_status !== 'not_required');
+  const paidBookings = activeRows.filter((r) => r.payment_status === 'paid').length;
+  const unpaidBookings = activeRows.filter((r) => r.payment_status === 'pending').length;
+  const noShowCancelled = reservations.filter((r) => r.status === 'cancelled' && r.payment_status === 'expired').length;
+  const statCard = (label: string, value: number, note: string) => (
+    <div className="glass-card" style={{ margin: 0 }}><small>{label}</small><div style={{ fontSize: 28, fontWeight: 700 }}>{value}</div><small>{note}</small></div>
+  );
 
   return (
     <div className="admin-mode">
@@ -199,11 +208,17 @@ export default function AdminReservationsPage({ id }: { id: string }) {
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 12, marginTop: 20 }}>
-              <div className="glass-card" style={{ margin: 0 }}><small>有効発行数</small><div style={{ fontSize: 28, fontWeight: 700 }}>{activeBookings}</div><small>未使用＋使用済み</small></div>
-              <div className="glass-card" style={{ margin: 0 }}><small>未使用数</small><div style={{ fontSize: 28, fontWeight: 700 }}>{unusedTickets}</div><small>これから使用可能</small></div>
-              <div className="glass-card" style={{ margin: 0 }}><small>使用済み数</small><div style={{ fontSize: 28, fontWeight: 700 }}>{usedTickets}</div><small>すでに使用済み</small></div>
-              <div className="glass-card" style={{ margin: 0 }}><small>キャンセル数</small><div style={{ fontSize: 28, fontWeight: 700 }}>{cancelledBookings}</div><small>有効数には含まない</small></div>
-              <div className="glass-card" style={{ margin: 0 }}><small>総記録件数</small><div style={{ fontSize: 28, fontWeight: 700 }}>{reservations.length}</div><small>有効＋キャンセル</small></div>
+              {statCard('予約人数', activeBookings, 'キャンセルを除く')}
+              {paymentRequired ? (
+                <>
+                  {statCard('支払い済み', paidBookings, '予約人数のうち')}
+                  {statCard('未払い', unpaidBookings, '予約人数のうち')}
+                </>
+              ) : (
+                statCard('未使用', unusedTickets, 'これから使用可能')
+              )}
+              {statCard('キャンセル', cancelledBookings, paymentRequired ? `うち支払いに来なかった ${noShowCancelled}` : '予約人数には含まない')}
+              {statCard('受け取り済み', usedTickets, 'チケット使用済み')}
             </div>
 
             <div style={{ display: 'flex', gap: 12, marginTop: 24, flexWrap: 'wrap' }}>
