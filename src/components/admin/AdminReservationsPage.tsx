@@ -106,6 +106,24 @@ export default function AdminReservationsPage({ id }: { id: string }) {
     if (!authLoading && user) loadData();
   }, [id, authLoading, user]);
 
+  // メールアドレスをカンマ区切りでコピーする（Gmail の宛先欄にそのまま貼り付けられる形）
+  const copyEmailList = async (rows: ReservationItem[], label: string) => {
+    const emails = Array.from(new Set(
+      rows.map((res) => res.university_email?.trim()).filter((email): email is string => Boolean(email)),
+    ));
+    if (emails.length === 0) {
+      alert(`${label}にコピーできるメールアドレスがありません。`);
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(emails.join(','));
+      alert(`${label}の${emails.length}件のメールアドレスをコピーしました。Gmailの宛先欄にそのまま貼り付けられます。`);
+    } catch (copyError) {
+      console.error(copyError);
+      setError('メールアドレスのコピーに失敗しました。');
+    }
+  };
+
   const handleCopyEmails = async (includeUsed: boolean) => {
     const emails = Array.from(new Set(
       reservations
@@ -237,7 +255,7 @@ export default function AdminReservationsPage({ id }: { id: string }) {
 
               <div className="admin-table-container">
                 <table className="admin-table admin-table-stack">
-                  <thead><tr><th>開催枠</th><th>全体定員</th><th>予約券</th><th>当日券</th><th>全体</th></tr></thead>
+                  <thead><tr><th>開催枠</th><th>全体定員</th><th>予約券</th><th>当日券</th><th>全体</th><th>メール</th></tr></thead>
                   <tbody>
                     {slots.map((s) => {
                       const slotActive = reservations.filter((r) => r.event_slot_id === s.id && r.status !== 'cancelled');
@@ -281,6 +299,11 @@ export default function AdminReservationsPage({ id }: { id: string }) {
                             </div>
                             <div style={{ marginTop: 5, fontSize: 12 }}>全体残り {totalRemaining}人（{usageRate.toFixed(1)}%）</div>
                           </div></td>
+                          <td data-label="メール" className="admin-table-stack-actions">
+                            <button type="button" className="btn btn-secondary btn-sm" onClick={() => void copyEmailList(slotActive, s.label)} disabled={slotActive.length === 0}>
+                              📋 メールをコピー（{slotActive.length}件）
+                            </button>
+                          </td>
                         </tr>
                       );
                     })}
