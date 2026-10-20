@@ -117,7 +117,7 @@ export default function AdminReservationsPage({ id }: { id: string }) {
     }
     try {
       await navigator.clipboard.writeText(emails.join(','));
-      alert(`${label}の${emails.length}件のメールアドレスをコピーしました。Gmailの宛先欄にそのまま貼り付けられます。`);
+      alert(`${label}の${emails.length}件のメールアドレスをコピーしました。GmailのBcc欄にそのまま貼り付けられます（宛先欄に貼ると、受け取った全員にほかの人のアドレスが見えます）。`);
     } catch (copyError) {
       console.error(copyError);
       setError('メールアドレスのコピーに失敗しました。');
@@ -201,6 +201,25 @@ export default function AdminReservationsPage({ id }: { id: string }) {
   const usedTickets = reservations.filter((r) => r.status === 'used').length;
   const cancelledBookings = reservations.filter((r) => r.status === 'cancelled').length;
   const activeRows = reservations.filter((r) => r.status === 'reserved' || r.status === 'used');
+  // 受け取り日（枠の開始日）ごとの有効な予約者。当日の案内メールをまとめて送るため
+  const slotDays = (() => {
+    const dayOf = (value: string | null) => (value ? new Date(value).toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' }) : null);
+    const days = new Map<string, { key: string; label: string; slotIds: Set<string> }>();
+    for (const slot of slots) {
+      const key = dayOf(slot.starts_at);
+      if (!key) continue;
+      const entry = days.get(key) || {
+        key,
+        label: new Date(`${key}T12:00:00+09:00`).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric', weekday: 'short', timeZone: 'Asia/Tokyo' }),
+        slotIds: new Set<string>(),
+      };
+      entry.slotIds.add(slot.id);
+      days.set(key, entry);
+    }
+    return [...days.values()]
+      .sort((a, b) => a.key.localeCompare(b.key))
+      .map((day) => ({ key: day.key, label: day.label, rows: activeRows.filter((r) => r.event_slot_id && day.slotIds.has(r.event_slot_id)) }));
+  })();
   const paymentRequired = reservations.some((r) => r.payment_status && r.payment_status !== 'not_required');
   const paidBookings = activeRows.filter((r) => r.payment_status === 'paid').length;
   const unpaidBookings = activeRows.filter((r) => r.payment_status === 'pending').length;
@@ -242,6 +261,11 @@ export default function AdminReservationsPage({ id }: { id: string }) {
             <div style={{ display: 'flex', gap: 12, marginTop: 24, flexWrap: 'wrap' }}>
               <button className="btn btn-secondary btn-sm" onClick={() => handleCopyEmails(false)}>📋 未使用者メールをコピー</button>
               <button className="btn btn-secondary btn-sm" onClick={() => handleCopyEmails(true)}>📋 予約者全員のメールをコピー</button>
+              {slotDays.map(({ key, label, rows }) => (
+                <button key={key} className="btn btn-secondary btn-sm" onClick={() => void copyEmailList(rows, `${label}の予約者`)} disabled={rows.length === 0}>
+                  📋 {label}の予約者メールをコピー（{rows.length}件）
+                </button>
+              ))}
               <button className="btn btn-danger btn-sm" onClick={() => setShowWipeModal(true)} style={{ marginLeft: 'auto' }}>🗑️ 予約データの完全削除</button>
             </div>
           </div>
