@@ -36,6 +36,15 @@ interface AdminEventSlot {
   remaining_reservation_slots: number;
   remaining_walkin_slots: number;
   walkin_limit: number | null;
+  ticket_use_ends_at?: string | null;
+}
+
+type PickupFilter = { slotId: string; kind: 'used' | 'not_used' } | null;
+
+/** 受け取り（チケット使用）の締め切り。枠の使用終了時刻、なければ枠の終了時刻 */
+function pickupEndsAt(slot: AdminEventSlot | undefined): string | null {
+  if (!slot) return null;
+  return slot.ticket_use_ends_at || slot.ends_at;
 }
 
 function escapeCsvCell(value: string): string {
@@ -72,6 +81,13 @@ export default function AdminReservationsPage({ id }: { id: string }) {
   const [error, setError] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [pickupFilter, setPickupFilter] = useState<PickupFilter>(null);
+  // 「受け取らずに終了」の判定に使う現在時刻（1分ごとに更新）
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
   const [showWipeModal, setShowWipeModal] = useState(false);
   const [wiping, setWiping] = useState(false);
 
@@ -187,10 +203,26 @@ export default function AdminReservationsPage({ id }: { id: string }) {
     URL.revokeObjectURL(url);
   };
 
+  const slotById = new Map(slots.map((slot) => [slot.id, slot]));
+  const pickupClosed = (slotId: string | null) => {
+    const end = pickupEndsAt(slotId ? slotById.get(slotId) : undefined);
+    return Boolean(end && new Date(end).getTime() < nowMs);
+  };
+
   const filteredReservations = reservations.filter((res) => {
+    if (pickupFilter) {
+      if (res.event_slot_id !== pickupFilter.slotId) return false;
+      if (pickupFilter.kind === 'used' && res.status !== 'used') return false;
+      if (pickupFilter.kind === 'not_used' && res.status !== 'reserved') return false;
+    }
     const query = searchQuery.trim().toLowerCase();
     return !query || res.student_name.toLowerCase().includes(query) || res.student_number.toLowerCase().includes(query);
   });
+
+  const showPickupList = (slotId: string, kind: 'used' | 'not_used') => {
+    setPickupFilter({ slotId, kind });
+    setTimeout(() => document.getElementById('reservation-list')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
+  };
 
   if (authLoading || loading) {
     return <div style={{ textAlign: 'center', padding: '60px 0' }}><div className="loading-spinner" /></div>;
@@ -272,6 +304,55 @@ export default function AdminReservationsPage({ id }: { id: string }) {
 
           {error && <div className="error-banner">⚠️ {error}</div>}
 
+          {slots.length > 0 && (() => {
+            const rows = slots.map((slot) => {
+              const slotRows = reservations.filter((r) => r.event_slot_id === slot.id);
+              return {
+                slot,
+                used: slotRows.filter((r) => r.status === 'used').length,
+                notUsed: slotRows.filter((r) => r.status === 'reserved').length,
+                closed: pickupClosed(slot.id),
+              };
+            });
+            const totalUsed = rows.reduce((sum, row) => sum + row.used, 0);
+            const totalMissed = rows.filter((row) => row.closed).reduce((sum, row) => sum + row.notUsed, 0);
+            const totalWaiting = rows.filter((row) => !row.closed).reduce((sum, row) => sum + row.notUsed, 0);
+            return (
+              <div className="glass-card" style={{ marginTop: 20 }}>
+                <h2 style={{ marginBottom: 6 }}>🍱 枠ごとの受け取り状況</h2>
+                <p style={{ marginTop: 0, opacity: 0.75 }}>
+                  受け取り済み {totalUsed}人 ／ 受け取らずに終了 {totalMissed}人 ／ 受け取り待ち {totalWaiting}人。人数を押すと、下の一覧がその人たちだけになります。
+                </p>
+                <div className="admin-table-container">
+                  <table className="admin-table admin-table-stack">
+                    <thead><tr><th>開催枠</th><th>受け取り済み</th><th>受け取っていない</th></tr></thead>
+                    <tbody>
+                      {rows.map(({ slot, used, notUsed, closed }) => (
+                        <tr key={slot.id}>
+                          <td className="admin-table-stack-title"><strong>{slot.label}</strong></td>
+                          <td data-label="受け取り済み">
+                            <button type="button" className="btn btn-secondary btn-sm" onClick={() => showPickupList(slot.id, 'used')} disabled={used === 0}>{used}人</button>
+                          </td>
+                          <td data-label="受け取っていない">
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-sm"
+                              onClick={() => showPickupList(slot.id, 'not_used')}
+                              disabled={notUsed === 0}
+                              style={closed && notUsed > 0 ? { color: 'var(--color-danger)', borderColor: 'var(--color-danger-border)' } : undefined}
+                            >
+                              {closed ? `受け取らずに終了 ${notUsed}人` : `受け取り待ち ${notUsed}人`}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })()}
+
           {slots.length > 0 && (
             <div className="glass-card" style={{ marginTop: 20 }}>
               <h2 style={{ marginBottom: 6 }}>📊 開催枠ごとの発行状況</h2>
@@ -341,7 +422,18 @@ export default function AdminReservationsPage({ id }: { id: string }) {
             </div>
           )}
 
-          <div className="admin-table-container reservations-table-desktop" style={{ marginTop: 20 }}>
+          {pickupFilter && (
+            <div id="reservation-list" className="glass-card" style={{ marginTop: 20, marginBottom: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <span>
+                <strong>{slotById.get(pickupFilter.slotId)?.label}</strong> の
+                {pickupFilter.kind === 'used' ? '受け取った人' : pickupClosed(pickupFilter.slotId) ? '受け取らずに終了した人' : 'まだ受け取っていない人'}
+                （{filteredReservations.length}人）を表示中
+              </span>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => setPickupFilter(null)}>絞り込みを解除</button>
+            </div>
+          )}
+
+          <div id={pickupFilter ? undefined : 'reservation-list'} className="admin-table-container reservations-table-desktop" style={{ marginTop: 20 }}>
             <table className="admin-table admin-table-stack">
               <thead><tr><th>予約日時</th><th>券種</th><th>氏名</th><th>学籍番号</th><th>開催枠</th><th>大学メールアドレス</th><th>状態</th><th>操作</th></tr></thead>
               <tbody>
@@ -353,7 +445,7 @@ export default function AdminReservationsPage({ id }: { id: string }) {
                     <td data-label="学籍番号">{res.student_number}</td>
                     <td data-label="開催枠">{res.event_slots?.label || '-'}</td>
                     <td data-label="メール">{res.university_email}</td>
-                    <td data-label="状態">{res.status === 'reserved' ? '有効' : res.status === 'used' ? '使用済み' : 'キャンセル'}</td>
+                    <td data-label="状態">{res.status === 'used' ? '受け取り済み' : res.status === 'cancelled' ? 'キャンセル' : pickupClosed(res.event_slot_id) ? '受け取らずに終了' : '有効（受け取り待ち）'}</td>
                     <td className="admin-table-stack-actions">{res.status !== 'cancelled' && <button className="btn btn-secondary btn-sm" onClick={() => handleCancelReservation(res.id)} disabled={cancellingId === res.id}>❌ 取消</button>}</td>
                   </tr>
                 ))}
