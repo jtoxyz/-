@@ -37,6 +37,7 @@ interface AdminEventSlot {
   remaining_walkin_slots: number;
   walkin_limit: number | null;
   ticket_use_ends_at?: string | null;
+  is_walkin_enabled?: boolean;
 }
 
 type PickupFilter = { slotId: string; kind: 'used' | 'not_used' } | null;
@@ -61,14 +62,6 @@ function formatDateTime(dateStr: string | null): string {
     year: 'numeric', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit', second: '2-digit',
     timeZone: 'Asia/Tokyo',
-  });
-}
-
-function formatSlotDateTime(dateStr: string | null): string {
-  if (!dateStr) return '-';
-  return new Date(dateStr).toLocaleString('ja-JP', {
-    month: 'numeric', day: 'numeric', weekday: 'short',
-    hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tokyo',
   });
 }
 
@@ -307,120 +300,76 @@ export default function AdminReservationsPage({ id }: { id: string }) {
           {slots.length > 0 && (() => {
             const rows = slots.map((slot) => {
               const slotRows = reservations.filter((r) => r.event_slot_id === slot.id);
+              const active = slotRows.filter((r) => r.status !== 'cancelled');
+              const reservationIssued = active.filter((r) => r.ticket_type === 'reservation').length;
+              const walkinIssued = active.filter((r) => r.ticket_type === 'walkin').length;
+              const held = Math.max(slot.reserved_count - reservationIssued, 0) + Math.max(slot.walkin_count - walkinIssued, 0);
               return {
                 slot,
+                active,
+                reservationIssued,
+                walkinIssued,
+                held,
+                occupied: reservationIssued + walkinIssued + held,
                 used: slotRows.filter((r) => r.status === 'used').length,
                 notUsed: slotRows.filter((r) => r.status === 'reserved').length,
                 closed: pickupClosed(slot.id),
+                showWalkin: Boolean(slot.is_walkin_enabled) || walkinIssued > 0,
               };
             });
             const totalUsed = rows.reduce((sum, row) => sum + row.used, 0);
             const totalMissed = rows.filter((row) => row.closed).reduce((sum, row) => sum + row.notUsed, 0);
             const totalWaiting = rows.filter((row) => !row.closed).reduce((sum, row) => sum + row.notUsed, 0);
+            const muted = { fontSize: 12, color: 'var(--text-secondary)' } as const;
             return (
               <div className="glass-card" style={{ marginTop: 20 }}>
-                <h2 style={{ marginBottom: 6 }}>🍱 枠ごとの受け取り状況</h2>
-                <p style={{ marginTop: 0, opacity: 0.75 }}>
+                <h2 style={{ marginBottom: 6 }}>🍱 枠ごとの状況</h2>
+                <p style={{ marginTop: 0, ...muted, fontSize: 13 }}>
                   受け取り済み {totalUsed}人 ／ 受け取らずに終了 {totalMissed}人 ／ 受け取り待ち {totalWaiting}人。人数を押すと、下の一覧がその人たちだけになります。
                 </p>
-                <div className="admin-table-container">
-                  <table className="admin-table admin-table-stack">
-                    <thead><tr><th>開催枠</th><th>受け取り済み</th><th>受け取っていない</th></tr></thead>
-                    <tbody>
-                      {rows.map(({ slot, used, notUsed, closed }) => (
-                        <tr key={slot.id}>
-                          <td className="admin-table-stack-title"><strong>{slot.label}</strong></td>
-                          <td data-label="受け取り済み">
-                            <button type="button" className="btn btn-secondary btn-sm" onClick={() => showPickupList(slot.id, 'used')} disabled={used === 0}>{used}人</button>
-                          </td>
-                          <td data-label="受け取っていない">
-                            <button
-                              type="button"
-                              className="btn btn-secondary btn-sm"
-                              onClick={() => showPickupList(slot.id, 'not_used')}
-                              disabled={notUsed === 0}
-                              style={closed && notUsed > 0 ? { color: 'var(--color-danger)', borderColor: 'var(--color-danger-border)' } : undefined}
-                            >
-                              {closed ? `受け取らずに終了 ${notUsed}人` : `受け取り待ち ${notUsed}人`}
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+                  {rows.map(({ slot, active, walkinIssued, held, occupied, used, notUsed, closed, showWalkin }) => {
+                    const capacity = slot.total_capacity;
+                    const rate = capacity > 0 ? Math.min((occupied / capacity) * 100, 100) : 0;
+                    const full = occupied >= capacity;
+                    return (
+                      <div key={slot.id} className="glass-card" style={{ margin: 0, padding: 14 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+                          <strong>{slot.label}</strong>
+                          <span style={{ fontWeight: 800, whiteSpace: 'nowrap', color: full ? 'var(--color-danger)' : undefined }}>{occupied}/{capacity}人</span>
+                        </div>
+                        <div style={{ marginTop: 8, height: 6, borderRadius: 999, background: 'rgba(127,127,127,0.25)', overflow: 'hidden' }}>
+                          <div style={{ width: `${rate}%`, height: '100%', background: full ? 'var(--color-danger)' : 'var(--color-primary)' }} />
+                        </div>
+                        <div style={{ ...muted, marginTop: 4 }}>
+                          {full ? '満席' : `残り ${Math.max(capacity - occupied, 0)}人`}
+                          {held > 0 && `・事前確保 ${held}人`}
+                          {showWalkin && `・当日券 ${walkinIssued}人（今から ${slot.remaining_walkin_slots}人）`}
+                        </div>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
+                          <button type="button" className="btn btn-secondary btn-sm" onClick={() => showPickupList(slot.id, 'used')} disabled={used === 0}>
+                            受け取り済み {used}人
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => showPickupList(slot.id, 'not_used')}
+                            disabled={notUsed === 0}
+                            style={closed && notUsed > 0 ? { color: 'var(--color-danger)', borderColor: 'var(--color-danger-border)' } : undefined}
+                          >
+                            {closed ? `受け取らずに終了 ${notUsed}人` : `受け取り待ち ${notUsed}人`}
+                          </button>
+                          <button type="button" className="btn btn-secondary btn-sm" onClick={() => void copyEmailList(active, slot.label)} disabled={active.length === 0}>
+                            📋 メール（{active.length}件）
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             );
           })()}
-
-          {slots.length > 0 && (
-            <div className="glass-card" style={{ marginTop: 20 }}>
-              <h2 style={{ marginBottom: 6 }}>📊 開催枠ごとの発行状況</h2>
-              <p style={{ marginTop: 0, opacity: 0.75 }}>実際の発行数、事前確保数、現在発行できる残りを分けて表示します。</p>
-
-              <div className="admin-table-container">
-                <table className="admin-table admin-table-stack">
-                  <thead><tr><th>開催枠</th><th>全体定員</th><th>予約券</th><th>当日券</th><th>全体</th><th>メール</th></tr></thead>
-                  <tbody>
-                    {slots.map((s) => {
-                      const slotActive = reservations.filter((r) => r.event_slot_id === s.id && r.status !== 'cancelled');
-                      const reservationIssued = slotActive.filter((r) => r.ticket_type === 'reservation').length;
-                      const walkinIssued = slotActive.filter((r) => r.ticket_type === 'walkin').length;
-                      const reservationHeld = Math.max(s.reserved_count - reservationIssued, 0);
-                      const walkinHeld = Math.max(s.walkin_count - walkinIssued, 0);
-                      const reservationCapacityRemaining = Math.max(s.reservation_capacity - reservationIssued - reservationHeld, 0);
-                      const occupied = reservationIssued + walkinIssued + reservationHeld + walkinHeld;
-                      const totalRemaining = Math.max(s.total_capacity - occupied, 0);
-                      const usageRate = s.total_capacity > 0 ? Math.min((occupied / s.total_capacity) * 100, 100) : 0;
-                      const dynamicWalkinCapacity = walkinIssued + walkinHeld + s.remaining_walkin_slots;
-
-                      return (
-                        <tr key={s.id}>
-                          <td className="admin-table-stack-title">
-                            <strong>{s.label}</strong>
-                            <div style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>
-                              {formatSlotDateTime(s.starts_at)}〜{s.ends_at ? new Date(s.ends_at).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tokyo' }) : '-'}
-                            </div>
-                          </td>
-                          <td data-label="全体定員"><strong>{s.total_capacity}人</strong></td>
-                          <td data-label="予約券"><div>
-                            <div><strong>発行済み {reservationIssued}人</strong></div>
-                            {reservationHeld > 0 && <div style={{ marginTop: 4 }}>事前確保 {reservationHeld}人</div>}
-                            <div style={{ marginTop: 4 }}>予約枠上限 {s.reservation_capacity}人</div>
-                            <div style={{ marginTop: 5, fontWeight: 700 }}>予約枠残り {reservationCapacityRemaining}人</div>
-                          </div></td>
-                          <td data-label="当日券"><div>
-                            <div><strong>発行済み {walkinIssued}人</strong></div>
-                            {walkinHeld > 0 && <div style={{ marginTop: 4 }}>事前確保 {walkinHeld}人</div>}
-                            <div style={{ marginTop: 4 }}>
-                              {s.walkin_limit == null ? `動的上限（現在最大 ${dynamicWalkinCapacity}人）` : `固定上限 ${s.walkin_limit}人`}
-                            </div>
-                            <div style={{ marginTop: 5, fontWeight: 700 }}>今から発行可能 {s.remaining_walkin_slots}人</div>
-                          </div></td>
-                          <td data-label="全体" style={{ minWidth: 180 }}><div style={{ flex: 1, maxWidth: 220 }}>
-                            <div><strong>占有 {occupied}人 / {s.total_capacity}人</strong></div>
-                            <div style={{ marginTop: 6, height: 8, borderRadius: 999, background: 'rgba(255,255,255,0.1)', overflow: 'hidden' }}>
-                              <div style={{ width: `${usageRate}%`, height: '100%', background: 'var(--color-primary)', borderRadius: 999 }} />
-                            </div>
-                            <div style={{ marginTop: 5, fontSize: 12 }}>全体残り {totalRemaining}人（{usageRate.toFixed(1)}%）</div>
-                          </div></td>
-                          <td data-label="メール" className="admin-table-stack-actions">
-                            <button type="button" className="btn btn-secondary btn-sm" onClick={() => void copyEmailList(slotActive, s.label)} disabled={slotActive.length === 0}>
-                              📋 メールをコピー（{slotActive.length}件）
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
-              <div style={{ marginTop: 14, padding: 12, borderRadius: 10, background: 'rgba(255,255,255,0.04)', fontSize: 13, lineHeight: 1.7 }}>
-                <strong>見方：</strong> 「発行済み」は予約データとして作成済みのチケットです。「事前確保」は管理者の事前登録で押さえている枠です。当日券の動的上限は、予約やキャンセルの増減に応じて全体残席から自動計算されます。
-              </div>
-            </div>
-          )}
 
           {pickupFilter && (
             <div id="reservation-list" className="glass-card" style={{ marginTop: 20, marginBottom: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
