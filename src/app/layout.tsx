@@ -13,6 +13,8 @@ import NoShowNotice from '@/components/NoShowNotice';
 export const metadata: Metadata = {
   title: '大学委員会 参加型企画予約システム',
   description: '大阪産業大学の委員会・サークル向け 参加予約＆電子チケット管理システム',
+  // 予約のリンクを受け取った人だけが使うサイトなので、検索エンジンに載せない(2026-10-27)
+  robots: { index: false, follow: false },
   viewport: 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no',
   manifest: '/manifest.webmanifest',
   icons: {
