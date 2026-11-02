@@ -22,7 +22,11 @@ interface ReservationItem {
   cancelled_at: string | null;
   created_at: string;
   event_slots: { label: string } | null;
+  event_ticket_options: { label: string; price_yen: number } | null;
+  survey_answers: Record<string, string | string[] | number> | null;
 }
+
+type SurveyQuestionInfo = { id: string; text: string };
 
 interface AdminEventSlot {
   id: string;
@@ -83,18 +87,20 @@ export default function AdminReservationsPage({ id }: { id: string }) {
   }, []);
   const [showWipeModal, setShowWipeModal] = useState(false);
   const [wiping, setWiping] = useState(false);
+  const [surveyQuestions, setSurveyQuestions] = useState<SurveyQuestionInfo[]>([]);
 
   const loadData = async () => {
     try {
       setError(null);
       const { data: eventData, error: eventError } = await supabase
-        .from('events').select('title').eq('id', id).single();
+        .from('events').select('title, survey_config').eq('id', id).single();
       if (eventError || !eventData) throw new Error('企画情報が見つかりません。');
       setEventTitle(eventData.title);
+      setSurveyQuestions(((eventData.survey_config as { questions?: SurveyQuestionInfo[] } | null)?.questions) ?? []);
 
       const { data: resData, error: resError } = await supabase
         .from('reservations')
-        .select('*, event_slots(label)')
+        .select('*, event_slots(label), event_ticket_options(label, price_yen)')
         .eq('event_id', id)
         .order('created_at', { ascending: false });
       if (resError) throw resError;
@@ -389,7 +395,19 @@ export default function AdminReservationsPage({ id }: { id: string }) {
                 {filteredReservations.map((res) => (
                   <tr key={res.id} style={{ opacity: res.status === 'cancelled' ? 0.4 : 1 }}>
                     <td data-label="予約日時">{formatDateTime(res.created_at)}</td>
-                    <td data-label="券種">{res.ticket_type === 'walkin' ? '当日券' : '予約券'}</td>
+                    <td data-label="券種">
+                      {res.ticket_type === 'walkin' ? '当日券' : '予約券'}
+                      {res.event_ticket_options && <div style={{ fontSize: '0.8rem' }}>{res.event_ticket_options.label}（{res.event_ticket_options.price_yen.toLocaleString('ja-JP')}円）</div>}
+                      {res.survey_answers && Object.keys(res.survey_answers).length > 0 && (
+                        <details style={{ fontSize: '0.8rem' }}>
+                          <summary>アンケート回答</summary>
+                          {surveyQuestions.filter((q) => res.survey_answers && q.id in res.survey_answers).map((q) => {
+                            const value = res.survey_answers![q.id];
+                            return <div key={q.id}><strong>{q.text}</strong>：{Array.isArray(value) ? value.join('、') : String(value)}</div>;
+                          })}
+                        </details>
+                      )}
+                    </td>
                     <td data-label="氏名">{res.student_name}</td>
                     <td data-label="学籍番号">{res.student_number}</td>
                     <td data-label="開催枠">{res.event_slots?.label || '-'}</td>

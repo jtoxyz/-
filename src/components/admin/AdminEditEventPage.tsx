@@ -11,6 +11,7 @@ import AdminNav from '@/components/AdminNav';
 import EventPreviewModal from '@/components/EventPreviewModal';
 import { adminSupabase as supabase } from '@/lib/supabase';
 import PaymentVisitSettings from '@/components/admin/PaymentVisitSettings';
+import TicketOptionsSettings from '@/components/admin/TicketOptionsSettings';
 import { applySlotTimingChange } from '@/lib/slotTiming';
 
 function formatSlotDateTime(value: string): string {
@@ -1562,6 +1563,14 @@ export default function AdminEditEventPage({ id }: { id: string }) {
               onWindowDaysChange={setPaymentVisitWindowDays}
               disabled={saving}
             />
+          </div>
+
+          {/* Section: Ticket options & survey */}
+          <div className="glass-card" style={{ marginBottom: '24px' }}>
+            <h3 style={{ fontSize: '1.1rem', marginBottom: '16px', color: 'var(--color-primary)' }}>
+              券種とアンケート（任意）
+            </h3>
+            <TicketOptionsSettings eventId={id} />
           </div>
 
           {/* Section: Status */}
