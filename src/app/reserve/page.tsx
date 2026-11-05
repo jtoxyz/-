@@ -16,10 +16,10 @@ import {
   canReserveSlot,
   formatAccountDate,
 } from '@/lib/studentAccount';
+import { type SurveyQuestion, missingRequiredAnswer, pruneHiddenAnswers, visibleQuestionIds } from '@/lib/survey';
 
 type BulkResult = { id: string; slot_label: string };
 
-type SurveyQuestion = { id: string; text: string; type: 'text' | 'single' | 'multiple' | 'rating'; options?: string[]; required?: boolean };
 type TicketOptionRow = {
   id: string; label: string; description: string | null; price_yen: number; requires_survey: boolean;
   sort_order: number; event_slot_id: string; per_slot_limit: number | null; used_count: number;
@@ -108,11 +108,10 @@ export default function AccountReservationPage() {
   const slotOptions = optionRows.filter((row) => selected.length === 1 && row.event_slot_id === selected[0]);
   const chosenOption = slotOptions.find((row) => row.id === optionId);
   const optionFull = (row: TicketOptionRow) => row.per_slot_limit !== null && row.used_count >= row.per_slot_limit;
-  const surveyMissing = Boolean(chosenOption?.requires_survey) && questions.some((q) => {
-    if (!q.required) return false;
-    const value = answers[q.id];
-    return Array.isArray(value) ? value.length === 0 : !value || !String(value).trim();
-  });
+  // 分岐: 前の答えによって出す設問が変わる。必須チェックは表示中の設問だけ
+  const visibleIds = visibleQuestionIds(questions, answers);
+  const visibleQuestions = questions.filter((q) => visibleIds.has(q.id));
+  const surveyMissing = Boolean(chosenOption?.requires_survey) && missingRequiredAnswer(questions, answers);
   const optionReady = !hasOptions || (Boolean(chosenOption) && !optionFull(chosenOption!) && !surveyMissing);
   const reservable = selectedSlots.length > 0 && selectedSlots.every(canReserveSlot) && (!visitRequired || visitSlotId !== '') && optionReady;
   const walkinAvailable = selectedSlots.length === 1 && canGetWalkinSlot(selectedSlots[0]);
@@ -153,7 +152,7 @@ export default function AccountReservationPage() {
       p_event_slot_id: selected[0],
       p_payment_visit_slot_id: visitRequired ? visitSlotId : null,
       p_ticket_option_id: hasOptions ? optionId : null,
-      p_survey_answers: hasOptions && chosenOption?.requires_survey ? answers : null,
+      p_survey_answers: hasOptions && chosenOption?.requires_survey ? pruneHiddenAnswers(questions, answers) : null,
     });
     if (rpcError) setError(rpcError.message || '予約に失敗しました。');
     else {
@@ -253,7 +252,7 @@ export default function AccountReservationPage() {
             <h2 style={{ fontSize: '1.2rem', marginBottom: 6 }}>アンケート</h2>
             {surveyIntro && <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: 12 }}>{surveyIntro}</p>}
             <div style={{ display: 'grid', gap: 16 }}>
-              {questions.map((q) => (
+              {visibleQuestions.map((q) => (
                 <div key={q.id}>
                   <div style={{ fontWeight: 700, marginBottom: 6 }}>{q.text}{q.required && <span style={{ color: 'var(--color-danger, #d33)' }}> *</span>}</div>
                   {q.type === 'text' && <textarea className="input" rows={3} maxLength={1000} value={String(answers[q.id] ?? '')} onChange={(e) => setAnswer(q.id, e.target.value)} />}

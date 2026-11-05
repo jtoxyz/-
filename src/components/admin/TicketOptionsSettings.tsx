@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { adminSupabase as supabase } from '@/lib/supabase';
+import { SURVEY_TYPE_LABELS, isChoiceQuestion, type SurveyQuestion, type SurveyQuestionType, type SurveyShowIf } from '@/lib/survey';
 
-type QuestionType = 'text' | 'single' | 'multiple' | 'rating';
-type Question = { id: string; text: string; type: QuestionType; options: string[]; required: boolean };
+type QuestionType = SurveyQuestionType;
+type Question = { id: string; text: string; type: QuestionType; options: string[]; required: boolean; show_if: SurveyShowIf | null };
 type OptionRow = {
   id: string; // 新規は 'new-' で始まる仮ID
   label: string;
@@ -15,12 +16,7 @@ type OptionRow = {
   is_enabled: boolean;
 };
 
-const TYPE_LABELS: Record<QuestionType, string> = {
-  text: '自由記述',
-  single: '1つ選ぶ',
-  multiple: '複数選ぶ',
-  rating: '5段階評価',
-};
+const TYPE_LABELS = SURVEY_TYPE_LABELS;
 
 /**
  * 券種（例: アンケート回答 100円 / 通常 500円）とアンケート設問の設定。
@@ -40,9 +36,9 @@ export default function TicketOptionsSettings({ eventId }: { eventId: string }) 
       supabase.from('events').select('survey_config').eq('id', eventId).single(),
       supabase.from('event_ticket_options').select('*').eq('event_id', eventId).order('sort_order'),
     ]);
-    const config = eventResult.data?.survey_config as { intro?: string; questions?: Question[] } | null | undefined;
+    const config = eventResult.data?.survey_config as { intro?: string; questions?: SurveyQuestion[] } | null | undefined;
     setIntro(config?.intro ?? '');
-    setQuestions((config?.questions ?? []).map((q) => ({ ...q, options: q.options ?? [], required: Boolean(q.required) })));
+    setQuestions((config?.questions ?? []).map((q) => ({ ...q, options: q.options ?? [], required: Boolean(q.required), show_if: q.show_if ?? null })));
     setOptions(
       (optionResult.data ?? []).map((o) => ({
         id: o.id,
@@ -80,7 +76,7 @@ export default function TicketOptionsSettings({ eventId }: { eventId: string }) 
     setQuestions((rows) => {
       let n = rows.length + 1;
       while (rows.some((r) => r.id === `q${n}`)) n += 1;
-      return [...rows, { id: `q${n}`, text: '', type: 'single', options: ['', ''], required: true }];
+      return [...rows, { id: `q${n}`, text: '', type: 'single', options: ['', ''], required: true, show_if: null }];
     });
 
   const save = async () => {
@@ -92,15 +88,34 @@ export default function TicketOptionsSettings({ eventId }: { eventId: string }) 
       return setMessage({ type: 'error', text: '1枠あたりの上限は0以上の整数で入力してください。' });
     }
 
-    const cleanQuestions = questions.map((q) => ({
+    const trimmed = questions.map((q) => ({
       ...q,
       text: q.text.trim(),
-      options: q.type === 'single' || q.type === 'multiple' ? q.options.map((o) => o.trim()).filter(Boolean) : [],
+      options: isChoiceQuestion(q) ? q.options.map((o) => o.trim()).filter(Boolean) : [],
     }));
-    if (cleanQuestions.some((q) => !q.text)) return setMessage({ type: 'error', text: '設問の文章を入力してください。' });
-    if (cleanQuestions.some((q) => (q.type === 'single' || q.type === 'multiple') && new Set(q.options).size < 2)) {
+    if (trimmed.some((q) => !q.text)) return setMessage({ type: 'error', text: '設問の文章を入力してください。' });
+    if (trimmed.some((q) => isChoiceQuestion(q) && new Set(q.options).size < 2)) {
       return setMessage({ type: 'error', text: '選択式の設問には、重複しない選択肢を2つ以上入力してください。' });
     }
+    // 表示条件は「前にある選択式の設問」の「今ある選択肢」だけ
+    for (const [index, q] of trimmed.entries()) {
+      if (!q.show_if) continue;
+      const parentIndex = trimmed.findIndex((row) => row.id === q.show_if!.question_id);
+      const parent = trimmed[parentIndex];
+      if (!parent || parentIndex >= index || !isChoiceQuestion(parent)) {
+        return setMessage({ type: 'error', text: `設問${index + 1}の表示条件の設問が見つかりません。条件を選び直してください。` });
+      }
+      if (q.show_if.values.length === 0) {
+        return setMessage({ type: 'error', text: `設問${index + 1}の表示条件で、選択肢を1つ以上選んでください。` });
+      }
+      if (q.show_if.values.some((v) => !parent.options.includes(v))) {
+        return setMessage({ type: 'error', text: `設問${index + 1}の表示条件に、設問${parentIndex + 1}にない選択肢があります。条件を選び直してください。` });
+      }
+    }
+    if (trimmed.length > 0 && trimmed[0].show_if) {
+      return setMessage({ type: 'error', text: '設問1には表示条件を付けられません。' });
+    }
+    const cleanQuestions = trimmed.map(({ show_if, ...q }) => (show_if ? { ...q, show_if } : q));
     if (cleanOptions.some((o) => o.requires_survey && o.is_enabled) && cleanQuestions.length === 0) {
       return setMessage({ type: 'error', text: 'アンケートが必要な券種があるので、設問を1つ以上追加してください。' });
     }
@@ -191,9 +206,19 @@ export default function TicketOptionsSettings({ eventId }: { eventId: string }) 
                 <textarea className="input" rows={3} value={q.options.join('\n')} onChange={(e) => updateQuestion(q.id, { options: e.target.value.split('\n') })} />
               </label>
             )}
+            {index > 0 && <ShowIfEditor question={q} earlier={questions.slice(0, index)} onChange={(show_if) => updateQuestion(q.id, { show_if })} />}
             <div style={{ display: 'flex', gap: 18, alignItems: 'center' }}>
               <label style={{ display: 'flex', gap: 6 }}><input type="checkbox" checked={q.required} onChange={(e) => updateQuestion(q.id, { required: e.target.checked })} />必須</label>
-              <button type="button" className="btn btn-danger" onClick={() => setQuestions((rows) => rows.filter((r) => r.id !== q.id))} disabled={saving}>削除</button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                onClick={() => {
+                  const dependents = questions.filter((r) => r.show_if?.question_id === q.id).length;
+                  if (dependents > 0 && !confirm(`この設問を表示条件にしている設問が${dependents}個あります。削除すると、それらの表示条件も外れます。削除しますか？`)) return;
+                  setQuestions((rows) => rows.filter((r) => r.id !== q.id).map((r) => (r.show_if?.question_id === q.id ? { ...r, show_if: null } : r)));
+                }}
+                disabled={saving}
+              >削除</button>
             </div>
           </div>
         ))}
@@ -202,6 +227,59 @@ export default function TicketOptionsSettings({ eventId }: { eventId: string }) 
 
       {message && <div className={message.type === 'ok' ? undefined : 'error-banner'} style={{ marginTop: 16, ...(message.type === 'ok' ? { color: 'var(--color-success, #1a8f4a)', fontWeight: 700 } : {}) }}>{message.text}</div>}
       <button type="button" className="btn btn-primary" style={{ marginTop: 16 }} onClick={save} disabled={saving}>{saving ? '保存中...' : '券種とアンケートを保存'}</button>
+    </div>
+  );
+}
+
+/** 「前の設問で◯◯を選んだ人だけに表示」の設定 */
+function ShowIfEditor({ question, earlier, onChange }: { question: Question; earlier: Question[]; onChange: (showIf: SurveyShowIf | null) => void }) {
+  const candidates = earlier.map((q, i) => ({ q, number: i + 1 })).filter(({ q }) => isChoiceQuestion(q));
+  const cond = question.show_if;
+  const parent = cond ? candidates.find(({ q }) => q.id === cond.question_id)?.q : undefined;
+  const parentOptions = parent ? parent.options.map((o) => o.trim()).filter(Boolean) : [];
+  const staleValues = cond ? cond.values.filter((v) => !parentOptions.includes(v)) : [];
+
+  return (
+    <div style={{ display: 'grid', gap: 8, padding: 10, borderRadius: 8, border: '1px dashed var(--card-border)' }}>
+      <label>表示条件
+        <select
+          className="input"
+          value={cond?.question_id ?? ''}
+          onChange={(e) => onChange(e.target.value ? { question_id: e.target.value, values: [] } : null)}
+        >
+          <option value="">いつも表示する</option>
+          {candidates.map(({ q, number }) => (
+            <option key={q.id} value={q.id}>設問{number}「{q.text || '（未入力）'}」の答えによって表示する</option>
+          ))}
+          {cond && !parent && <option value={cond.question_id}>（条件の設問が見つからないか、選択式ではありません）</option>}
+        </select>
+      </label>
+      {candidates.length === 0 && !cond && (
+        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>前に「1つ選ぶ」か「複数選ぶ」の設問があると、その答えによって出し分けられます。</div>
+      )}
+      {cond && parent && (
+        <div>
+          <div style={{ fontSize: '0.85rem', marginBottom: 4 }}>次のどれかを選んだ人だけに表示する</div>
+          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+            {parentOptions.map((opt) => (
+              <label key={opt} style={{ display: 'flex', gap: 6 }}>
+                <input
+                  type="checkbox"
+                  checked={cond.values.includes(opt)}
+                  onChange={() => onChange({ ...cond, values: cond.values.includes(opt) ? cond.values.filter((v) => v !== opt) : [...cond.values, opt] })}
+                />
+                {opt}
+              </label>
+            ))}
+          </div>
+          {staleValues.length > 0 && (
+            <div className="error-banner" style={{ marginTop: 6 }}>
+              選択肢にない「{staleValues.join('」「')}」が条件に残っています。
+              <button type="button" className="btn btn-secondary btn-sm" style={{ marginLeft: 8 }} onClick={() => onChange({ ...cond, values: cond.values.filter((v) => parentOptions.includes(v)) })}>外す</button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

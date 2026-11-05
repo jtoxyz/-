@@ -7,6 +7,8 @@ import Link from 'next/link';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import AdminNav from '@/components/AdminNav';
 import { adminSupabase as supabase } from '@/lib/supabase';
+import { type SurveyAnswers, type SurveyQuestion, type SurveyQuestionSummary, describeShowIf, formatSurveyAnswer, summarizeSurvey } from '@/lib/survey';
+import { type XlsxCell, type XlsxSheet, downloadXlsx } from '@/lib/xlsx';
 
 interface ReservationItem {
   id: string;
@@ -23,10 +25,8 @@ interface ReservationItem {
   created_at: string;
   event_slots: { label: string } | null;
   event_ticket_options: { label: string; price_yen: number } | null;
-  survey_answers: Record<string, string | string[] | number> | null;
+  survey_answers: SurveyAnswers | null;
 }
-
-type SurveyQuestionInfo = { id: string; text: string };
 
 interface AdminEventSlot {
   id: string;
@@ -50,10 +50,6 @@ type PickupFilter = { slotId: string; kind: 'used' | 'not_used' } | null;
 function pickupEndsAt(slot: AdminEventSlot | undefined): string | null {
   if (!slot) return null;
   return slot.ticket_use_ends_at || slot.ends_at;
-}
-
-function escapeCsvCell(value: string): string {
-  return `"${value.replace(/"/g, '""')}"`;
 }
 
 function safeFileName(value: string): string {
@@ -87,7 +83,7 @@ export default function AdminReservationsPage({ id }: { id: string }) {
   }, []);
   const [showWipeModal, setShowWipeModal] = useState(false);
   const [wiping, setWiping] = useState(false);
-  const [surveyQuestions, setSurveyQuestions] = useState<SurveyQuestionInfo[]>([]);
+  const [surveyQuestions, setSurveyQuestions] = useState<SurveyQuestion[]>([]);
 
   const loadData = async () => {
     try {
@@ -96,7 +92,7 @@ export default function AdminReservationsPage({ id }: { id: string }) {
         .from('events').select('title, survey_config').eq('id', id).single();
       if (eventError || !eventData) throw new Error('企画情報が見つかりません。');
       setEventTitle(eventData.title);
-      setSurveyQuestions(((eventData.survey_config as { questions?: SurveyQuestionInfo[] } | null)?.questions) ?? []);
+      setSurveyQuestions(((eventData.survey_config as { questions?: SurveyQuestion[] } | null)?.questions) ?? []);
 
       const { data: resData, error: resError } = await supabase
         .from('reservations')
@@ -183,23 +179,28 @@ export default function AdminReservationsPage({ id }: { id: string }) {
     setWiping(false);
   };
 
-  const handleExportCsv = () => {
+  // 予約者一覧（アンケートの回答を列に追加）と、アンケート集計を1つの .xlsx にまとめる
+  const handleExportExcel = () => {
     if (reservations.length === 0) return alert('エクスポートする予約データがありません。');
     const statusLabel = { reserved: '有効', used: '使用済み', cancelled: 'キャンセル' } as const;
     const typeLabel = { reservation: '予約券', walkin: '当日券' } as const;
-    const headers = ['企画名', '開催枠', '券種', '氏名', '学籍番号', '大学メール', '状態', '申込日時', '使用日時', '取消日時', 'チケットコード'];
-    const rows = reservations.map((res) => [
-      eventTitle, res.event_slots?.label || '-', typeLabel[res.ticket_type], res.student_name,
-      res.student_number, res.university_email, statusLabel[res.status], formatDateTime(res.created_at),
-      res.used_at ? formatDateTime(res.used_at) : '', res.cancelled_at ? formatDateTime(res.cancelled_at) : '', res.ticket_code,
+    const paymentLabel = { not_required: '不要', pending: '未払い', paid: '支払い済み', expired: '期限切れ' } as const;
+    const hasOptions = reservations.some((res) => res.event_ticket_options);
+    const headers = [
+      '企画名', '開催枠', '券種', ...(hasOptions ? ['券種名', '金額（円）'] : []), '氏名', '学籍番号', '大学メール', '状態', '支払い',
+      '申込日時', '使用日時', '取消日時', 'チケットコード', ...surveyQuestions.map((q, i) => `Q${i + 1} ${q.text}`),
+    ];
+    const rows: XlsxCell[][] = reservations.map((res) => [
+      eventTitle, res.event_slots?.label || '-', typeLabel[res.ticket_type],
+      ...(hasOptions ? [res.event_ticket_options?.label ?? '', res.event_ticket_options?.price_yen ?? ''] : []),
+      res.student_name, res.student_number, res.university_email, statusLabel[res.status], paymentLabel[res.payment_status] ?? res.payment_status,
+      formatDateTime(res.created_at), res.used_at ? formatDateTime(res.used_at) : '', res.cancelled_at ? formatDateTime(res.cancelled_at) : '', res.ticket_code,
+      ...surveyQuestions.map((q) => formatSurveyAnswer(res.survey_answers?.[q.id])),
     ]);
-    const csv = [headers, ...rows].map((row) => row.map((cell) => escapeCsvCell(String(cell))).join(',')).join('\r\n');
-    const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' }));
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `reservations_${safeFileName(eventTitle)}_${new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' })}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
+    const sheets: XlsxSheet[] = [{ name: '予約者一覧', rows: [headers, ...rows], boldRows: [0], freezeHeader: true }];
+    if (surveyQuestions.length > 0) sheets.push(surveySummarySheet(surveyQuestions, surveySummary));
+    const date = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
+    downloadXlsx(sheets, `reservations_${safeFileName(eventTitle)}_${date}.xlsx`);
   };
 
   const slotById = new Map(slots.map((slot) => [slot.id, slot]));
@@ -207,6 +208,12 @@ export default function AdminReservationsPage({ id }: { id: string }) {
     const end = pickupEndsAt(slotId ? slotById.get(slotId) : undefined);
     return Boolean(end && new Date(end).getTime() < nowMs);
   };
+
+  // アンケート集計はキャンセルを除いた予約で数える
+  const surveySummary = summarizeSurvey(
+    surveyQuestions,
+    reservations.filter((r) => r.status !== 'cancelled').map((r) => r.survey_answers),
+  );
 
   const filteredReservations = reservations.filter((res) => {
     if (pickupFilter) {
@@ -271,7 +278,7 @@ export default function AdminReservationsPage({ id }: { id: string }) {
               <div><h1>予約者一覧</h1><p>{eventTitle}</p></div>
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                 <input className="form-input" placeholder="氏名・学籍番号で検索..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
-                <button onClick={handleExportCsv} className="btn btn-secondary">📥 CSV出力</button>
+                <button onClick={handleExportExcel} className="btn btn-secondary">📥 Excelでダウンロード</button>
               </div>
             </div>
 
@@ -377,6 +384,8 @@ export default function AdminReservationsPage({ id }: { id: string }) {
             );
           })()}
 
+          {surveyQuestions.length > 0 && <SurveySummaryCard questions={surveyQuestions} summary={surveySummary} />}
+
           {pickupFilter && (
             <div id="reservation-list" className="glass-card" style={{ marginTop: 20, marginBottom: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
               <span>
@@ -403,7 +412,7 @@ export default function AdminReservationsPage({ id }: { id: string }) {
                           <summary>アンケート回答</summary>
                           {surveyQuestions.filter((q) => res.survey_answers && q.id in res.survey_answers).map((q) => {
                             const value = res.survey_answers![q.id];
-                            return <div key={q.id}><strong>{q.text}</strong>：{Array.isArray(value) ? value.join('、') : String(value)}</div>;
+                            return <div key={q.id}><strong>{q.text}</strong>：{formatSurveyAnswer(value)}</div>;
                           })}
                         </details>
                       )}
@@ -436,4 +445,75 @@ export default function AdminReservationsPage({ id }: { id: string }) {
       </div>
     </div>
   );
+}
+
+const percent = (count: number, total: number) => (total > 0 ? `${Math.round((count / total) * 1000) / 10}%` : '-');
+
+function summaryNote(questions: SurveyQuestion[], row: SurveyQuestionSummary): string {
+  const parts = [`回答 ${row.respondents}人`];
+  if (row.question.type === 'multiple') parts.push('複数回答（割合は回答者に対する割合）');
+  if (row.average !== null) parts.push(`平均 ${row.average.toFixed(2)}`);
+  const cond = describeShowIf(questions, row.question);
+  if (cond) parts.push(`${cond}に表示`);
+  return parts.join('・');
+}
+
+/** 設問ごとに、選択肢ごとの人数と割合を表示する（キャンセルを除く） */
+function SurveySummaryCard({ questions, summary }: { questions: SurveyQuestion[]; summary: SurveyQuestionSummary[] }) {
+  const muted = { fontSize: 12, color: 'var(--text-secondary)' } as const;
+  return (
+    <div className="glass-card" style={{ marginTop: 20 }}>
+      <h2 style={{ marginBottom: 6 }}>📊 アンケート集計</h2>
+      <p style={{ marginTop: 0, ...muted, fontSize: 13 }}>キャンセルを除いた予約の回答です。「Excelでダウンロード」の「アンケート集計」シートにも同じ内容が入ります。</p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 12 }}>
+        {summary.map((row, index) => {
+          const max = Math.max(1, ...row.counts.map((c) => c.count));
+          return (
+            <div key={row.question.id} className="glass-card" style={{ margin: 0, padding: 14 }}>
+              <strong>Q{index + 1}. {row.question.text}</strong>
+              <div style={{ ...muted, marginTop: 2 }}>{summaryNote(questions, row)}</div>
+              {row.question.type === 'text' ? (
+                row.texts.length > 0 ? (
+                  <details style={{ marginTop: 8, fontSize: 13 }}>
+                    <summary>回答を見る（{row.texts.length}件）</summary>
+                    <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>{row.texts.map((text, i) => <li key={i}>{text}</li>)}</ul>
+                  </details>
+                ) : <div style={{ ...muted, marginTop: 8 }}>まだ回答がありません</div>
+              ) : (
+                <div style={{ display: 'grid', gap: 6, marginTop: 10 }}>
+                  {row.counts.map((c) => (
+                    <div key={c.label}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 13 }}>
+                        <span>{c.label}</span>
+                        <span style={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{c.count}人（{percent(c.count, row.respondents)}）</span>
+                      </div>
+                      <div style={{ marginTop: 3, height: 6, borderRadius: 999, background: 'rgba(127,127,127,0.25)', overflow: 'hidden' }}>
+                        <div style={{ width: `${(c.count / max) * 100}%`, height: '100%', background: 'var(--color-primary)' }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function surveySummarySheet(questions: SurveyQuestion[], summary: SurveyQuestionSummary[]): XlsxSheet {
+  const rows: XlsxCell[][] = [['設問', '選択肢・回答', '人数', '割合']];
+  const boldRows = [0];
+  summary.forEach((row, index) => {
+    boldRows.push(rows.length);
+    rows.push([`Q${index + 1} ${row.question.text}`, summaryNote(questions, row)]);
+    if (row.question.type === 'text') {
+      row.texts.forEach((text) => rows.push(['', text]));
+    } else {
+      row.counts.forEach((c) => rows.push(['', c.label, c.count, percent(c.count, row.respondents)]));
+    }
+    rows.push([]);
+  });
+  return { name: 'アンケート集計', rows, boldRows, freezeHeader: true, columnWidths: [40, 50, 8, 10] };
 }
