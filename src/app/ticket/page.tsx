@@ -4,17 +4,17 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { useQueryParam } from '@/hooks/useQueryParam';
 
 export default function LegacyTicketPage() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
 
+  const publicToken = useQueryParam('token');
+
   useEffect(() => {
     let active = true;
-    const publicToken = new URLSearchParams(window.location.search).get('token');
-
     if (!publicToken) {
-      setError('チケットが指定されていません。');
       return () => {
         active = false;
       };
@@ -38,16 +38,18 @@ export default function LegacyTicketPage() {
     return () => {
       active = false;
     };
-  }, [router]);
+  }, [publicToken, router]);
 
-  if (error) {
+  const shownError = publicToken === null ? 'チケットが指定されていません。' : error;
+
+  if (shownError) {
     return (
       <div className="glass-card text-center" style={{ maxWidth: 560, margin: '32px auto', padding: 34 }}>
-        <div className="error-banner">{error}</div>
+        <div className="error-banner">{shownError}</div>
         <p style={{ color: 'var(--text-secondary)', lineHeight: 1.7, marginTop: 16 }}>
           予約時と同じ大学Googleアカウントでログインしているか確認してください。
         </p>
-        <Link href="/#my-tickets"><button className="btn btn-secondary" style={{ marginTop: 16 }}>自分の予約へ戻る</button></Link>
+        <Link href="/#my-tickets" className="btn btn-secondary" style={{ marginTop: 16 }}>自分の予約へ戻る</Link>
       </div>
     );
   }

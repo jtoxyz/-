@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import AdminNav from '@/components/AdminNav';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { adminSupabase as supabase } from '@/lib/supabase';
 import { type PaymentVisitSlot, VISIT_SLOT_COLUMNS, formatVisitSlot, jstDateKey, visitSlotPlace } from '@/lib/paymentVisit';
+import { useLoadEffect } from '@/hooks/useLoadEffect';
 
 type PaymentStatus = 'not_required' | 'pending' | 'paid' | 'expired';
 type EventItem = { id: string; title: string };
@@ -121,16 +122,16 @@ export default function PaymentManagementPage() {
     setLoading(false);
   };
 
-  useEffect(() => {
+  useLoadEffect(() => {
     if (authLoading || !user) return;
-    loadEvents().catch((err) => {
+    return loadEvents().catch((err) => {
       setError(err.message || '企画一覧の取得に失敗しました。');
       setLoading(false);
     });
   }, [authLoading, user]);
 
-  useEffect(() => {
-    if (eventId) void loadRows(eventId);
+  useLoadEffect(() => {
+    if (eventId) return loadRows(eventId);
   }, [eventId]);
 
   const changeEvent = (nextEventId: string) => {
@@ -240,7 +241,7 @@ export default function PaymentManagementPage() {
     <div className="admin-mode">
       <div className="admin-layout-sidebar">
         <AdminNav />
-        <main>
+        <div>
           <div className="glass-card">
             <h1 style={{ marginTop: 0 }}>支払い管理</h1>
             <p style={{ color: 'var(--text-secondary)' }}>予約者の支払い状態を確認し、手動で支払い済み・未払いへ変更できます。</p>
@@ -374,7 +375,7 @@ export default function PaymentManagementPage() {
               </div>
             )}
           </div>
-        </main>
+        </div>
       </div>
     </div>
   );

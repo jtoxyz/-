@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useSyncExternalStore } from 'react';
 import { Palette, Check } from 'lucide-react';
 
 type Theme = 'white' | 'dark' | 'blue' | 'green' | 'pink';
@@ -13,9 +13,20 @@ const THEMES: { id: Theme; name: string; color: string }[] = [
   { id: 'pink', name: 'ピンク', color: '#fce7f3' },
 ];
 
+// 今のテーマは <html data-theme> から読む（最初の描画前に layout のスクリプトが設定している）
+const subscribeTheme = (onChange: () => void) => {
+  const observer = new MutationObserver(onChange);
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  return () => observer.disconnect();
+};
+const readTheme = (): Theme => {
+  const value = document.documentElement.getAttribute('data-theme');
+  return THEMES.some((t) => t.id === value) ? (value as Theme) : 'white';
+};
+
 export default function ThemeSwitcher() {
   const [isOpen, setIsOpen] = useState(false);
-  const [currentTheme, setCurrentTheme] = useState<Theme>('white');
+  const currentTheme = useSyncExternalStore(subscribeTheme, readTheme, () => 'white' as Theme);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -42,25 +53,7 @@ export default function ThemeSwitcher() {
     };
   }, [isOpen]);
 
-  useEffect(() => {
-    // 初回マウント時にlocalStorageからテーマを読み込む
-    try {
-      const stored = localStorage.getItem('theme') as Theme | null;
-      if (stored && THEMES.some(t => t.id === stored)) {
-        setCurrentTheme(stored);
-      } else {
-        // 不正な値や未設定時はwhiteを強制
-        setCurrentTheme('white');
-        localStorage.setItem('theme', 'white');
-        document.documentElement.setAttribute('data-theme', 'white');
-      }
-    } catch (e) {
-      console.error('Failed to access localStorage', e);
-    }
-  }, []);
-
   const changeTheme = (theme: Theme) => {
-    setCurrentTheme(theme);
     setIsOpen(false);
     
     // HTML属性を更新
@@ -78,8 +71,10 @@ export default function ThemeSwitcher() {
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="theme-switcher-btn"
+        type="button"
         aria-label="テーマ切替"
         aria-expanded={isOpen}
+        aria-haspopup="true"
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -92,7 +87,7 @@ export default function ThemeSwitcher() {
           borderRadius: '50%',
         }}
       >
-        <Palette size={20} />
+        <Palette size={20} aria-hidden="true" />
       </button>
 
       {isOpen && (
@@ -115,6 +110,8 @@ export default function ThemeSwitcher() {
           {THEMES.map((theme) => (
             <button
               key={theme.id}
+              type="button"
+              aria-pressed={currentTheme === theme.id}
               onClick={() => changeTheme(theme.id)}
               style={{
                 display: 'flex',

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import AdminNav from '@/components/AdminNav';
 import { adminSupabase as supabase } from '@/lib/supabase';
+import { downloadPng as savePng, downloadSvg as saveSvg } from '@/lib/qrDownload';
 
 export default function QrMakerPage() {
   const [url, setUrl] = useState('');
@@ -27,45 +28,16 @@ export default function QrMakerPage() {
     };
   }, []);
 
+  const qrSvg = () => svgWrapRef.current?.querySelector('svg');
   const downloadSvg = () => {
-    const svg = svgWrapRef.current?.querySelector('svg');
-    if (!svg || !value) return;
-    const source = new XMLSerializer().serializeToString(svg);
-    const blob = new Blob([source], { type: 'image/svg+xml;charset=utf-8' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = 'qr-code.svg';
-    link.click();
-    URL.revokeObjectURL(link.href);
+    if (value) saveSvg(qrSvg(), 'qr-code.svg');
   };
-
   const downloadPng = () => {
-    const svg = svgWrapRef.current?.querySelector('svg');
-    if (!svg || !value) return;
-    const source = new XMLSerializer().serializeToString(svg);
-    const blob = new Blob([source], { type: 'image/svg+xml;charset=utf-8' });
-    const objectUrl = URL.createObjectURL(blob);
-    const image = new Image();
-    image.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = size;
-      canvas.height = size;
-      const context = canvas.getContext('2d');
-      if (!context) return;
-      context.fillStyle = '#ffffff';
-      context.fillRect(0, 0, size, size);
-      context.drawImage(image, 0, 0, size, size);
-      const link = document.createElement('a');
-      link.href = canvas.toDataURL('image/png');
-      link.download = 'qr-code.png';
-      link.click();
-      URL.revokeObjectURL(objectUrl);
-    };
-    image.src = objectUrl;
+    if (value) savePng(qrSvg(), size, 'qr-code.png');
   };
 
   const content = (
-    <main style={isAdmin ? { maxWidth: 860 } : { maxWidth: 860, margin: '0 auto', paddingTop: 16 }}>
+    <div style={isAdmin ? { maxWidth: 860 } : { maxWidth: 860, margin: '0 auto', paddingTop: 16 }}>
       <div className="glass-card">
         <h1 style={{ marginTop: 0 }}>URLからQRコード作成</h1>
         <p style={{ color: 'var(--text-secondary)', lineHeight: 1.7 }}>
@@ -73,8 +45,9 @@ export default function QrMakerPage() {
         </p>
 
         <div className="form-group">
-          <label className="form-label">URLまたは文字列</label>
+          <label className="form-label" htmlFor="qr-text">URLまたは文字列</label>
           <textarea
+            id="qr-text"
             className="form-input"
             rows={4}
             value={url}
@@ -85,8 +58,8 @@ export default function QrMakerPage() {
         </div>
 
         <div className="form-group" style={{ maxWidth: 260 }}>
-          <label className="form-label">保存サイズ</label>
-          <select className="form-input" value={size} onChange={(event) => setSize(Number(event.target.value))}>
+          <label className="form-label" htmlFor="qr-size">保存サイズ</label>
+          <select id="qr-size" className="form-input" value={size} onChange={(event) => setSize(Number(event.target.value))}>
             <option value={256}>256 × 256</option>
             <option value={512}>512 × 512</option>
             <option value={1024}>1024 × 1024</option>
@@ -100,16 +73,16 @@ export default function QrMakerPage() {
               <QRCodeSVG value={value} size={Math.min(size, 520)} level="M" includeMargin />
             </div>
             <div style={{ display: 'flex', justifyContent: 'center', gap: 12, flexWrap: 'wrap', marginTop: 20 }}>
-              <button className="btn btn-primary" onClick={downloadPng}>PNGで保存</button>
-              <button className="btn btn-secondary" onClick={downloadSvg}>SVGで保存</button>
-              <button className="btn btn-secondary" onClick={() => window.print()}>印刷</button>
+              <button type="button" className="btn btn-primary btn-sm" onClick={downloadPng}>PNGで保存</button>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={downloadSvg}>SVGで保存</button>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => window.print()}>印刷</button>
             </div>
           </section>
         ) : (
           <div style={{ padding: 36, textAlign: 'center', color: 'var(--text-secondary)' }}>URLを入力するとQRコードが表示されます。</div>
         )}
       </div>
-    </main>
+    </div>
   );
 
   if (!isAdmin) return content;

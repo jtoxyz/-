@@ -11,7 +11,7 @@ type NoShowStatus = { noshow_count: number; level: 'normal' | 'yellow' | 'blackl
 export default function NoShowNotice() {
   const pathname = usePathname();
   const [status, setStatus] = useState<NoShowStatus | null>(null);
-  const hidden = pathname.startsWith('/admin') || pathname.startsWith('/qr-maker');
+  const hidden = pathname.startsWith('/admin') || pathname.startsWith('/qr-maker') || pathname.startsWith('/staff');
 
   useEffect(() => {
     if (hidden) return;
@@ -30,7 +30,9 @@ export default function NoShowNotice() {
     };
 
     void load();
-    const { data: listener } = supabase.auth.onAuthStateChange(() => void load());
+    const { data: listener } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'USER_UPDATED') void load();
+    });
     return () => {
       active = false;
       listener.subscription.unsubscribe();

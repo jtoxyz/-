@@ -1,14 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { Copy, Eye, Trash2, TriangleAlert } from 'lucide-react';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import AdminNav from '@/components/AdminNav';
 import EventPreviewModal from '@/components/EventPreviewModal';
+import FormatToolbar from '@/components/admin/FormatToolbar';
 import { adminSupabase as supabase } from '@/lib/supabase';
 import PaymentVisitSettings from '@/components/admin/PaymentVisitSettings';
 import { applySlotTimingChange } from '@/lib/slotTiming';
+import { formatJstShort, jstDateTimeToIso, jstLocalToIso } from '@/lib/jst';
 
 interface SlotFormRow {
   id: string; // temp client-side ID
@@ -28,31 +31,27 @@ interface SlotFormRow {
   totalCapacity: number; // 総参加枠
 }
 
-function formatSlotDateTime(value: string): string {
-  if (!value) return '未設定';
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return '未設定';
-  const days = ['日', '月', '火', '水', '木', '金', '土'];
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getMonth() + 1}/${d.getDate()}(${days[d.getDay()]}) ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
 function isValidUrl(url: string | null | undefined): boolean {
   if (!url) return true; // Empty is valid since it is optional
   try {
     const parsed = new URL(url);
     return parsed.protocol === 'http:' || parsed.protocol === 'https:';
-  } catch (_) {
+  } catch {
     return false;
   }
 }
 
 export default function AdminNewEventPage() {
-  const { loading: authLoading, user } = useAdminAuth();
+  const { loading: authLoading } = useAdminAuth();
   const router = useRouter();
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 保存ボタンはページの下にあるので、エラーが出たらページ上部のエラー表示まで移動する
+  const errorRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (error) errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [error]);
 
   // Preview state
   const [showPreview, setShowPreview] = useState(false);
@@ -62,8 +61,9 @@ export default function AdminNewEventPage() {
   const [description, setDescription] = useState('');
   
   // Date/Time strings (empty string represents null)
-  const [useStartsAt, setUseStartsAt] = useState('');
-  const [useEndsAt, setUseEndsAt] = useState('');
+  // 企画全体の使用可能期間は今は各開催枠で設定する（旧項目。空のまま保存する）
+  const [useStartsAt] = useState('');
+  const [useEndsAt] = useState('');
 
   // 予約受付期間は企画全体で共通（保存時に全開催枠へ同じ値を書き込む）
   const [reservationStartsAt, setReservationStartsAt] = useState('');
@@ -195,6 +195,12 @@ export default function AdminNewEventPage() {
       setSaving(false);
       return;
     }
+    const unnamedIndex = slotRows.findIndex((row) => !row.label.trim());
+    if (unnamedIndex >= 0) {
+      setError(`${unnamedIndex + 1}番目の開催枠に枠名を入力してください。`);
+      setSaving(false);
+      return;
+    }
 
     // 予約受付期間（企画全体）
     if (slotRows.some((row) => row.isReservationEnabled)) {
@@ -314,19 +320,11 @@ export default function AdminNewEventPage() {
     }
 
     // Helper: combine date + time into ISO string
-    const combineDateTime = (dateStr: string, timeStr: string): string | null => {
-      if (!dateStr || !timeStr) return null;
-      const [year, month, day] = dateStr.split('-').map(Number);
-      const [hours, minutes] = timeStr.split(':').map(Number);
-      const date = new Date(year, month - 1, day, hours, minutes);
-      return date.toISOString();
-    };
+    // 開催日・時刻は日本時間として扱う（端末のタイムゾーンに左右されない）
+    const combineDateTime = (dateStr: string, timeStr: string): string | null => jstDateTimeToIso(dateStr, timeStr);
 
     // Helper: parse datetime-local string to ISO string
-    const parseToIso = (dtStr: string): string | null => {
-      if (!dtStr) return null;
-      return new Date(dtStr).toISOString();
-    };
+    const parseToIso = (dtStr: string): string | null => jstLocalToIso(dtStr);
 
     // Backward compat: use first slot's values for event-level fields
     const firstSlot = slotRows[0];
@@ -341,8 +339,8 @@ export default function AdminNewEventPage() {
       reservation_starts_at: parseToIso(reservationStartsAt),
       reservation_ends_at: parseToIso(reservationEndsAt),
       block_weekend_holiday_reservations: blockWeekendHolidayReservations,
-      use_starts_at: useStartsAt ? new Date(useStartsAt).toISOString() : null,
-      use_ends_at: useEndsAt ? new Date(useEndsAt).toISOString() : null,
+      use_starts_at: jstLocalToIso(useStartsAt),
+      use_ends_at: jstLocalToIso(useEndsAt),
       is_public: isPublic,
       reservation_enabled: reservationEnabled,
       ticket_enabled: ticketEnabled,
@@ -362,10 +360,10 @@ export default function AdminNewEventPage() {
       is_reservation_suspended: isReservationSuspended,
       is_walkin_suspended: isWalkinSuspended,
       is_ticket_use_suspended: isTicketUseSuspended,
-      auto_suspend_at: autoSuspendAt ? new Date(autoSuspendAt).toISOString() : null,
-      auto_hide_at: autoHideAt ? new Date(autoHideAt).toISOString() : null,
+      auto_suspend_at: jstLocalToIso(autoSuspendAt),
+      auto_hide_at: jstLocalToIso(autoHideAt),
       post_reservation_notes: postReservationNotes.trim() || null,
-      low_remaining_threshold: parseInt(lowRemainingThreshold) || 10,
+      low_remaining_threshold: Number.isNaN(parseInt(lowRemainingThreshold, 10)) ? 10 : Math.max(0, parseInt(lowRemainingThreshold, 10)),
       low_remaining_threshold_type: lowRemainingThresholdType,
     };
 
@@ -457,14 +455,14 @@ export default function AdminNewEventPage() {
               style={{ padding: '8px 16px', fontSize: '0.85rem' }}
               onClick={() => setShowPreview(true)}
             >
-              👁 プレビュー
+              <Eye size={16} aria-hidden="true" />プレビュー
             </button>
           </div>
         </div>
 
         {error && (
-          <div className="error-banner">
-            <span>⚠️</span>
+          <div className="error-banner" role="alert" ref={errorRef} tabIndex={-1}>
+            <TriangleAlert size={18} aria-hidden="true" style={{ flexShrink: 0 }} />
             <div>{error}</div>
           </div>
         )}
@@ -495,68 +493,7 @@ export default function AdminNewEventPage() {
               <label className="form-label" htmlFor="description" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
                 <span>説明文（専用タグやMarkdown記法が使用可能です）</span>
               </label>
-              <div className="format-toolbar" style={{ display: 'flex', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
-                <button type="button" className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '0.8rem', color: 'var(--color-danger)', borderColor: 'var(--color-danger)' }} onClick={() => {
-                  const el = document.getElementById('description') as HTMLTextAreaElement;
-                  if (!el) return;
-                  const start = el.selectionStart;
-                  const end = el.selectionEnd;
-                  const text = el.value;
-                  const selectedText = text.substring(start, end) || '重要なテキスト';
-                  const before = text.substring(0, start);
-                  const after = text.substring(end);
-                  setDescription(`${before}[red:${selectedText}]${after}`);
-                  setTimeout(() => { el.focus(); el.setSelectionRange(start + 5, start + 5 + selectedText.length); }, 0);
-                }}>赤字(重要)</button>
-                <button type="button" className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '0.8rem', color: 'var(--color-warning)', borderColor: 'var(--color-warning)' }} onClick={() => {
-                  const el = document.getElementById('description') as HTMLTextAreaElement;
-                  if (!el) return;
-                  const start = el.selectionStart;
-                  const end = el.selectionEnd;
-                  const text = el.value;
-                  const selectedText = text.substring(start, end) || '注意テキスト';
-                  const before = text.substring(0, start);
-                  const after = text.substring(end);
-                  setDescription(`${before}[orange:${selectedText}]${after}`);
-                  setTimeout(() => { el.focus(); el.setSelectionRange(start + 8, start + 8 + selectedText.length); }, 0);
-                }}>オレンジ(注意)</button>
-                <button type="button" className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '0.8rem', color: 'var(--color-primary)', borderColor: 'var(--color-primary)' }} onClick={() => {
-                  const el = document.getElementById('description') as HTMLTextAreaElement;
-                  if (!el) return;
-                  const start = el.selectionStart;
-                  const end = el.selectionEnd;
-                  const text = el.value;
-                  const selectedText = text.substring(start, end) || '補足テキスト';
-                  const before = text.substring(0, start);
-                  const after = text.substring(end);
-                  setDescription(`${before}[blue:${selectedText}]${after}`);
-                  setTimeout(() => { el.focus(); el.setSelectionRange(start + 6, start + 6 + selectedText.length); }, 0);
-                }}>青字(補足)</button>
-                <button type="button" className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '0.8rem', color: 'var(--color-success)', borderColor: 'var(--color-success)' }} onClick={() => {
-                  const el = document.getElementById('description') as HTMLTextAreaElement;
-                  if (!el) return;
-                  const start = el.selectionStart;
-                  const end = el.selectionEnd;
-                  const text = el.value;
-                  const selectedText = text.substring(start, end) || '案内テキスト';
-                  const before = text.substring(0, start);
-                  const after = text.substring(end);
-                  setDescription(`${before}[green:${selectedText}]${after}`);
-                  setTimeout(() => { el.focus(); el.setSelectionRange(start + 7, start + 7 + selectedText.length); }, 0);
-                }}>緑字(案内)</button>
-                <button type="button" className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '0.8rem', background: 'var(--bg-secondary)', borderColor: 'var(--card-border)' }} onClick={() => {
-                  const el = document.getElementById('description') as HTMLTextAreaElement;
-                  if (!el) return;
-                  const start = el.selectionStart;
-                  const end = el.selectionEnd;
-                  const text = el.value;
-                  const selectedText = text.substring(start, end) || '注意書きブロック内容';
-                  const before = text.substring(0, start);
-                  const after = text.substring(end);
-                  setDescription(`${before}[alert:${selectedText}]${after}`);
-                  setTimeout(() => { el.focus(); el.setSelectionRange(start + 7, start + 7 + selectedText.length); }, 0);
-                }}>注意書きブロック</button>
-              </div>
+              <FormatToolbar targetId="description" onChange={setDescription} disabled={saving} />
               <textarea
                 id="description"
                 className="form-input"
@@ -572,68 +509,7 @@ export default function AdminNewEventPage() {
 
             <div className="form-group">
               <label className="form-label" htmlFor="postReservationNotes">予約完了後の注意事項（利用者のチケット画面上部に表示）</label>
-              <div className="format-toolbar" style={{ display: 'flex', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
-                <button type="button" className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '0.8rem', color: 'var(--color-danger)', borderColor: 'var(--color-danger)' }} onClick={() => {
-                  const el = document.getElementById('postReservationNotes') as HTMLTextAreaElement;
-                  if (!el) return;
-                  const start = el.selectionStart;
-                  const end = el.selectionEnd;
-                  const text = el.value;
-                  const selectedText = text.substring(start, end) || '重要なテキスト';
-                  const before = text.substring(0, start);
-                  const after = text.substring(end);
-                  setPostReservationNotes(`${before}[red:${selectedText}]${after}`);
-                  setTimeout(() => { el.focus(); el.setSelectionRange(start + 5, start + 5 + selectedText.length); }, 0);
-                }}>赤字(重要)</button>
-                <button type="button" className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '0.8rem', color: 'var(--color-warning)', borderColor: 'var(--color-warning)' }} onClick={() => {
-                  const el = document.getElementById('postReservationNotes') as HTMLTextAreaElement;
-                  if (!el) return;
-                  const start = el.selectionStart;
-                  const end = el.selectionEnd;
-                  const text = el.value;
-                  const selectedText = text.substring(start, end) || '注意テキスト';
-                  const before = text.substring(0, start);
-                  const after = text.substring(end);
-                  setPostReservationNotes(`${before}[orange:${selectedText}]${after}`);
-                  setTimeout(() => { el.focus(); el.setSelectionRange(start + 8, start + 8 + selectedText.length); }, 0);
-                }}>オレンジ(注意)</button>
-                <button type="button" className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '0.8rem', color: 'var(--color-primary)', borderColor: 'var(--color-primary)' }} onClick={() => {
-                  const el = document.getElementById('postReservationNotes') as HTMLTextAreaElement;
-                  if (!el) return;
-                  const start = el.selectionStart;
-                  const end = el.selectionEnd;
-                  const text = el.value;
-                  const selectedText = text.substring(start, end) || '補足テキスト';
-                  const before = text.substring(0, start);
-                  const after = text.substring(end);
-                  setPostReservationNotes(`${before}[blue:${selectedText}]${after}`);
-                  setTimeout(() => { el.focus(); el.setSelectionRange(start + 6, start + 6 + selectedText.length); }, 0);
-                }}>青字(補足)</button>
-                <button type="button" className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '0.8rem', color: 'var(--color-success)', borderColor: 'var(--color-success)' }} onClick={() => {
-                  const el = document.getElementById('postReservationNotes') as HTMLTextAreaElement;
-                  if (!el) return;
-                  const start = el.selectionStart;
-                  const end = el.selectionEnd;
-                  const text = el.value;
-                  const selectedText = text.substring(start, end) || '案内テキスト';
-                  const before = text.substring(0, start);
-                  const after = text.substring(end);
-                  setPostReservationNotes(`${before}[green:${selectedText}]${after}`);
-                  setTimeout(() => { el.focus(); el.setSelectionRange(start + 7, start + 7 + selectedText.length); }, 0);
-                }}>緑字(案内)</button>
-                <button type="button" className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '0.8rem', background: 'var(--bg-secondary)', borderColor: 'var(--card-border)' }} onClick={() => {
-                  const el = document.getElementById('postReservationNotes') as HTMLTextAreaElement;
-                  if (!el) return;
-                  const start = el.selectionStart;
-                  const end = el.selectionEnd;
-                  const text = el.value;
-                  const selectedText = text.substring(start, end) || '注意書きブロック内容';
-                  const before = text.substring(0, start);
-                  const after = text.substring(end);
-                  setPostReservationNotes(`${before}[alert:${selectedText}]${after}`);
-                  setTimeout(() => { el.focus(); el.setSelectionRange(start + 7, start + 7 + selectedText.length); }, 0);
-                }}>注意書きブロック</button>
-              </div>
+              <FormatToolbar targetId="postReservationNotes" onChange={setPostReservationNotes} disabled={saving} />
               <textarea
                 id="postReservationNotes"
                 className="form-input"
@@ -902,7 +778,7 @@ export default function AdminNewEventPage() {
                       {!showAdvancedTiming ? (
                         row.isTicketUseEnabled && (
                           <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-                            {formatSlotDateTime(row.ticketUseStartsAt)} 〜 {formatSlotDateTime(row.ticketUseEndsAt)}
+                            {formatJstShort(row.ticketUseStartsAt)} 〜 {formatJstShort(row.ticketUseEndsAt)}
                           </div>
                         )
                       ) : (
@@ -956,7 +832,7 @@ export default function AdminNewEventPage() {
                       {!showAdvancedTiming ? (
                         row.isWalkinEnabled && (
                           <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-                            {formatSlotDateTime(row.walkinStartsAt)} 〜 {formatSlotDateTime(row.walkinEndsAt)}
+                            {formatJstShort(row.walkinStartsAt)} 〜 {formatJstShort(row.walkinEndsAt)}
                             {row.walkinLimit && `　上限${row.walkinLimit}枚`}
                           </div>
                         )
@@ -1006,7 +882,7 @@ export default function AdminNewEventPage() {
                       )}
 
                       {/* Config warning message */}
-                      {row.isWalkinEnabled && row.isReservationEnabled && row.walkinStartsAt && reservationEndsAt && (new Date(row.walkinStartsAt) < new Date(reservationEndsAt)) && (
+                      {row.isWalkinEnabled && row.isReservationEnabled && row.walkinStartsAt && reservationEndsAt && (row.walkinStartsAt < reservationEndsAt) && (
                         <div style={{
                           marginTop: '12px',
                           padding: '8px 12px',
@@ -1019,7 +895,7 @@ export default function AdminNewEventPage() {
                           alignItems: 'center',
                           gap: '6px'
                         }}>
-                          <span>⚠️</span>
+                          <TriangleAlert size={18} aria-hidden="true" style={{ flexShrink: 0 }} />
                           <span>通常予約の終了日時より前に、当日券の発行期間が開始されています。設定ミスの可能性があります。</span>
                         </div>
                       )}
@@ -1076,7 +952,7 @@ export default function AdminNewEventPage() {
                         fontSize: '0.85rem',
                       }}
                     >
-                      📄 この枠を複製
+                      <Copy size={14} aria-hidden="true" />この枠を複製
                     </button>
                     <button
                       type="button"
@@ -1093,7 +969,7 @@ export default function AdminNewEventPage() {
                         fontSize: '0.85rem',
                       }}
                     >
-                      🗑 この枠を削除
+                      <Trash2 size={14} aria-hidden="true" />この枠を削除
                     </button>
                   </div>
                 </div>
@@ -1175,7 +1051,7 @@ export default function AdminNewEventPage() {
                 </div>
 
                 <div style={{ marginLeft: '24px', padding: '10px 14px', borderRadius: 'var(--radius-sm)', background: 'rgba(99, 102, 241, 0.06)', border: '1px solid rgba(99, 102, 241, 0.15)', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                  💡 チケットの使用可能時間は、各開催枠の「予約券使用時間」「当日券受付時間」で設定してください。
+                  チケットの使用可能時間は、各開催枠の「予約券使用時間」「当日券受付時間」で設定してください。
                 </div>
               </>
             )}
@@ -1399,10 +1275,8 @@ export default function AdminNewEventPage() {
 
           {/* Form Actions */}
           <div style={{ display: 'flex', gap: '16px' }}>
-            <Link href="/admin/events" style={{ flex: 1 }}>
-              <button type="button" className="btn btn-secondary" disabled={saving}>
-                キャンセル
-              </button>
+            <Link href="/admin/events" className="btn btn-secondary" style={{ flex: 1 }} aria-disabled={saving} tabIndex={saving ? -1 : undefined}>
+              キャンセル
             </Link>
             <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={saving}>
               {saving ? '保存中...' : '企画を作成する'}

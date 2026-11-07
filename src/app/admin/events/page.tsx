@@ -1,11 +1,28 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useState, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import AdminNav from '@/components/AdminNav';
 import { adminSupabase as supabase } from '@/lib/supabase';
+import { Copy, FolderOpen, Package, Pencil, Plus, Ticket, TriangleAlert, Users, X } from 'lucide-react';
+
+type BackupRow = { ticket_type?: string; status?: string };
+type BackupData = {
+  schema_version?: string;
+  backup_type?: string;
+  created_at?: string;
+  event?: { title?: string } & Record<string, unknown>;
+  event_slots?: unknown[];
+  reservations?: BackupRow[];
+  admin_pre_registrations?: BackupRow[];
+} & Record<string, unknown>;
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String((err as { message?: string } | null)?.message ?? err);
+}
+import { useLoadEffect } from '@/hooks/useLoadEffect';
 
 interface EventAdminItem {
   id: string;
@@ -46,8 +63,8 @@ export default function AdminEventsPage() {
 
   // Restore modal state
   const [showRestoreModal, setShowRestoreModal] = useState(false);
-  const [restoreFile, setRestoreFile] = useState<File | null>(null);
-  const [restoreData, setRestoreData] = useState<any | null>(null);
+  const [, setRestoreFile] = useState<File | null>(null);
+  const [restoreData, setRestoreData] = useState<BackupData | null>(null);
   const [restoreType, setRestoreType] = useState<'config_only' | 'full'>('config_only');
   const [restoring, setRestoring] = useState(false);
   const [restoreError, setRestoreError] = useState<string | null>(null);
@@ -74,10 +91,8 @@ export default function AdminEventsPage() {
     }
   };
 
-  useEffect(() => {
-    if (!authLoading && user) {
-      fetchEvents();
-    }
+  useLoadEffect(() => {
+    if (!authLoading && user) return fetchEvents();
   }, [authLoading, user]);
 
   const handleDuplicate = async (eventId: string) => {
@@ -86,14 +101,14 @@ export default function AdminEventsPage() {
     }
     
     try {
-      const { data, error } = await supabase.rpc('admin_duplicate_event', { p_event_id: eventId });
+      const { error } = await supabase.rpc('admin_duplicate_event', { p_event_id: eventId });
       
       if (error) throw error;
       
       alert('企画を複製しました。「下書き」タブを確認してください。');
       fetchEvents();
-    } catch (err: any) {
-      alert(`複製に失敗しました: ${err.message}`);
+    } catch (err) {
+      alert(`複製に失敗しました: ${errorMessage(err)}`);
     }
   };
 
@@ -139,7 +154,7 @@ export default function AdminEventsPage() {
       setRestoreFile(file);
       setRestoreData(parsed);
       setRestoreType(parsed.backup_type === 'full' ? 'full' : 'config_only');
-    } catch (e) {
+    } catch {
       setRestoreError('JSONの解析に失敗しました。ファイルが正しいか確認してください。');
     }
   };
@@ -156,14 +171,14 @@ export default function AdminEventsPage() {
       if (rpcError) throw rpcError;
 
       const newEventId = data;
-      alert('✅ バックアップから企画を復元しました。編集画面に移動します。');
+      alert('バックアップから企画を復元しました。編集画面に移動します。');
       setShowRestoreModal(false);
       setRestoreFile(null);
       setRestoreData(null);
       setRestoreError(null);
       router.push(`/admin/event?id=${newEventId}`);
-    } catch (err: any) {
-      setRestoreError(`復元に失敗しました: ${err.message}`);
+    } catch (err) {
+      setRestoreError(`復元に失敗しました: ${errorMessage(err)}`);
     } finally {
       setRestoring(false);
     }
@@ -229,8 +244,9 @@ export default function AdminEventsPage() {
                 (r) => r.status !== 'cancelled'
               ).length;
               
+              // 有効化済みの事前登録はすでに予約に含まれるので、まだ予約になっていないものだけ数える（get_event_slots と同じ）
               const activePreRegistrationsCount = (event.admin_pre_registrations || []).filter(
-                (r) => r.status !== 'cancelled'
+                (r) => r.status === 'reserved' || r.status === 'activation_failed'
               ).length;
               
               const totalUsed = activeReservationsCount + activePreRegistrationsCount;
@@ -247,7 +263,7 @@ export default function AdminEventsPage() {
                     {event.title}
                     {!hasSlots && (
                       <span className="badge badge-danger" style={{ marginLeft: '8px', background: 'var(--color-danger)', color: 'var(--text-primary)' }}>
-                        ⚠️ 枠未設定
+                        <TriangleAlert size={13} aria-hidden="true" />枠未設定
                       </span>
                     )}
                   </td>
@@ -276,28 +292,23 @@ export default function AdminEventsPage() {
                   </td>
                   <td className="admin-table-stack-actions">
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
-                      <Link href={`/admin/event?id=${event.id}`}>
-                        <button className="btn btn-secondary btn-sm" style={{ padding: '6px 12px', fontSize: '0.8rem' }} title="設定を編集">
-                          ⚙️ 編集
-                        </button>
+                      <Link href={`/admin/event?id=${event.id}`} className="btn btn-secondary btn-sm" style={{ padding: '6px 12px', fontSize: '0.8rem' }} title="設定を編集">
+                        <Pencil size={14} aria-hidden="true" />編集
                       </Link>
-                      <Link href={`/admin/pre-registrations?eventId=${event.id}`}>
-                        <button className="btn btn-secondary btn-sm" style={{ padding: '6px 12px', fontSize: '0.8rem', borderColor: 'var(--color-warning-border)', color: 'var(--color-warning)' }} title="管理者による事前登録">
-                          🎟️ 事前登録
-                        </button>
+                      <Link href={`/admin/pre-registrations?eventId=${event.id}`} className="btn btn-secondary btn-sm" style={{ padding: '6px 12px', fontSize: '0.8rem', borderColor: 'var(--color-warning-border)', color: 'var(--color-warning)' }} title="管理者による事前登録">
+                        <Ticket size={14} aria-hidden="true" />事前登録
                       </Link>
-                      <Link href={`/admin/reservations?eventId=${event.id}`}>
-                        <button className="btn btn-secondary btn-sm" style={{ padding: '6px 12px', fontSize: '0.8rem', borderColor: 'var(--color-primary-hover)' }} title="予約者一覧">
-                          👥 予約者 ({totalUsed})
-                        </button>
+                      <Link href={`/admin/reservations?eventId=${event.id}`} className="btn btn-secondary btn-sm" style={{ padding: '6px 12px', fontSize: '0.8rem', borderColor: 'var(--color-primary-hover)' }} title="予約者一覧">
+                        <Users size={14} aria-hidden="true" />予約者 ({totalUsed})
                       </Link>
-                      <button 
-                        className="btn btn-secondary btn-sm" 
-                        style={{ padding: '6px 12px', fontSize: '0.8rem', borderColor: 'var(--color-surface-hover)' }}
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        style={{ padding: '6px 12px', fontSize: '0.8rem' }}
                         onClick={() => handleDuplicate(event.id)}
                         title="企画を複製"
                       >
-                        📄 複製
+                        <Copy size={14} aria-hidden="true" />複製
                       </button>
                     </div>
                   </td>
@@ -325,11 +336,11 @@ export default function AdminEventsPage() {
             </p>
           </div>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            <button className="btn btn-secondary btn-sm" onClick={openRestoreModal}>
-              📦 バックアップから復元
+            <button type="button" className="btn btn-secondary btn-sm" onClick={openRestoreModal}>
+              <Package size={15} aria-hidden="true" />バックアップから復元
             </button>
-            <Link href="/admin/events/new">
-              <button className="btn btn-primary btn-sm">➕ 新規企画を追加</button>
+            <Link href="/admin/events/new" className="btn btn-primary btn-sm">
+              <Plus size={15} aria-hidden="true" />新規企画を追加
             </Link>
           </div>
         </div>
@@ -337,7 +348,7 @@ export default function AdminEventsPage() {
 
       {error && (
         <div className="error-banner">
-          <span>⚠️</span>
+          <TriangleAlert size={18} aria-hidden="true" style={{ flexShrink: 0 }} />
           <div>{error}</div>
         </div>
       )}
@@ -346,9 +357,7 @@ export default function AdminEventsPage() {
         <div className="glass-card text-center" style={{ padding: '60px 20px', color: 'var(--text-secondary)' }}>
           <p style={{ fontSize: '1.2rem', marginBottom: '8px' }}>企画がまだ登録されていません</p>
           <p style={{ fontSize: '0.875rem', marginBottom: '20px' }}>右上のボタンから最初の企画を作成してください。</p>
-          <Link href="/admin/events/new">
-            <button className="btn btn-primary" style={{ width: 'auto' }}>企画作成フォームへ</button>
-          </Link>
+          <Link href="/admin/events/new" className="btn btn-primary" style={{ width: 'auto' }}>企画作成フォームへ</Link>
         </div>
       ) : (
         <div className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
@@ -409,13 +418,15 @@ export default function AdminEventsPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <h2 style={{ fontSize: '1.25rem', color: 'var(--text-primary)', margin: 0 }}>📦 バックアップから復元</h2>
+              <h2 style={{ fontSize: '1.25rem', color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}><Package size={22} aria-hidden="true" />バックアップから復元</h2>
               <button
                 onClick={() => !restoring && setShowRestoreModal(false)}
                 style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', fontSize: '1.5rem', cursor: 'pointer', padding: '4px' }}
                 disabled={restoring}
+                aria-label="閉じる"
+                type="button"
               >
-                ✕
+                <X size={22} aria-hidden="true" />
               </button>
             </div>
 
@@ -429,7 +440,7 @@ export default function AdminEventsPage() {
                 color: 'var(--color-danger, #ef4444)',
                 fontSize: '0.875rem',
               }}>
-                ⚠️ {restoreError}
+                <TriangleAlert size={16} aria-hidden="true" style={{ verticalAlign: 'middle', marginRight: 4 }} />{restoreError}
               </div>
             )}
 
@@ -455,7 +466,7 @@ export default function AdminEventsPage() {
                     if (file) handleRestoreFileSelect(file);
                   }}
                 >
-                  <div style={{ fontSize: '2.5rem', marginBottom: '12px' }}>📁</div>
+                  <div style={{ marginBottom: '12px', color: 'var(--text-secondary)' }}><FolderOpen size={40} aria-hidden="true" /></div>
                   <p style={{ color: 'var(--text-primary)', fontWeight: 600, marginBottom: '8px' }}>
                     バックアップファイルを選択
                   </p>
@@ -499,21 +510,21 @@ export default function AdminEventsPage() {
                           value: `${[
                             ...(restoreData.reservations || []),
                             ...(restoreData.admin_pre_registrations || []),
-                          ].filter((r: any) => r.ticket_type === 'reservation').length} 件`,
+                          ].filter((r: BackupRow) => r.ticket_type === 'reservation').length} 件`,
                         },
                         {
                           label: '当日券数',
                           value: `${[
                             ...(restoreData.reservations || []),
                             ...(restoreData.admin_pre_registrations || []),
-                          ].filter((r: any) => r.ticket_type === 'walkin').length} 件`,
+                          ].filter((r: BackupRow) => r.ticket_type === 'walkin').length} 件`,
                         },
                         {
                           label: '使用済み数',
                           value: `${[
                             ...(restoreData.reservations || []),
                             ...(restoreData.admin_pre_registrations || []),
-                          ].filter((r: any) => r.status === 'used').length} 件`,
+                          ].filter((r: BackupRow) => r.status === 'used').length} 件`,
                         },
                       ] : []),
                     ].map((row, i) => (
@@ -539,7 +550,7 @@ export default function AdminEventsPage() {
                   fontSize: '0.82rem',
                   lineHeight: 1.6,
                 }}>
-                  ⚠ 復元された企画は非公開・受付停止の安全な状態で作成されます。日時を確認してから公開してください。
+                  <TriangleAlert size={14} aria-hidden="true" style={{ verticalAlign: 'middle', marginRight: 4 }} />復元された企画は非公開・受付停止の安全な状態で作成されます。日時を確認してから公開してください。
                 </div>
 
                 {/* Restore type selection */}
@@ -627,7 +638,7 @@ export default function AdminEventsPage() {
                         復元中...
                       </span>
                     ) : (
-                      '✅ 復元を実行'
+                      '復元を実行'
                     )}
                   </button>
                 </div>

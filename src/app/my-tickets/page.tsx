@@ -1,12 +1,14 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { BadgeCheck, Clock3, ExternalLink, TicketCheck } from 'lucide-react';
 import RichText from '@/components/RichText';
 import { supabase } from '@/lib/supabase';
 import { formatAccountDate } from '@/lib/studentAccount';
 import { type PaymentVisitSlot, fetchMyVisitSlots, formatVisitSlot, visitSlotPlace } from '@/lib/paymentVisit';
+import { useQueryParam } from '@/hooks/useQueryParam';
+import { useLoadEffect } from '@/hooks/useLoadEffect';
 
 type TicketDetails = {
   reservation_id: string;
@@ -42,9 +44,26 @@ type TicketDetails = {
 
 function formatRemaining(ms: number): string {
   const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
-  const minutes = Math.floor(totalSeconds / 60);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
+  if (hours > 0) return `${hours}時間${minutes}分`;
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
+
+/** チケットを今使えない理由（使えるときは null） */
+function ticketBlockReason(ticket: TicketDetails | null, now: number): string | null {
+  if (!ticket || ticket.status !== 'reserved') return null;
+  if (!ticket.ticket_enabled || !ticket.use_button_enabled) return 'この企画では、まだチケットの使用が始まっていません。';
+  if (ticket.is_ticket_use_suspended) return '現在、チケットの使用を一時停止しています。';
+  if (ticket.auto_suspend_at && now >= new Date(ticket.auto_suspend_at).getTime()) return '現在、チケットの使用を停止しています。';
+  if (ticket.payment_status === 'pending') return '支払いが確認されると使えるようになります。';
+  if (ticket.payment_status === 'expired') return '支払期限が過ぎたため使用できません。';
+  if (ticket.use_starts_at && now < new Date(ticket.use_starts_at).getTime()) {
+    return `${formatAccountDate(ticket.use_starts_at)}から使えます（あと${formatRemaining(new Date(ticket.use_starts_at).getTime() - now)}）。`;
+  }
+  if (ticket.use_ends_at && now > new Date(ticket.use_ends_at).getTime()) return '使用できる時間は終了しました。';
+  return null;
 }
 
 function safeHttpUrl(value: string | null): string | null {
@@ -58,7 +77,7 @@ function safeHttpUrl(value: string | null): string | null {
 }
 
 export default function MyTicketPage() {
-  const [reservationId, setReservationId] = useState<string | null>(null);
+  const reservationId = useQueryParam('reservationId');
   const [ticket, setTicket] = useState<TicketDetails | null>(null);
   const [visitSlot, setVisitSlot] = useState<PaymentVisitSlot | null>(null);
   const [loading, setLoading] = useState(true);
@@ -66,16 +85,7 @@ export default function MyTicketPage() {
   const [error, setError] = useState<string | null>(null);
   const [nowTick, setNowTick] = useState(() => Date.now());
 
-  useEffect(() => {
-    const id = new URLSearchParams(window.location.search).get('reservationId');
-    setReservationId(id);
-    if (!id) {
-      setError('チケットが指定されていません。');
-      setLoading(false);
-    }
-  }, []);
-
-  const loadTicket = async (id: string) => {
+  const loadTicket = useCallback(async (id: string) => {
     const { data, error: rpcError } = await supabase.rpc('get_my_ticket', {
       p_reservation_id: id,
     });
@@ -89,21 +99,28 @@ export default function MyTicketPage() {
       setVisitSlot(visits[id] ?? null);
     }
     setLoading(false);
-  };
+  }, []);
 
+  useLoadEffect(() => {
+    if (reservationId) return loadTicket(reservationId);
+  }, [reservationId, loadTicket]);
+
+  // 使用開始時刻を過ぎたらボタンが押せるよう、未使用の間も時刻を進める（再読み込みしなくてよい）
   useEffect(() => {
-    if (reservationId) void loadTicket(reservationId);
-  }, [reservationId]);
+    if (ticket?.status !== 'reserved') return;
+    const id = setInterval(() => setNowTick(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [ticket?.status]);
 
-  const useAllowed = useMemo(() => {
-    if (!ticket || ticket.status !== 'reserved' || !ticket.ticket_enabled || !ticket.use_button_enabled || ticket.is_ticket_use_suspended) return false;
-    const now = Date.now();
-    if (ticket.auto_suspend_at && now >= new Date(ticket.auto_suspend_at).getTime()) return false;
-    if (ticket.use_starts_at && now < new Date(ticket.use_starts_at).getTime()) return false;
-    if (ticket.use_ends_at && now > new Date(ticket.use_ends_at).getTime()) return false;
-    if (ticket.payment_status === 'pending' || ticket.payment_status === 'expired') return false;
-    return true;
-  }, [ticket]);
+  // 支払い待ちの間は、支払いが確認されたかを30秒ごとに確認する
+  useEffect(() => {
+    if (!reservationId || ticket?.status !== 'reserved' || ticket.payment_status !== 'pending') return;
+    const id = setInterval(() => void loadTicket(reservationId), 30_000);
+    return () => clearInterval(id);
+  }, [reservationId, ticket?.status, ticket?.payment_status, loadTicket]);
+
+  const blockReason = ticketBlockReason(ticket, nowTick);
+  const useAllowed = Boolean(ticket && ticket.status === 'reserved' && !blockReason);
 
   const ticketReveal = useMemo(() => {
     if (!ticket || ticket.status !== 'used' || !ticket.used_at) return null;
@@ -131,10 +148,14 @@ export default function MyTicketPage() {
     setUsingTicket(false);
   };
 
+  if (reservationId === null) {
+    return <div className="glass-card text-center" style={{ padding: 36 }}><div className="error-banner">チケットが指定されていません。</div><Link href="/#my-tickets" className="btn btn-secondary" style={{ marginTop: 18 }}>自分の予約へ戻る</Link></div>;
+  }
+
   if (loading) return <div style={{ textAlign: 'center', padding: 64 }}><div className="loading-spinner" /></div>;
 
   if (!ticket) {
-    return <div className="glass-card text-center" style={{ padding: 36 }}><div className="error-banner">{error || 'チケットが見つかりません。'}</div><Link href="/#my-tickets"><button className="btn btn-secondary" style={{ marginTop: 18 }}>自分の予約へ戻る</button></Link></div>;
+    return <div className="glass-card text-center" style={{ padding: 36 }}><div className="error-banner">{error || 'チケットが見つかりません。'}</div><Link href="/#my-tickets" className="btn btn-secondary" style={{ marginTop: 18 }}>自分の予約へ戻る</Link></div>;
   }
 
   const paymentText = ticket.payment_status === 'paid'
@@ -155,7 +176,7 @@ export default function MyTicketPage() {
   return (
     <div style={{ maxWidth: 720, margin: '0 auto' }}>
       <div style={{ marginBottom: 18 }}><Link href="/#my-tickets">← 自分の予約へ戻る</Link></div>
-      {error && <div className="error-banner" style={{ marginBottom: 16 }}>{error}</div>}
+      {error && <div className="error-banner" role="alert" style={{ marginBottom: 16 }}>{error}</div>}
 
       <div className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
         <div style={{ padding: '14px 20px', textAlign: 'center', fontWeight: 900, background: ticket.status === 'used' ? 'var(--color-warning-bg)' : ticket.status === 'cancelled' ? 'rgba(244,63,94,.12)' : 'var(--color-primary-glow)', color: ticket.status === 'cancelled' ? 'var(--color-danger)' : 'var(--text-primary)' }}>
@@ -216,9 +237,12 @@ export default function MyTicketPage() {
           {ticket.use_starts_at && <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: 'var(--text-secondary)', marginBottom: 14 }}><Clock3 size={17} aria-hidden="true" />使用可能：{formatAccountDate(ticket.use_starts_at)} 〜 {formatAccountDate(ticket.use_ends_at)}</div>}
 
           {ticket.status === 'reserved' && (
-            <button type="button" className="btn btn-primary" onClick={handleUse} disabled={!useAllowed || usingTicket} style={{ width: '100%' }}>
-              {usingTicket ? '処理中...' : useAllowed ? 'このチケットを使用する' : '現在は使用できません'}
-            </button>
+            <>
+              <button type="button" className="btn btn-primary" onClick={handleUse} disabled={!useAllowed || usingTicket} aria-describedby={blockReason ? 'use-block-reason' : undefined}>
+                {usingTicket ? '処理中...' : useAllowed ? 'このチケットを使用する' : '現在は使用できません'}
+              </button>
+              {blockReason && <p id="use-block-reason" style={{ marginTop: 10, textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.88rem' }}>{blockReason}</p>}
+            </>
           )}
           {ticket.status === 'used' && ticket.used_at && <div style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>使用日時：{formatAccountDate(ticket.used_at)}</div>}
 

@@ -44,8 +44,10 @@ export function useAdminAuth() {
         if (!active) return;
 
         if (adminError) {
+          // ログイン状態は消さずに、ログイン画面で理由を出す（読み込み中のまま止まらないように）
           console.error('Admin status check failed, leaving session intact:', adminError);
           setUser(null);
+          router.replace('/admin/login?reason=check-failed');
           return;
         }
 

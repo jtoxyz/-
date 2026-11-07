@@ -1,11 +1,8 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import './globals.css';
-import './display-enhancements.css';
 import Link from 'next/link';
 import { Ticket } from 'lucide-react';
 import ThemeSwitcher from '@/components/ThemeSwitcher';
-import DisplayEnhancer from '@/components/DisplayEnhancer';
-import UiIconNormalizer from '@/components/UiIconNormalizer';
 import StudentAuthGate from '@/components/StudentAuthGate';
 import StudentAccountMenu from '@/components/StudentAccountMenu';
 import NoShowNotice from '@/components/NoShowNotice';
@@ -15,7 +12,6 @@ export const metadata: Metadata = {
   description: '大阪産業大学の委員会・サークル向け 参加予約＆電子チケット管理システム',
   // 予約のリンクを受け取った人だけが使うサイトなので、検索エンジンに載せない(2026-10-27)
   robots: { index: false, follow: false },
-  viewport: 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no',
   manifest: '/manifest.webmanifest',
   icons: {
     icon: { url: '/icon.svg', type: 'image/svg+xml' },
@@ -26,6 +22,12 @@ export const metadata: Metadata = {
     title: '委員会予約',
     statusBarStyle: 'default',
   },
+};
+
+// Next 16 では viewport は metadata ではなくここで指定する。拡大は禁止しない（文字を大きくして読む人のため）
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
 };
 
 export default function RootLayout({
@@ -58,25 +60,19 @@ export default function RootLayout({
         />
       </head>
       <body>
-        <DisplayEnhancer />
-        <UiIconNormalizer />
         <div className="app-container">
           <header className="header">
             <div className="header-container">
-              <Link href="/" className="header-logo" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+              <Link href="/" className="header-logo">
                 <Ticket size={23} strokeWidth={2.2} aria-hidden="true" />
                 <span>委員会企画予約</span>
               </Link>
-              <nav className="header-nav">
-                <Link href="/tickets/find" style={{ color: 'var(--text-secondary)' }}>
+              <nav className="header-nav" aria-label="メインメニュー">
+                <Link href="/tickets/find" className="header-nav-link">
                   チケットを探す
                 </Link>
-                <span className="header-nav-sep">|</span>
+                <span className="header-nav-sep" aria-hidden="true">|</span>
                 <StudentAccountMenu />
-                <Link href="/admin" style={{ color: 'var(--text-secondary)' }}>
-                  管理画面
-                </Link>
-                <span className="header-nav-sep">|</span>
                 <ThemeSwitcher />
               </nav>
             </div>
@@ -91,8 +87,10 @@ export default function RootLayout({
             <p style={{ fontSize: '0.8rem', marginTop: '6px' }}>
               製作：<a href="https://osu-denken.github.io/" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text-secondary)', textDecoration: 'underline' }}>電子計算研究部</a>
             </p>
-            <p style={{ fontSize: '0.75rem', marginTop: '6px', opacity: 0.5 }}>
-              Cloudflare Pages + Supabase
+            <p style={{ fontSize: '0.8rem', marginTop: '10px' }}>
+              <Link href="/staff" style={{ color: 'var(--text-secondary)' }}>スタッフ用</Link>
+              <span aria-hidden="true" style={{ margin: '0 8px' }}>·</span>
+              <Link href="/admin" style={{ color: 'var(--text-secondary)' }}>管理画面</Link>
             </p>
           </footer>
         </div>

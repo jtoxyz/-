@@ -144,10 +144,8 @@ export default function Home() {
 
                 <div className="mt-4">
                   {status.active ? (
-                    <Link href={`/reserve?id=${encodeURIComponent(event.id)}`}>
-                      <button className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                        {status.button}<ArrowRight size={17} aria-hidden="true" />
-                      </button>
+                    <Link href={`/reserve?id=${encodeURIComponent(event.id)}`} className="btn btn-primary">
+                      {status.button}<ArrowRight size={17} aria-hidden="true" />
                     </Link>
                   ) : (
                     <button className="btn btn-secondary" disabled>{status.button}</button>

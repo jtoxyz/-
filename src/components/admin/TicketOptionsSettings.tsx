@@ -1,8 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { adminSupabase as supabase } from '@/lib/supabase';
 import { SURVEY_TYPE_LABELS, isChoiceQuestion, type SurveyQuestion, type SurveyQuestionType, type SurveyShowIf } from '@/lib/survey';
+import { useLoadEffect } from '@/hooks/useLoadEffect';
 
 type QuestionType = SurveyQuestionType;
 type Question = { id: string; text: string; type: QuestionType; options: string[]; required: boolean; show_if: SurveyShowIf | null };
@@ -54,9 +55,7 @@ export default function TicketOptionsSettings({ eventId }: { eventId: string }) 
     setLoading(false);
   }, [eventId]);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  useLoadEffect(() => load(), [load]);
 
   const updateOption = (id: string, patch: Partial<OptionRow>) =>
     setOptions((rows) => rows.map((row) => (row.id === id ? { ...row, ...patch } : row)));

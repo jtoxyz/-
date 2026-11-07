@@ -3,11 +3,13 @@
 export const runtime = 'edge';
 
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import AdminNav from '@/components/AdminNav';
 import { adminSupabase as supabase } from '@/lib/supabase';
+import { useLoadEffect } from '@/hooks/useLoadEffect';
+import { TriangleAlert, X } from 'lucide-react';
 
 interface AdminPreRegistration {
   id: string;
@@ -95,10 +97,8 @@ export default function AdminPreRegistrationsPage({ id }: { id: string }) {
     }
   };
 
-  useEffect(() => {
-    if (!authLoading && user) {
-      loadData();
-    }
+  useLoadEffect(() => {
+    if (!authLoading && user) return loadData();
   }, [id, authLoading, user]);
 
   const handleAdd = async (e: React.FormEvent) => {
@@ -235,7 +235,7 @@ export default function AdminPreRegistrationsPage({ id }: { id: string }) {
 
         {error && (
           <div className="error-banner">
-            <span>⚠️</span>
+            <TriangleAlert size={18} aria-hidden="true" style={{ flexShrink: 0 }} />
             <div>{error}</div>
           </div>
         )}
@@ -287,7 +287,7 @@ export default function AdminPreRegistrationsPage({ id }: { id: string }) {
                             style={{ padding: '4px 8px', fontSize: '0.75rem' }}
                             onClick={() => handleCancel(pr.id)}
                           >
-                            ❌ 取消
+                            <X size={14} aria-hidden="true" />取消
                           </button>
                         )}
                       </td>

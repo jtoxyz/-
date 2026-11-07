@@ -3,9 +3,9 @@
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import type { Session } from '@supabase/supabase-js';
+import { TriangleAlert } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-
-const STUDENT_EMAIL_PATTERN = /^s[0-9]{2}[a-z][0-9]{3}@ge\.osaka-sandai\.ac\.jp$/i;
+import { isStudentEmail } from '@/lib/config';
 
 function isExcludedPath(pathname: string): boolean {
   return (
@@ -13,7 +13,8 @@ function isExcludedPath(pathname: string): boolean {
     pathname === '/account/setup' ||
     pathname.startsWith('/admin') ||
     pathname.startsWith('/qr-maker') ||
-    pathname.startsWith('/tickets/find') ||
+    // スタッフ画面は自分でログインとスタッフ登録を確認する（初回の氏名登録は不要）
+    pathname.startsWith('/staff') ||
     // 支払いQRはログイン前に読み取り済みにする必要があるため、ログインは /pay 側で行う
     pathname.startsWith('/pay')
   );
@@ -31,38 +32,44 @@ function loginPath(pathname: string, reason?: string): string {
   return `/login?${params.toString()}`;
 }
 
+// 初回登録まで確認できた利用者。ページを移るたびにプロフィールを読み直さないよう覚えておく
+let verifiedUserId: string | null = null;
+
+type GateState = 'checking' | 'ready' | 'error';
+
 export default function StudentAuthGate({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [ready, setReady] = useState(false);
+  const excluded = isExcludedPath(pathname);
+  const [state, setState] = useState<GateState>('checking');
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
+    if (excluded) return;
     let active = true;
-
-    if (isExcludedPath(pathname)) {
-      setReady(true);
-      return () => {
-        active = false;
-      };
-    }
 
     const checkAccount = async (session: Session | null) => {
       if (!active) return;
 
       if (!session?.user) {
-        setReady(false);
+        verifiedUserId = null;
+        setState('checking');
         router.replace(loginPath(pathname));
         return;
       }
 
-      const email = String(session.user.email || '').trim().toLowerCase();
-      if (!STUDENT_EMAIL_PATTERN.test(email)) {
-        // The admin session lives in its own client (adminSupabase), so signing
-        // a non-student account out of the student client leaves admin logged in.
+      if (!isStudentEmail(session.user.email)) {
+        // 管理者のログインは別のクライアント（adminSupabase）にあるので、ここでログアウトしても管理画面はそのまま
+        verifiedUserId = null;
         await supabase.auth.signOut({ scope: 'local' });
         if (!active) return;
-        setReady(false);
+        setState('checking');
         router.replace(loginPath(pathname, 'university-account'));
+        return;
+      }
+
+      if (verifiedUserId === session.user.id) {
+        setState('ready');
         return;
       }
 
@@ -76,40 +83,63 @@ export default function StudentAuthGate({ children }: { children: React.ReactNod
 
       if (error) {
         console.error('Profile check failed:', error);
-        setReady(false);
+        setState('error');
         return;
       }
 
       if (!profile) {
         const params = new URLSearchParams();
         params.set('next', currentPath(pathname));
-        setReady(false);
+        setState('checking');
         router.replace(`/account/setup?${params.toString()}`);
         return;
       }
 
-      setReady(true);
+      verifiedUserId = session.user.id;
+      setState('ready');
     };
 
-    supabase.auth.getSession().then(({ data }) => checkAccount(data.session));
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      void checkAccount(session);
+    void supabase.auth.getSession().then(({ data }) => checkAccount(data.session));
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+      // トークンの更新（TOKEN_REFRESHED）や初回通知（INITIAL_SESSION）では確認し直さない
+      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'USER_UPDATED') {
+        void checkAccount(session);
+      }
     });
 
     return () => {
       active = false;
       listener.subscription.unsubscribe();
     };
-  }, [pathname, router]);
+  }, [excluded, pathname, router, attempt]);
 
-  if (!ready) {
+  if (excluded || state === 'ready') return <>{children}</>;
+
+  if (state === 'error') {
     return (
-      <div style={{ textAlign: 'center', padding: '64px 20px' }}>
-        <div className="loading-spinner" style={{ margin: '0 auto 16px' }} />
-        <p style={{ color: 'var(--text-secondary)' }}>アカウント情報を確認しています...</p>
+      <div className="glass-card text-center" style={{ maxWidth: 520, margin: '40px auto', padding: 28 }}>
+        <div className="error-banner" role="alert" style={{ textAlign: 'left' }}>
+          <TriangleAlert size={20} aria-hidden="true" style={{ flexShrink: 0 }} />
+          <span>アカウント情報を確認できませんでした。通信状況を確認して、もう一度お試しください。</span>
+        </div>
+        <button
+          type="button"
+          className="btn btn-primary"
+          onClick={() => {
+            setState('checking');
+            setAttempt((n) => n + 1);
+          }}
+        >
+          もう一度確認する
+        </button>
       </div>
     );
   }
 
-  return <>{children}</>;
+  return (
+    <div style={{ textAlign: 'center', padding: '64px 20px' }} role="status">
+      <div className="loading-spinner" style={{ margin: '0 auto 16px' }} />
+      <p style={{ color: 'var(--text-secondary)' }}>アカウント情報を確認しています...</p>
+    </div>
+  );
 }

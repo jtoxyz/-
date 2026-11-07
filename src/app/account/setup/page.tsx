@@ -4,16 +4,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { BadgeCheck, LockKeyhole } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-
-function safeNextPath(value: string | null): string {
-  if (!value || !value.startsWith('/') || value.startsWith('//')) return '/';
-  return value;
-}
-
-function studentNumberFromEmail(email: string): string {
-  const match = email.match(/^s([0-9]{2}[a-z][0-9]{3})@ge\.osaka-sandai\.ac\.jp$/i);
-  return match ? match[1].toUpperCase() : '';
-}
+import { studentNumberFromEmail } from '@/lib/config';
+import { safeNextPath } from '@/lib/safeNextPath';
+import { useQueryParam } from '@/hooks/useQueryParam';
 
 export default function AccountSetupPage() {
   const router = useRouter();
@@ -23,14 +16,14 @@ export default function AccountSetupPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [nextPath, setNextPath] = useState('/');
+  const nextParam = useQueryParam('next');
+  const nextPath = nextParam === undefined ? '/' : safeNextPath(nextParam);
 
   const studentNumber = useMemo(() => studentNumberFromEmail(email), [email]);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const next = safeNextPath(params.get('next'));
-    setNextPath(next);
+    if (nextParam === undefined) return;
+    const next = nextPath;
 
     const load = async () => {
       const { data: sessionData } = await supabase.auth.getSession();
@@ -63,7 +56,7 @@ export default function AccountSetupPage() {
     };
 
     void load();
-  }, [router]);
+  }, [nextParam, nextPath, router]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Banknote, CalendarDays, MapPin, Ticket, UserRound } from 'lucide-react';
@@ -17,6 +17,7 @@ import {
   formatAccountDate,
 } from '@/lib/studentAccount';
 import { type SurveyQuestion, missingRequiredAnswer, pruneHiddenAnswers, visibleQuestionIds } from '@/lib/survey';
+import { useQueryParam } from '@/hooks/useQueryParam';
 
 type BulkResult = { id: string; slot_label: string };
 
@@ -27,7 +28,7 @@ type TicketOptionRow = {
 
 export default function AccountReservationPage() {
   const router = useRouter();
-  const [eventId, setEventId] = useState<string | null>(null);
+  const eventId = useQueryParam('id');
   const [event, setEvent] = useState<AccountEvent | null>(null);
   const [profile, setProfile] = useState<StudentProfile | null>(null);
   const [slots, setSlots] = useState<AccountEventSlot[]>([]);
@@ -44,14 +45,14 @@ export default function AccountReservationPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const id = new URLSearchParams(window.location.search).get('id');
-    setEventId(id);
-    if (!id) {
-      setError('企画が指定されていません。');
-      setLoading(false);
-    }
-  }, []);
+  // 予約に失敗したとき（満席になった等）に、枠の状態だけ読み直す
+  const reloadSlots = useCallback(async () => {
+    if (!eventId) return;
+    const { data } = await supabase.rpc('get_event_slots', { p_event_id: eventId });
+    if (data) setSlots(((data as AccountEventSlot[] | null) || []).filter((slot) => slot.is_enabled));
+    const optionResult = await supabase.rpc('get_event_ticket_options', { p_event_id: eventId });
+    if (!optionResult.error) setOptionRows((optionResult.data as TicketOptionRow[] | null) ?? []);
+  }, [eventId]);
 
   useEffect(() => {
     if (!eventId) return;
@@ -59,7 +60,11 @@ export default function AccountReservationPage() {
     const load = async () => {
       const { data: sessionData } = await supabase.auth.getSession();
       const user = sessionData.session?.user;
-      if (!user) return;
+      if (!user) {
+        setError('ログインの有効期限が切れました。もう一度ログインしてください。');
+        setLoading(false);
+        return;
+      }
 
       const [profileResult, eventResult, slotResult] = await Promise.all([
         supabase.from('user_profiles').select('student_name, student_number, university_email').eq('user_id', user.id).single(),
@@ -123,6 +128,23 @@ export default function AccountReservationPage() {
 
   const setAnswer = (id: string, value: string | string[]) => setAnswers((current) => ({ ...current, [id]: value }));
 
+  // 予約ボタンを押せない理由（押せるときは null）
+  const reserveBlocker = (() => {
+    if (selectedSlots.length === 0) return '参加する枠を選んでください。';
+    if (!selectedSlots.every(canReserveSlot)) return '選んだ枠は今は予約できません（当日券のみ、または受付時間外です）。';
+    if (hasOptions && !chosenOption) return '券種を選んでください。';
+    if (chosenOption && optionFull(chosenOption)) return '選んだ券種はこの枠では満席です。';
+    if (surveyMissing) return '必須のアンケートに回答してください。';
+    if (visitRequired && visitSlots.length === 0) return '選べる支払い日時がありません。';
+    if (visitRequired && !visitSlotId) return '支払いに来る日時を選んでください。';
+    return null;
+  })();
+
+  const openTicket = (data: unknown) => {
+    const reservationId = String((data as { id?: string } | null)?.id || '');
+    router.push(reservationId ? `/my-tickets?reservationId=${encodeURIComponent(reservationId)}` : '/#my-tickets');
+  };
+
   const toggle = (slot: AccountEventSlot) => {
     if (!event || (!canReserveSlot(slot) && !canGetWalkinSlot(slot))) return;
     if (selected[0] !== slot.id) setOptionId('');
@@ -141,8 +163,10 @@ export default function AccountReservationPage() {
         p_event_slot_ids: selected,
         p_payment_visit_slot_id: visitRequired ? visitSlotId : null,
       });
-      if (rpcError) setError(rpcError.message || '予約に失敗しました。');
-      else setResults((data as BulkResult[] | null) || []);
+      if (rpcError) {
+        setError(rpcError.message || '予約に失敗しました。');
+        void reloadSlots();
+      } else setResults((data as BulkResult[] | null) || []);
       setSaving(false);
       return;
     }
@@ -154,10 +178,11 @@ export default function AccountReservationPage() {
       p_ticket_option_id: hasOptions ? optionId : null,
       p_survey_answers: hasOptions && chosenOption?.requires_survey ? pruneHiddenAnswers(questions, answers) : null,
     });
-    if (rpcError) setError(rpcError.message || '予約に失敗しました。');
-    else {
-      const reservationId = String((data as { id?: string } | null)?.id || '');
-      reservationId ? router.push(`/my-tickets?reservationId=${encodeURIComponent(reservationId)}`) : router.push('/#my-tickets');
+    if (rpcError) {
+      setError(rpcError.message || '予約に失敗しました。');
+      void reloadSlots();
+    } else {
+      openTicket(data);
     }
     setSaving(false);
   };
@@ -170,18 +195,23 @@ export default function AccountReservationPage() {
       p_event_id: event.id,
       p_event_slot_id: selected[0],
     });
-    if (rpcError) setError(rpcError.message || '当日券の取得に失敗しました。');
-    else {
-      const reservationId = String((data as { id?: string } | null)?.id || '');
-      reservationId ? router.push(`/my-tickets?reservationId=${encodeURIComponent(reservationId)}`) : router.push('/#my-tickets');
+    if (rpcError) {
+      setError(rpcError.message || '当日券の取得に失敗しました。');
+      void reloadSlots();
+    } else {
+      openTicket(data);
     }
     setSaving(false);
   };
 
+  if (eventId === null) {
+    return <div className="glass-card text-center" style={{ padding: 36 }}><div className="error-banner">企画が指定されていません。</div><Link href="/" className="btn btn-secondary" style={{ marginTop: 18 }}>企画一覧へ戻る</Link></div>;
+  }
+
   if (loading) return <div style={{ textAlign: 'center', padding: 64 }}><div className="loading-spinner" /></div>;
 
   if (!event || !profile) {
-    return <div className="glass-card text-center" style={{ padding: 36 }}><div className="error-banner">{error || '企画情報を読み込めませんでした。'}</div><Link href="/"><button className="btn btn-secondary" style={{ marginTop: 18 }}>企画一覧へ戻る</button></Link></div>;
+    return <div className="glass-card text-center" style={{ padding: 36 }}><div className="error-banner">{error || '企画情報を読み込めませんでした。'}</div><Link href="/" className="btn btn-secondary" style={{ marginTop: 18 }}>企画一覧へ戻る</Link></div>;
   }
 
   if (results.length > 0) {
@@ -191,7 +221,7 @@ export default function AccountReservationPage() {
         <div style={{ display: 'grid', gap: 10 }}>
           {results.map((result) => <Link key={result.id} href={`/my-tickets?reservationId=${encodeURIComponent(result.id)}`} className="glass-card interactive" style={{ padding: 14, display: 'flex', justifyContent: 'space-between' }}><span>{result.slot_label}</span><strong>チケットを表示</strong></Link>)}
         </div>
-        <Link href="/"><button className="btn btn-secondary" style={{ width: '100%', marginTop: 18 }}>企画一覧へ戻る</button></Link>
+        <Link href="/" className="btn btn-secondary" style={{ marginTop: 18 }}>企画一覧へ戻る</Link>
       </div>
     );
   }
@@ -209,7 +239,7 @@ export default function AccountReservationPage() {
         <div><small style={{ color: 'var(--text-secondary)' }}>予約者</small><div style={{ fontWeight: 800 }}>{profile.student_name} <span style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>（{profile.student_number}）</span></div></div>
       </div>
 
-      {error && <div className="error-banner" style={{ marginBottom: 18 }}>{error}</div>}
+      {error && <div className="error-banner" role="alert" style={{ marginBottom: 18 }}>{error}</div>}
 
       <div className="glass-card">
         <h2 style={{ fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}><CalendarDays size={22} aria-hidden="true" />参加する枠を選択</h2>
@@ -218,7 +248,7 @@ export default function AccountReservationPage() {
             const active = selected.includes(slot.id);
             const selectable = canReserveSlot(slot) || canGetWalkinSlot(slot);
             return (
-              <button key={slot.id} type="button" onClick={() => toggle(slot)} disabled={!selectable || saving} className="glass-card interactive" style={{ textAlign: 'left', width: '100%', padding: 15, opacity: selectable ? 1 : 0.55, borderColor: active ? 'var(--color-primary)' : 'var(--card-border)', background: active ? 'var(--color-primary-glow)' : 'var(--card-bg)' }}>
+              <button key={slot.id} type="button" onClick={() => toggle(slot)} disabled={!selectable || saving} aria-pressed={active} className="glass-card interactive" style={{ textAlign: 'left', width: '100%', padding: 15, opacity: selectable ? 1 : 0.55, borderColor: active ? 'var(--color-primary)' : 'var(--card-border)', background: active ? 'var(--color-primary-glow)' : 'var(--card-bg)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}><div><strong>{slot.label}</strong><div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 4 }}>{formatAccountDate(slot.starts_at)} 〜 {formatAccountDate(slot.ends_at)}</div></div><span className={`badge ${selectable ? 'badge-success' : 'badge-secondary'}`}>{accountSlotStatus(slot)}</span></div>
               </button>
             );
@@ -235,7 +265,7 @@ export default function AccountReservationPage() {
                 const active = optionId === row.id;
                 const full = optionFull(row);
                 return (
-                  <button key={row.id} type="button" onClick={() => setOptionId(row.id)} disabled={full || saving} className="glass-card interactive" style={{ textAlign: 'left', width: '100%', padding: 13, opacity: full ? 0.55 : 1, borderColor: active ? 'var(--color-primary)' : 'var(--card-border)', background: active ? 'var(--color-primary-glow)' : 'var(--card-bg)' }}>
+                  <button key={row.id} type="button" onClick={() => setOptionId(row.id)} disabled={full || saving} aria-pressed={active} className="glass-card interactive" style={{ textAlign: 'left', width: '100%', padding: 13, opacity: full ? 0.55 : 1, borderColor: active ? 'var(--color-primary)' : 'var(--card-border)', background: active ? 'var(--color-primary-glow)' : 'var(--card-bg)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}><strong>{row.label}</strong><strong>{row.price_yen.toLocaleString('ja-JP')}円</strong></div>
                     {row.description && <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 4 }}>{row.description}</div>}
                     {row.requires_survey && <div style={{ fontSize: '0.8rem', marginTop: 4 }}>アンケートへの回答が必要です</div>}
@@ -253,9 +283,9 @@ export default function AccountReservationPage() {
             {surveyIntro && <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: 12 }}>{surveyIntro}</p>}
             <div style={{ display: 'grid', gap: 16 }}>
               {visibleQuestions.map((q) => (
-                <div key={q.id}>
-                  <div style={{ fontWeight: 700, marginBottom: 6 }}>{q.text}{q.required && <span style={{ color: 'var(--color-danger, #d33)' }}> *</span>}</div>
-                  {q.type === 'text' && <textarea className="input" rows={3} maxLength={1000} value={String(answers[q.id] ?? '')} onChange={(e) => setAnswer(q.id, e.target.value)} />}
+                <fieldset key={q.id} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+                  <legend style={{ fontWeight: 700, marginBottom: 6, padding: 0 }}>{q.text}{q.required && <span style={{ color: 'var(--color-danger)' }}> *<span className="visually-hidden">（必須）</span></span>}</legend>
+                  {q.type === 'text' && <textarea className="form-input" rows={3} maxLength={1000} aria-label={q.text} value={String(answers[q.id] ?? '')} onChange={(e) => setAnswer(q.id, e.target.value)} />}
                   {q.type === 'single' && (q.options ?? []).map((opt) => (
                     <label key={opt} style={{ display: 'flex', gap: 8, padding: '4px 0' }}><input type="radio" name={q.id} checked={answers[q.id] === opt} onChange={() => setAnswer(q.id, opt)} />{opt}</label>
                   ))}
@@ -265,10 +295,10 @@ export default function AccountReservationPage() {
                   })}
                   {q.type === 'rating' && (
                     <div style={{ display: 'flex', gap: 8 }}>
-                      {[1, 2, 3, 4, 5].map((n) => <button key={n} type="button" className={`btn ${answers[q.id] === String(n) ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setAnswer(q.id, String(n))}>{n}</button>)}
+                      {[1, 2, 3, 4, 5].map((n) => <button key={n} type="button" aria-pressed={answers[q.id] === String(n)} className={`btn ${answers[q.id] === String(n) ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setAnswer(q.id, String(n))}>{n}</button>)}
                     </div>
                   )}
-                </div>
+                </fieldset>
               ))}
             </div>
           </div>
@@ -288,7 +318,7 @@ export default function AccountReservationPage() {
               {visitSlots.map((visit) => {
                 const active = visitSlotId === visit.id;
                 return (
-                  <button key={visit.id} type="button" onClick={() => setVisitSlotId(visit.id)} disabled={saving} className="glass-card interactive" style={{ textAlign: 'left', width: '100%', padding: 13, borderColor: active ? 'var(--color-primary)' : 'var(--card-border)', background: active ? 'var(--color-primary-glow)' : 'var(--card-bg)' }}>
+                  <button key={visit.id} type="button" onClick={() => setVisitSlotId(visit.id)} disabled={saving} aria-pressed={active} className="glass-card interactive" style={{ textAlign: 'left', width: '100%', padding: 13, borderColor: active ? 'var(--color-primary)' : 'var(--card-border)', background: active ? 'var(--color-primary-glow)' : 'var(--card-bg)' }}>
                     <strong>{formatVisitSlot(visit)}</strong>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.88rem', fontWeight: 700, marginTop: 4 }}><MapPin size={15} aria-hidden="true" />{visitSlotPlace(visit)}</div>
                     {visit.note && <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 4 }}>{visit.note}</div>}
@@ -302,7 +332,8 @@ export default function AccountReservationPage() {
         )}
 
         <div style={{ display: 'grid', gap: 10, marginTop: 20 }}>
-          <button type="button" className="btn btn-primary" onClick={reserve} disabled={!reservable || saving}><Ticket size={18} aria-hidden="true" />{saving ? '処理中...' : '選択した枠を予約する'}</button>
+          <button type="button" className="btn btn-primary" onClick={reserve} disabled={!reservable || saving} aria-describedby={reserveBlocker ? 'reserve-blocker' : undefined}><Ticket size={18} aria-hidden="true" />{saving ? '処理中...' : '選択した枠を予約する'}</button>
+          {reserveBlocker && !walkinAvailable && <p id="reserve-blocker" style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary)', textAlign: 'center' }}>{reserveBlocker}</p>}
           {hasWalkinSlots && <button type="button" className="btn btn-secondary" onClick={getWalkin} disabled={!walkinAvailable || saving}>{saving ? '処理中...' : '選択した枠の当日券を取得する'}</button>}
         </div>
       </div>

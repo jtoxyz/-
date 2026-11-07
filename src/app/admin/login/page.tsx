@@ -3,7 +3,9 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { TriangleAlert } from 'lucide-react';
 import { adminSupabase as supabase } from '@/lib/supabase';
+import { useQueryParam } from '@/hooks/useQueryParam';
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -11,6 +13,10 @@ export default function AdminLoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const reason = useQueryParam('reason');
+  const shownError = error ?? (reason === 'check-failed'
+    ? '管理者情報の確認に失敗しました。通信状況を確認して、もう一度ログインしてください。'
+    : null);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,13 +87,13 @@ export default function AdminLoginPage() {
           管理者ログイン
         </h1>
         <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', textAlign: 'center', marginBottom: '24px' }}>
-          委員会スタッフ専用ログインページです。
+          委員会の管理者専用です。自治会などのスタッフは<Link href="/staff">スタッフ用画面</Link>から大学アカウントでログインしてください。
         </p>
 
-        {error && (
-          <div className="error-banner">
-            <span>⚠️</span>
-            <div>{error}</div>
+        {shownError && (
+          <div className="error-banner" role="alert">
+            <TriangleAlert size={20} aria-hidden="true" style={{ flexShrink: 0 }} />
+            <div>{shownError}</div>
           </div>
         )}
 

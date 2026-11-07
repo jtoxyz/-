@@ -8,10 +8,10 @@ import {
   Banknote,
   CalendarDays,
   CirclePlus,
-  ClipboardCopy,
   DoorOpen,
   FileText,
   GraduationCap,
+  IdCard,
   LogOut,
   QrCode,
   RefreshCw,
@@ -19,12 +19,35 @@ import {
 } from 'lucide-react';
 import { adminSupabase as supabase } from '@/lib/supabase';
 
-const iconStyle = { marginRight: '6px', verticalAlign: 'middle' } as const;
+const iconStyle = { marginRight: '6px', verticalAlign: 'middle', flexShrink: 0 } as const;
+
+const LINKS = [
+  ['/admin/events', CalendarDays, '企画一覧・管理'],
+  ['/admin/events/new', CirclePlus, '新規企画作成'],
+  ['/admin/users', Users, '利用者管理'],
+  ['/admin/staff', IdCard, 'スタッフ管理'],
+  ['/admin/settings/payment', Banknote, '支払い設定'],
+  ['/admin/payment-management', BadgeCheck, '支払い管理'],
+  ['/admin/payment-visits', DoorOpen, '委員会室 支払い受付'],
+  ['/admin/payment-qr', RefreshCw, '動的支払いQR'],
+  ['/admin/daily-payment-qr', FileText, '1日支払いQR'],
+  ['/qr-maker', QrCode, 'QRコード作成'],
+  ['/admin/settings/student-number', GraduationCap, '学籍番号設定'],
+  ['/admin/blacklist', Ban, 'ブラックリスト'],
+] as const;
+
+/** 企画の編集・予約者一覧などは「企画一覧・管理」の中のページとして強調する */
+function isActive(pathname: string, href: string): boolean {
+  if (pathname === href) return true;
+  if (href === '/admin/events') {
+    return ['/admin/event', '/admin/reservations', '/admin/pre-registrations'].includes(pathname);
+  }
+  return false;
+}
 
 export default function AdminNav() {
   const router = useRouter();
   const pathname = usePathname();
-  const isReservationsPage = /^\/admin\/events\/[^/]+\/reservations$/.test(pathname);
 
   const handleLogout = async () => {
     try {
@@ -35,65 +58,20 @@ export default function AdminNav() {
     }
   };
 
-  const getActiveReservationColumnValues = (columnIndex: number): string[] => {
-    const rows = Array.from(document.querySelectorAll<HTMLTableRowElement>('.reservations-table-desktop tbody tr'));
-    return rows
-      .filter((row) => row.style.opacity !== '0.4')
-      .map((row) => row.querySelectorAll<HTMLTableCellElement>('td')[columnIndex]?.textContent?.trim() || '')
-      .filter(Boolean);
-  };
-
-  const copyReservationColumn = async (columnIndex: number, emptyMessage: string, successLabel: string) => {
-    const values = getActiveReservationColumnValues(columnIndex);
-    if (values.length === 0) {
-      alert(emptyMessage);
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(values.join('\n'));
-      alert(`${values.length}件の${successLabel}をクリップボードにコピーしました。`);
-    } catch (error) {
-      console.error(`${successLabel}のコピーに失敗しました:`, error);
-      alert('クリップボードへのコピーに失敗しました。');
-    }
-  };
-
-  const links = [
-    ['/admin/events', CalendarDays, '企画一覧・管理'],
-    ['/admin/events/new', CirclePlus, '新規企画作成'],
-    ['/admin/users', Users, '利用者管理'],
-    ['/admin/settings/payment', Banknote, '支払い設定'],
-    ['/admin/payment-management', BadgeCheck, '支払い管理'],
-    ['/admin/payment-visits', DoorOpen, '委員会室 支払い受付'],
-    ['/admin/payment-qr', RefreshCw, '動的支払いQR'],
-    ['/admin/daily-payment-qr', FileText, '1日支払いQR'],
-    ['/qr-maker', QrCode, 'QRコード作成'],
-    ['/admin/settings/student-number', GraduationCap, '学籍番号設定'],
-    ['/admin/blacklist', Ban, 'ブラックリスト'],
-  ] as const;
-
   return (
-    <div className="admin-navbar">
-      {links.map(([href, Icon, label]) => (
-        <Link key={href} href={href} className={`admin-nav-link ${pathname === href ? 'active' : ''}`}>
-          <Icon size={18} style={iconStyle} aria-hidden="true" />{label}
-        </Link>
-      ))}
+    <nav className="admin-navbar" aria-label="管理メニュー">
+      {LINKS.map(([href, Icon, label]) => {
+        const active = isActive(pathname, href);
+        return (
+          <Link key={href} href={href} className={`admin-nav-link ${active ? 'active' : ''}`} aria-current={active ? 'page' : undefined}>
+            <Icon size={18} style={iconStyle} aria-hidden="true" />{label}
+          </Link>
+        );
+      })}
 
-      {isReservationsPage && (
-        <>
-          <button type="button" onClick={() => copyReservationColumn(2, 'コピーできる有効な予約者がいません。', '氏名')} className="admin-nav-link" style={{ border: 'none', cursor: 'pointer', background: 'var(--color-primary-glow)', color: 'var(--color-primary)' }}>
-            <ClipboardCopy size={18} style={iconStyle} aria-hidden="true" />氏名のみコピー
-          </button>
-          <button type="button" onClick={() => copyReservationColumn(3, 'コピーできる有効な学籍番号がありません。', '学籍番号')} className="admin-nav-link" style={{ border: 'none', cursor: 'pointer', background: 'var(--color-primary-glow)', color: 'var(--color-primary)' }}>
-            <GraduationCap size={18} style={iconStyle} aria-hidden="true" />学籍番号のみコピー
-          </button>
-        </>
-      )}
-
-      <button onClick={handleLogout} className="admin-nav-link" style={{ border: 'none', cursor: 'pointer', background: 'rgba(244, 63, 94, 0.15)', color: 'var(--color-danger)', marginLeft: 'auto' }}>
+      <button type="button" onClick={handleLogout} className="admin-nav-link" style={{ border: 'none', cursor: 'pointer', background: 'var(--color-danger-bg)', color: 'var(--color-danger)', marginLeft: 'auto' }}>
         <LogOut size={18} style={iconStyle} aria-hidden="true" />ログアウト
       </button>
-    </div>
+    </nav>
   );
 }
