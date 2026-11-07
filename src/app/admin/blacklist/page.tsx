@@ -1,9 +1,11 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import AdminNav from '@/components/AdminNav';
 import { adminSupabase as supabase } from '@/lib/supabase';
+import { useLoadEffect } from '@/hooks/useLoadEffect';
+import { TriangleAlert } from 'lucide-react';
 
 interface BlacklistEntry {
   id: string;
@@ -90,7 +92,7 @@ export default function AdminBlacklistPage() {
     }
   };
 
-  useEffect(() => {
+  useLoadEffect(() => {
     if (!authLoading && user) {
       void loadEntries();
       void loadNoShowUsers();
@@ -198,7 +200,7 @@ export default function AdminBlacklistPage() {
         <div className="form-container-responsive">
           <h1 style={{ marginBottom: 20 }}>ブラックリスト管理</h1>
 
-          {error && <div className="error-banner">⚠️ {error}</div>}
+          {error && <div className="error-banner" role="alert"><TriangleAlert size={20} aria-hidden="true" style={{ flexShrink: 0 }} /><span>{error}</span></div>}
 
           <form onSubmit={handleAdd} className="glass-card" style={{ marginBottom: 24 }}>
             <h2 style={{ fontSize: '1.1rem', marginBottom: 16 }}>利用停止対象を登録</h2>

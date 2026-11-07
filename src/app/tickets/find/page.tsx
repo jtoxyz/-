@@ -42,7 +42,8 @@ function formatRemaining(ms: number): string {
 
 export default function FindTicketPage() {
   const [events, setEvents] = useState<PublicEvent[]>([]);
-  const [slots, setSlots] = useState<AccountEventSlot[]>([]);
+  // どの企画の枠か一緒に持つ（企画を変えた直後は「読み込み中」と分かるように）
+  const [slotState, setSlotState] = useState<{ eventId: string; slots: AccountEventSlot[] } | null>(null);
   const [eventId, setEventId] = useState('');
   const [slotId, setSlotId] = useState('');
   const [studentName, setStudentName] = useState('');
@@ -67,16 +68,17 @@ export default function FindTicketPage() {
 
   useEffect(() => {
     let active = true;
-    setSlotId('');
-    setSlots([]);
     if (!eventId) return;
     supabase.rpc('get_event_slots', { p_event_id: eventId }).then(({ data }) => {
-      if (active) setSlots((data as AccountEventSlot[] | null) || []);
+      if (active) setSlotState({ eventId, slots: ((data as AccountEventSlot[] | null) || []).filter((slot) => slot.is_enabled) });
     });
     return () => {
       active = false;
     };
   }, [eventId]);
+
+  const slotsLoading = Boolean(eventId) && slotState?.eventId !== eventId;
+  const slots = slotState?.eventId === eventId ? slotState.slots : [];
 
   const ticketReveal = useMemo(() => {
     if (!ticket || ticket.status !== 'used' || !ticket.used_at) return null;
@@ -149,8 +151,8 @@ export default function FindTicketPage() {
   if (ticket) {
     return (
       <div style={{ maxWidth: 720, margin: '0 auto' }}>
-        <div style={{ marginBottom: 18 }}><button type="button" className="btn btn-secondary" onClick={reset}>← 別の予約を探す</button></div>
-        {useError && <div className="error-banner" style={{ marginBottom: 16 }}>{useError}</div>}
+        <div style={{ marginBottom: 18 }}><button type="button" className="btn btn-secondary btn-sm" onClick={reset}>← 別の予約を探す</button></div>
+        {useError && <div className="error-banner" role="alert" style={{ marginBottom: 16 }}>{useError}</div>}
 
         <div className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
           <div style={{ padding: '14px 20px', textAlign: 'center', fontWeight: 900, background: ticket.status === 'used' ? 'var(--color-warning-bg)' : ticket.status === 'cancelled' ? 'rgba(244,63,94,.12)' : 'var(--color-primary-glow)', color: ticket.status === 'cancelled' ? 'var(--color-danger)' : 'var(--text-primary)' }}>
@@ -214,14 +216,15 @@ export default function FindTicketPage() {
           <Search size={22} aria-hidden="true" />チケットを探す
         </h1>
         <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: 20 }}>
-          予約した本人以外の方が、代わりにチケットを使用する場合はこちらから予約者の氏名・学籍番号で検索してください。
+          予約した本人の代わりにチケットを使用するときに使います。予約者の氏名・学籍番号で検索してください。自分の予約は「自分の予約」から開けます。
+          代理で使用した記録は、ログイン中のアカウントに残ります。
         </p>
 
-        {searchError && <div className="error-banner" style={{ marginBottom: 16 }}>{searchError}</div>}
+        {searchError && <div className="error-banner" role="alert" style={{ marginBottom: 16 }}>{searchError}</div>}
 
         <div className="form-group">
           <label className="form-label" htmlFor="find-event">企画</label>
-          <select id="find-event" className="form-input" value={eventId} onChange={(e) => setEventId(e.target.value)}>
+          <select id="find-event" className="form-input" value={eventId} onChange={(e) => { setEventId(e.target.value); setSlotId(''); }}>
             <option value="">選択してください</option>
             {events.map((event) => <option key={event.id} value={event.id}>{event.title}</option>)}
           </select>
@@ -230,7 +233,7 @@ export default function FindTicketPage() {
         {eventId && (
           <div className="form-group">
             <label className="form-label" htmlFor="find-slot">開催枠</label>
-            <select id="find-slot" className="form-input" value={slotId} onChange={(e) => setSlotId(e.target.value)}>
+            <select id="find-slot" className="form-input" value={slotId} onChange={(e) => setSlotId(e.target.value)} disabled={slotsLoading}>
               <option value="">選択してください</option>
               {slots.map((slot) => (
                 <option key={slot.id} value={slot.id}>
@@ -238,7 +241,8 @@ export default function FindTicketPage() {
                 </option>
               ))}
             </select>
-            {slots.length === 0 && <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: 6, display: 'flex', alignItems: 'center' }}><CalendarDays size={14} aria-hidden="true" style={{ marginRight: 4 }} />この企画の開催枠を取得しています...</p>}
+            {slotsLoading && <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: 6, display: 'flex', alignItems: 'center' }}><CalendarDays size={14} aria-hidden="true" style={{ marginRight: 4 }} />この企画の開催枠を取得しています...</p>}
+            {!slotsLoading && slots.length === 0 && <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: 6 }}>この企画には選べる開催枠がありません。</p>}
           </div>
         )}
 

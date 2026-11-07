@@ -1,3 +1,4 @@
+/admin/events/new /admin/events/new 200
 /admin/events/:id/pre-registrations /admin/pre-registrations?eventId=:id 302
 /admin/events/:id/reservations /admin/reservations?eventId=:id 302
 /admin/events/:id /admin/event?id=:id 302

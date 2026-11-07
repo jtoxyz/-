@@ -1,10 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import Link from 'next/link';
 import { adminSupabase as supabase } from '@/lib/supabase';
 import { PAYMENT_ROOM_LABEL } from '@/lib/config';
 import { type PaymentVisitSlot, VISIT_SLOT_COLUMNS, VISIT_WINDOW_OPTIONS, formatVisitSlot, jstDateKey, visitSlotPlace } from '@/lib/paymentVisit';
+import { useLoadEffect } from '@/hooks/useLoadEffect';
 
 type Props = {
   paymentRequired: boolean;
@@ -50,8 +51,8 @@ export default function PaymentVisitSettings({
     else setSlots((data as PaymentVisitSlot[]) || []);
   }, []);
 
-  useEffect(() => {
-    if (visitRequired) void loadSlots();
+  useLoadEffect(() => {
+    if (visitRequired) return loadSlots();
   }, [visitRequired, loadSlots]);
 
   const addSlot = async () => {

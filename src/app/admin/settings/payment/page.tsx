@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import AdminNav from '@/components/AdminNav';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { adminSupabase as supabase } from '@/lib/supabase';
 import { VISIT_WINDOW_OPTIONS } from '@/lib/paymentVisit';
+import { useLoadEffect } from '@/hooks/useLoadEffect';
 
 type PaymentEvent = {
   id: string;
@@ -50,10 +51,8 @@ export default function PaymentSettingsPage() {
     setLoading(false);
   };
 
-  useEffect(() => {
-    if (!authLoading && user) {
-      void loadEvents();
-    }
+  useLoadEffect(() => {
+    if (!authLoading && user) return loadEvents();
   }, [authLoading, user]);
 
   const updateLocalEvent = (id: string, patch: Partial<PaymentEvent>) => {
@@ -111,7 +110,7 @@ export default function PaymentSettingsPage() {
     <div className="admin-mode">
       <div className="admin-layout-sidebar">
         <AdminNav />
-        <main>
+        <div>
           <div className="glass-card">
             <h1 style={{ marginTop: 0 }}>支払い設定</h1>
             <p style={{ color: 'var(--text-secondary)', lineHeight: 1.7 }}>
@@ -248,7 +247,7 @@ export default function PaymentSettingsPage() {
               </div>
             )}
           </div>
-        </main>
+        </div>
       </div>
     </div>
   );

@@ -31,25 +31,40 @@
 4. トランザクション内のテスト予約で確認し、ロールバックする。
 5. Security AdvisorとPerformance Advisorを確認する。
 
-## 公開RPCと管理者RPC
+## 公開RPCと管理者RPC（2026-11-07 時点）
 
-公開が必要:
+ログインなしで呼べる（anon）:
 
 - `get_public_events`
 - `get_event_slots`
-- `create_reservation`
-- `create_reservations_bulk`
-- `create_walkin_reservation`
-- `get_ticket`
-- `find_ticket`
-- `use_ticket`
+- `claim_payment_qr`（支払いQRを読み取った時点で、ログイン前に「読み取り済み」にするため）
+- `get_allowed_student_department_codes`
 
-匿名公開しない:
+ログイン中の大学アカウントだけ（authenticated）:
 
-- `admin_create_pre_registration`
-- `admin_auto_activate_pre_registrations`
-- `admin_duplicate_event`
-- `admin_export_event_backup`
-- `admin_get_event_slots`
-- `admin_restore_event_backup`
-- `delete_event_admin`
+- `create_my_reservation` / `create_my_reservations_bulk` / `create_my_walkin_reservation`
+- `get_my_tickets` / `get_my_ticket` / `use_my_ticket` / `get_my_cancelled_tickets`
+- `find_ticket` / `get_ticket` / `use_ticket`（「チケットを探す」。代理で使った人は `reservations.used_by` に残る）
+- `redeem_payment_qr`
+- スタッフ用：`get_my_staff_status` / `staff_list_events` / `staff_get_event_stats` /
+  `staff_get_payment_visit_stats` / `staff_get_lane_payment_qr` / `staff_get_daily_payment_qr`
+  （関数の中で、管理者か担当企画のスタッフかを `can_operate_event` で確認する）
+
+内部からだけ呼ぶ（API から直接は呼べない）:
+
+- `create_reservation` / `create_reservations_bulk` / `create_walkin_reservation`
+  （定義・引数・戻り値は正式契約のまま。学生は `create_my_*` 経由でだけ使う。直接呼ぶと氏名や支払い日時の検証を飛ばせてしまうため）
+- トリガー関数（`ensure_reservation_tokens` など。EXECUTE 権限がなくてもトリガーは動く）
+- `current_staff_id` / `can_operate_event`
+
+管理者RPC（authenticated に公開されているが、関数の中で `admin_users` を確認する。anon には公開しない）:
+
+- `admin_*` / `delete_event_admin`
+
+## マイグレーション履歴について
+
+本番の `supabase_migrations.schema_migrations` と、このフォルダのファイル名（バージョン番号）は、
+2026-11-05 までの分が一致していません（本番には別の番号で記録されていたり、本番にしかない記録があったりします）。
+そのため `supabase db push` はそのままでは使えません。本番に適用するときは、
+Supabase のダッシュボードか MCP の apply_migration で、ファイルの内容を1つずつ適用してください。
+2026-11-07 以降のマイグレーションは、本番に記録された番号と同じファイル名にしています。

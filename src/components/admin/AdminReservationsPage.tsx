@@ -1,14 +1,14 @@
 'use client';
 
-export const runtime = 'edge';
-
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { BarChart3, CalendarDays, ClipboardCopy, Download, GraduationCap, Mail, Trash2, TriangleAlert, UserRound, X } from 'lucide-react';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import AdminNav from '@/components/AdminNav';
 import { adminSupabase as supabase } from '@/lib/supabase';
 import { type SurveyAnswers, type SurveyQuestion, type SurveyQuestionSummary, describeShowIf, formatSurveyAnswer, summarizeSurvey } from '@/lib/survey';
 import { type XlsxCell, type XlsxSheet, downloadXlsx } from '@/lib/xlsx';
+import { useLoadEffect } from '@/hooks/useLoadEffect';
 
 interface ReservationItem {
   id: string;
@@ -56,6 +56,8 @@ function safeFileName(value: string): string {
   return value.replace(/[\/:*?"<>|\s]+/g, '_').replace(/^_+|_+$/g, '') || 'event';
 }
 
+const PAYMENT_LABEL: Record<string, string> = { not_required: '不要', pending: '未払い', paid: '支払い済み', expired: '期限切れ' };
+
 function formatDateTime(dateStr: string | null): string {
   if (!dateStr) return '-';
   return new Date(dateStr).toLocaleString('ja-JP', {
@@ -82,14 +84,15 @@ export default function AdminReservationsPage({ id }: { id: string }) {
     return () => window.clearInterval(timer);
   }, []);
   const [showWipeModal, setShowWipeModal] = useState(false);
+  const [wipeConfirmText, setWipeConfirmText] = useState('');
   const [wiping, setWiping] = useState(false);
   const [surveyQuestions, setSurveyQuestions] = useState<SurveyQuestion[]>([]);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
-      setError(null);
       const { data: eventData, error: eventError } = await supabase
         .from('events').select('title, survey_config').eq('id', id).single();
+      setError(null);
       if (eventError || !eventData) throw new Error('企画情報が見つかりません。');
       setEventTitle(eventData.title);
       setSurveyQuestions(((eventData.survey_config as { questions?: SurveyQuestion[] } | null)?.questions) ?? []);
@@ -111,11 +114,27 @@ export default function AdminReservationsPage({ id }: { id: string }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
-  useEffect(() => {
-    if (!authLoading && user) loadData();
-  }, [id, authLoading, user]);
+  useLoadEffect(() => {
+    if (!authLoading && user) return loadData();
+  }, [authLoading, user, loadData]);
+
+  // 一覧の列（氏名・学籍番号）を1行ずつコピーする。キャンセルを除き、今の絞り込み・検索に合わせる
+  const copyColumn = async (rows: ReservationItem[], pick: (row: ReservationItem) => string, label: string) => {
+    const values = rows.filter((row) => row.status !== 'cancelled').map(pick).filter(Boolean);
+    if (values.length === 0) {
+      alert(`コピーできる${label}がありません。`);
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(values.join('\n'));
+      alert(`${values.length}件の${label}をコピーしました。`);
+    } catch (copyError) {
+      console.error(copyError);
+      setError(`${label}のコピーに失敗しました。`);
+    }
+  };
 
   // メールアドレスをカンマ区切りでコピーする（Gmail の宛先欄にそのまま貼り付けられる形）
   const copyEmailList = async (rows: ReservationItem[], label: string) => {
@@ -167,13 +186,19 @@ export default function AdminReservationsPage({ id }: { id: string }) {
     setCancellingId(null);
   };
 
+  const closeWipeModal = () => {
+    setShowWipeModal(false);
+    setWipeConfirmText('');
+  };
+
   const handleWipeData = async () => {
+    if (wipeConfirmText !== '完全削除') return;
     setWiping(true);
     const { error: wipeError } = await supabase.from('reservations').delete().eq('event_id', id);
     if (wipeError) setError(wipeError.message);
     else {
       setReservations([]);
-      setShowWipeModal(false);
+      closeWipeModal();
       alert('すべての予約データを削除しました。');
     }
     setWiping(false);
@@ -277,8 +302,8 @@ export default function AdminReservationsPage({ id }: { id: string }) {
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
               <div><h1>予約者一覧</h1><p>{eventTitle}</p></div>
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                <input className="form-input" placeholder="氏名・学籍番号で検索..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
-                <button onClick={handleExportExcel} className="btn btn-secondary">📥 Excelでダウンロード</button>
+                <input className="form-input" type="search" aria-label="氏名・学籍番号で検索" placeholder="氏名・学籍番号で検索..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+                <button type="button" onClick={handleExportExcel} className="btn btn-secondary"><Download size={17} aria-hidden="true" />Excelでダウンロード</button>
               </div>
             </div>
 
@@ -297,18 +322,25 @@ export default function AdminReservationsPage({ id }: { id: string }) {
             </div>
 
             <div style={{ display: 'flex', gap: 12, marginTop: 24, flexWrap: 'wrap' }}>
-              <button className="btn btn-secondary btn-sm" onClick={() => handleCopyEmails(false)}>📋 未使用者メールをコピー</button>
-              <button className="btn btn-secondary btn-sm" onClick={() => handleCopyEmails(true)}>📋 予約者全員のメールをコピー</button>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleCopyEmails(false)}><Mail size={15} aria-hidden="true" />未使用者メールをコピー</button>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleCopyEmails(true)}><Mail size={15} aria-hidden="true" />予約者全員のメールをコピー</button>
+              {paymentRequired && (
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => void copyEmailList(activeRows.filter((r) => r.payment_status === 'pending'), '未払いの予約者')} disabled={unpaidBookings === 0}>
+                  <Mail size={15} aria-hidden="true" />未払いの人のメールをコピー（{unpaidBookings}件）
+                </button>
+              )}
               {slotDays.map(({ key, label, rows }) => (
-                <button key={key} className="btn btn-secondary btn-sm" onClick={() => void copyEmailList(rows, `${label}の予約者`)} disabled={rows.length === 0}>
-                  📋 {label}の予約者メールをコピー（{rows.length}件）
+                <button type="button" key={key} className="btn btn-secondary btn-sm" onClick={() => void copyEmailList(rows, `${label}の予約者`)} disabled={rows.length === 0}>
+                  <Mail size={15} aria-hidden="true" />{label}の予約者メールをコピー（{rows.length}件）
                 </button>
               ))}
-              <button className="btn btn-danger btn-sm" onClick={() => setShowWipeModal(true)} style={{ marginLeft: 'auto' }}>🗑️ 予約データの完全削除</button>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => void copyColumn(filteredReservations, (r) => r.student_name, '氏名')}><UserRound size={15} aria-hidden="true" />表示中の氏名をコピー</button>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => void copyColumn(filteredReservations, (r) => r.student_number, '学籍番号')}><GraduationCap size={15} aria-hidden="true" />表示中の学籍番号をコピー</button>
+              <button type="button" className="btn btn-danger btn-sm" onClick={() => setShowWipeModal(true)} style={{ marginLeft: 'auto' }}><Trash2 size={15} aria-hidden="true" />予約データの完全削除</button>
             </div>
           </div>
 
-          {error && <div className="error-banner">⚠️ {error}</div>}
+          {error && <div className="error-banner" role="alert"><TriangleAlert size={20} aria-hidden="true" style={{ flexShrink: 0 }} /><span>{error}</span></div>}
 
           {slots.length > 0 && (() => {
             const rows = slots.map((slot) => {
@@ -336,7 +368,7 @@ export default function AdminReservationsPage({ id }: { id: string }) {
             const muted = { fontSize: 12, color: 'var(--text-secondary)' } as const;
             return (
               <div className="glass-card" style={{ marginTop: 20 }}>
-                <h2 style={{ marginBottom: 6 }}>🍱 枠ごとの状況</h2>
+                <h2 style={{ marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}><CalendarDays size={22} aria-hidden="true" />枠ごとの状況</h2>
                 <p style={{ marginTop: 0, ...muted, fontSize: 13 }}>
                   受け取り済み {totalUsed}人 ／ 受け取らずに終了 {totalMissed}人 ／ 受け取り待ち {totalWaiting}人。人数を押すと、下の一覧がその人たちだけになります。
                 </p>
@@ -373,7 +405,7 @@ export default function AdminReservationsPage({ id }: { id: string }) {
                             {closed ? `受け取らずに終了 ${notUsed}人` : `受け取り待ち ${notUsed}人`}
                           </button>
                           <button type="button" className="btn btn-secondary btn-sm" onClick={() => void copyEmailList(active, slot.label)} disabled={active.length === 0}>
-                            📋 メール（{active.length}件）
+                            <ClipboardCopy size={14} aria-hidden="true" />メール（{active.length}件）
                           </button>
                         </div>
                       </div>
@@ -399,7 +431,7 @@ export default function AdminReservationsPage({ id }: { id: string }) {
 
           <div id={pickupFilter ? undefined : 'reservation-list'} className="admin-table-container reservations-table-desktop" style={{ marginTop: 20 }}>
             <table className="admin-table admin-table-stack">
-              <thead><tr><th>予約日時</th><th>券種</th><th>氏名</th><th>学籍番号</th><th>開催枠</th><th>大学メールアドレス</th><th>状態</th><th>操作</th></tr></thead>
+              <thead><tr><th>予約日時</th><th>券種</th><th>氏名</th><th>学籍番号</th><th>開催枠</th><th>大学メールアドレス</th><th>状態</th>{paymentRequired && <th>支払い</th>}<th>操作</th></tr></thead>
               <tbody>
                 {filteredReservations.map((res) => (
                   <tr key={res.id} style={{ opacity: res.status === 'cancelled' ? 0.4 : 1 }}>
@@ -422,7 +454,14 @@ export default function AdminReservationsPage({ id }: { id: string }) {
                     <td data-label="開催枠">{res.event_slots?.label || '-'}</td>
                     <td data-label="メール">{res.university_email}</td>
                     <td data-label="状態">{res.status === 'used' ? '受け取り済み' : res.status === 'cancelled' ? 'キャンセル' : pickupClosed(res.event_slot_id) ? '受け取らずに終了' : '有効（受け取り待ち）'}</td>
-                    <td className="admin-table-stack-actions">{res.status !== 'cancelled' && <button className="btn btn-secondary btn-sm" onClick={() => handleCancelReservation(res.id)} disabled={cancellingId === res.id}>❌ 取消</button>}</td>
+                    {paymentRequired && (
+                      <td data-label="支払い">
+                        <span className={`badge ${res.payment_status === 'paid' ? 'badge-success' : res.payment_status === 'pending' ? 'badge-warning' : res.payment_status === 'expired' ? 'badge-danger' : 'badge-secondary'}`}>
+                          {PAYMENT_LABEL[res.payment_status] ?? res.payment_status}
+                        </span>
+                      </td>
+                    )}
+                    <td className="admin-table-stack-actions">{res.status !== 'cancelled' && <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleCancelReservation(res.id)} disabled={cancellingId === res.id}><X size={15} aria-hidden="true" />取消</button>}</td>
                   </tr>
                 ))}
               </tbody>
@@ -430,13 +469,20 @@ export default function AdminReservationsPage({ id }: { id: string }) {
           </div>
 
           {showWipeModal && (
-            <div className="modal-overlay">
-              <div className="modal-content">
-                <h3>⚠️ 予約データの完全削除</h3>
-                <p>この企画のすべての予約データを完全に削除します。本当に削除しますか？</p>
+            <div className="modal-overlay" onKeyDown={(e) => { if (e.key === 'Escape' && !wiping) closeWipeModal(); }}>
+              <div className="modal-content" role="dialog" aria-modal="true" aria-labelledby="wipe-title">
+                <h3 id="wipe-title" className="modal-title"><TriangleAlert size={22} aria-hidden="true" />予約データの完全削除</h3>
+                <p className="modal-body">
+                  この企画のすべての予約データ（{reservations.length}件）を完全に削除します。元に戻せません。
+                  必要なら先に「Excelでダウンロード」で控えを取ってください。
+                </p>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="wipe-confirm">確認のため「完全削除」と入力してください</label>
+                  <input id="wipe-confirm" className="form-input" value={wipeConfirmText} onChange={(e) => setWipeConfirmText(e.target.value)} autoFocus autoComplete="off" />
+                </div>
                 <div className="modal-actions">
-                  <button className="btn btn-secondary" onClick={() => setShowWipeModal(false)}>キャンセル</button>
-                  <button className="btn btn-danger" onClick={handleWipeData} disabled={wiping}>{wiping ? '削除実行中...' : 'はい、完全に削除します'}</button>
+                  <button type="button" className="btn btn-secondary" onClick={closeWipeModal} disabled={wiping}>やめる</button>
+                  <button type="button" className="btn btn-danger" onClick={handleWipeData} disabled={wiping || wipeConfirmText !== '完全削除'}>{wiping ? '削除実行中...' : '完全に削除する'}</button>
                 </div>
               </div>
             </div>
@@ -463,7 +509,7 @@ function SurveySummaryCard({ questions, summary }: { questions: SurveyQuestion[]
   const muted = { fontSize: 12, color: 'var(--text-secondary)' } as const;
   return (
     <div className="glass-card" style={{ marginTop: 20 }}>
-      <h2 style={{ marginBottom: 6 }}>📊 アンケート集計</h2>
+      <h2 style={{ marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}><BarChart3 size={22} aria-hidden="true" />アンケート集計</h2>
       <p style={{ marginTop: 0, ...muted, fontSize: 13 }}>キャンセルを除いた予約の回答です。「Excelでダウンロード」の「アンケート集計」シートにも同じ内容が入ります。</p>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 12 }}>
         {summary.map((row, index) => {

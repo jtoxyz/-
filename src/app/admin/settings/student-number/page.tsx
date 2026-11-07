@@ -1,10 +1,11 @@
 'use client';
 
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import AdminNav from '@/components/AdminNav';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { adminSupabase as supabase } from '@/lib/supabase';
+import { useLoadEffect } from '@/hooks/useLoadEffect';
 
 export default function StudentNumberSettingsPage() {
   const { loading: authLoading, user } = useAdminAuth();
@@ -14,17 +15,9 @@ export default function StudentNumberSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!authLoading && user) {
-      void loadCodes();
-    }
-  }, [authLoading, user]);
-
   const loadCodes = async () => {
-    setLoading(true);
-    setError(null);
-
     const { data, error: rpcError } = await supabase.rpc('get_allowed_student_department_codes');
+    setError(null);
 
     if (rpcError) {
       setError(rpcError.message || '学科コードの取得に失敗しました。');
@@ -34,6 +27,10 @@ export default function StudentNumberSettingsPage() {
 
     setLoading(false);
   };
+
+  useLoadEffect(() => {
+    if (!authLoading && user) return loadCodes();
+  }, [authLoading, user]);
 
   const addCode = () => {
     const normalized = newCode.trim().toUpperCase();
@@ -94,7 +91,7 @@ export default function StudentNumberSettingsPage() {
     <div className="admin-mode">
       <div className="admin-layout-sidebar">
         <AdminNav />
-        <main>
+        <div>
           <div className="glass-card" style={{ maxWidth: '760px' }}>
             <h1 style={{ marginTop: 0, color: 'var(--text-primary)' }}>学籍番号設定</h1>
             <p style={{ color: 'var(--text-secondary)', lineHeight: 1.7 }}>
@@ -160,7 +157,7 @@ export default function StudentNumberSettingsPage() {
               {saving ? '保存中...' : '設定を保存'}
             </button>
           </div>
-        </main>
+        </div>
       </div>
     </div>
   );

@@ -1,11 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import AdminNav from '@/components/AdminNav';
 import { PAYMENT_ROOM_LABEL } from '@/lib/config';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { adminSupabase as supabase } from '@/lib/supabase';
 import { type PaymentVisitSlot, VISIT_SLOT_COLUMNS, formatVisitSlot, jstDateKey, visitSlotPlace } from '@/lib/paymentVisit';
+import { useLoadEffect } from '@/hooks/useLoadEffect';
 
 type VisitReservation = {
   id: string;
@@ -115,8 +116,8 @@ export default function PaymentVisitsPage() {
     setLoading(false);
   }, [dateKey, loadDay, loadUpcoming]);
 
-  useEffect(() => {
-    if (!authLoading && user) void reload();
+  useLoadEffect(() => {
+    if (!authLoading && user) return reload();
   }, [authLoading, user, reload]);
 
   const summary = useMemo(() => {
@@ -204,7 +205,7 @@ export default function PaymentVisitsPage() {
     <div className="admin-mode">
       <div className="admin-layout-sidebar">
         <AdminNav />
-        <main style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 20 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 20 }}>
           {error && <div className="error-banner">{error}</div>}
 
           <div className="glass-card">
@@ -329,7 +330,7 @@ export default function PaymentVisitsPage() {
               </div>
             )}
           </div>
-        </main>
+        </div>
       </div>
     </div>
   );

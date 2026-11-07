@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { CalendarDays, Clock3, Tickets } from 'lucide-react';
+import { CalendarDays, CircleX, Clock3, Tickets } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { type PaymentVisitSlot, fetchMyVisitSlots, formatVisitSlot, visitSlotPlace } from '@/lib/paymentVisit';
 
@@ -17,6 +17,16 @@ type MyTicket = {
   payment_status: 'not_required' | 'pending' | 'paid' | 'expired';
   payment_due_at: string | null;
   slot_starts_at: string | null;
+};
+
+type CancelledTicket = {
+  reservation_id: string;
+  event_title: string;
+  slot_label: string | null;
+  slot_starts_at: string | null;
+  ticket_type: 'reservation' | 'walkin';
+  payment_status: 'not_required' | 'pending' | 'paid' | 'expired';
+  cancelled_at: string | null;
 };
 
 function formatDateTime(value: string): string {
@@ -45,6 +55,7 @@ function paymentLabel(ticket: MyTicket, visit?: PaymentVisitSlot): string | null
 export default function MyTicketsList() {
   const [tickets, setTickets] = useState<MyTicket[]>([]);
   const [visits, setVisits] = useState<Record<string, PaymentVisitSlot>>({});
+  const [cancelled, setCancelled] = useState<CancelledTicket[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -52,9 +63,12 @@ export default function MyTicketsList() {
     let active = true;
 
     const loadTickets = async () => {
-      setLoading(true);
-      const { data, error: rpcError } = await supabase.rpc('get_my_tickets');
+      const [{ data, error: rpcError }, cancelledResult] = await Promise.all([
+        supabase.rpc('get_my_tickets'),
+        supabase.rpc('get_my_cancelled_tickets'),
+      ]);
       if (!active) return;
+      setCancelled(cancelledResult.error ? [] : ((cancelledResult.data as CancelledTicket[] | null) || []));
 
       if (rpcError) {
         setError(rpcError.message || '予約一覧を取得できませんでした。');
@@ -72,7 +86,9 @@ export default function MyTicketsList() {
     };
 
     void loadTickets();
-    const { data: listener } = supabase.auth.onAuthStateChange(() => void loadTickets());
+    const { data: listener } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'USER_UPDATED') void loadTickets();
+    });
 
     return () => {
       active = false;
@@ -132,6 +148,30 @@ export default function MyTicketsList() {
             );
           })}
         </div>
+      )}
+
+      {!loading && cancelled.length > 0 && (
+        <details style={{ marginTop: 16 }}>
+          <summary style={{ cursor: 'pointer', color: 'var(--text-secondary)', fontSize: '0.88rem' }}>
+            キャンセルされた予約（直近30日・{cancelled.length}件）
+          </summary>
+          <ul style={{ listStyle: 'none', display: 'grid', gap: 8, marginTop: 10 }}>
+            {cancelled.map((ticket) => (
+              <li key={ticket.reservation_id} className="glass-card" style={{ padding: '11px 14px', margin: 0, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                <CircleX size={18} aria-hidden="true" style={{ color: 'var(--color-danger)', flexShrink: 0, marginTop: 2 }} />
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontWeight: 700 }}>{ticket.event_title}{ticket.slot_label ? `（${ticket.slot_label}）` : ''}</div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 3 }}>
+                    {ticket.payment_status === 'expired'
+                      ? '支払期限までに支払いが確認できなかったため、自動でキャンセルされました。'
+                      : '委員会がキャンセルしました。心当たりがない場合は委員会にお問い合わせください。'}
+                    {ticket.cancelled_at && <span>（{formatDateTime(ticket.cancelled_at)}）</span>}
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
     </section>
   );

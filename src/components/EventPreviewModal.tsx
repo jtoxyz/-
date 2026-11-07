@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect } from 'react';
+import { Eye, X } from 'lucide-react';
 import DOMPurify from 'dompurify';
 import { marked } from 'marked';
 import { parseShortcodes } from '@/lib/parseShortcodes';
@@ -97,12 +98,14 @@ export default function EventPreviewModal({ isOpen, onClose, formData }: EventPr
             zIndex: 10,
           }}
           title="閉じる"
+          aria-label="閉じる"
+          type="button"
         >
-          ✕
+          <X size={22} aria-hidden="true" />
         </button>
 
         <div style={{ background: '#fef3c7', color: '#92400e', padding: '12px 20px', textAlign: 'center', fontWeight: 'bold', borderBottom: '1px solid #fcd34d', borderTopLeftRadius: 'var(--radius-lg)', borderTopRightRadius: 'var(--radius-lg)' }}>
-          👁 プレビューモード — この内容はまだ保存されていません
+          <Eye size={16} aria-hidden="true" style={{ verticalAlign: 'middle', marginRight: 6 }} />プレビューモード — この内容はまだ保存されていません
         </div>
 
         <div style={{ padding: '30px 20px' }}>

@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Save, Search, TicketPlus, UserRoundCog, X } from 'lucide-react';
 import AdminNav from '@/components/AdminNav';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { adminSupabase as supabase } from '@/lib/supabase';
 import { type PaymentVisitSlot, VISIT_SLOT_COLUMNS, formatVisitSlot, jstDateKey } from '@/lib/paymentVisit';
+import { useLoadEffect } from '@/hooks/useLoadEffect';
 
 type UserProfileRow = {
   user_id: string;
@@ -87,8 +88,8 @@ export default function AdminUsersPage() {
     setLoading(false);
   };
 
-  useEffect(() => {
-    if (!authLoading && user) void loadProfiles();
+  useLoadEffect(() => {
+    if (!authLoading && user) return loadProfiles();
   }, [authLoading, user]);
 
   const todayKey = jstDateKey(new Date());
