@@ -3,13 +3,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Copy, Eye, Trash2, TriangleAlert } from 'lucide-react';
+import { CalendarPlus, Copy, Eye, Trash2, TriangleAlert } from 'lucide-react';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import AdminNav from '@/components/AdminNav';
 import EventPreviewModal from '@/components/EventPreviewModal';
 import FormatToolbar from '@/components/admin/FormatToolbar';
 import { adminSupabase as supabase } from '@/lib/supabase';
 import PaymentVisitSettings from '@/components/admin/PaymentVisitSettings';
+import OptionalSection from '@/components/admin/OptionalSection';
+import { DEFAULT_ALLOWED_DOMAINS, DEFAULT_LOW_REMAINING_THRESHOLD, DEFAULT_LOW_REMAINING_THRESHOLD_TYPE, shiftSlotTimingByDays } from '@/lib/eventFormDefaults';
 import { applySlotTimingChange } from '@/lib/slotTiming';
 import { formatJstShort, jstDateTimeToIso, jstLocalToIso } from '@/lib/jst';
 
@@ -102,7 +104,13 @@ export default function AdminNewEventPage() {
   const [ticketRevealMinutes, setTicketRevealMinutes] = useState('5');
 
   // Allowed domains
-  const [allowedDomains, setAllowedDomains] = useState('ge.osaka-sandai.ac.jp');
+  const [allowedDomains, setAllowedDomains] = useState(DEFAULT_ALLOWED_DOMAINS);
+
+  // 毎回は使わない設定（チェックを入れたときだけ入力欄を出す。外すと標準値で保存）
+  const [useCustomDomains, setUseCustomDomains] = useState(false);
+  const [usePostReservationNotes, setUsePostReservationNotes] = useState(false);
+  const [useCustomThreshold, setUseCustomThreshold] = useState(false);
+  const [useAutoStop, setUseAutoStop] = useState(false);
 
   // Survey settings
   const [surveyAfterReservationEnabled, setSurveyAfterReservationEnabled] = useState(false);
@@ -123,18 +131,21 @@ export default function AdminNewEventPage() {
   // Slot row helpers
 
   // New features
-  const [isReservationSuspended, setIsReservationSuspended] = useState(false);
-  const [isWalkinSuspended, setIsWalkinSuspended] = useState(false);
-  const [isTicketUseSuspended, setIsTicketUseSuspended] = useState(false);
   const [autoSuspendAt, setAutoSuspendAt] = useState('');
   const [autoHideAt, setAutoHideAt] = useState('');
   const [postReservationNotes, setPostReservationNotes] = useState('');
-  const [lowRemainingThreshold, setLowRemainingThreshold] = useState('10');
-  const [lowRemainingThresholdType, setLowRemainingThresholdType] = useState<'count' | 'percent'>('count');
+  const [lowRemainingThreshold, setLowRemainingThreshold] = useState(String(DEFAULT_LOW_REMAINING_THRESHOLD));
+  const [lowRemainingThresholdType, setLowRemainingThresholdType] = useState<'count' | 'percent'>(DEFAULT_LOW_REMAINING_THRESHOLD_TYPE);
 
   // Slot row helpers
   const updateSlotRow = <K extends keyof SlotFormRow>(slotId: string, field: K, value: SlotFormRow[K]) => {
-    setSlotRows((prev) => prev.map((row) => (row.id === slotId ? applySlotTimingChange(row, field, value) : row)));
+    setSlotRows((prev) => prev.map((row) => {
+      if (row.id !== slotId) return row;
+      const next = applySlotTimingChange(row, field, value);
+      // 予約枠が総参加枠と同じ（当日券分を分けていない）なら、総参加枠の変更に合わせる
+      if (field === 'totalCapacity' && row.capacity === row.totalCapacity) next.capacity = next.totalCapacity;
+      return next;
+    }));
   };
 
   const addSlotRow = () => {
@@ -171,6 +182,18 @@ export default function AdminNewEventPage() {
         id: crypto.randomUUID(),
         label: target.label ? `${target.label}（コピー）` : 'コピー',
       };
+      const newRows = [...prev];
+      newRows.splice(rowIndex + 1, 0, newRow);
+      return newRows;
+    });
+  };
+
+  // 複数日開催向け：同じ時間帯の枠を翌日にコピーする
+  const duplicateSlotToNextDay = (slotId: string) => {
+    setSlotRows((prev) => {
+      const rowIndex = prev.findIndex(r => r.id === slotId);
+      if (rowIndex === -1) return prev;
+      const newRow = { ...shiftSlotTimingByDays(prev[rowIndex], 1), id: crypto.randomUUID() };
       const newRows = [...prev];
       newRows.splice(rowIndex + 1, 0, newRow);
       return newRows;
@@ -308,7 +331,7 @@ export default function AdminNewEventPage() {
     }
 
     // Domain normalization
-    const domainsArray = allowedDomains
+    const domainsArray = (useCustomDomains ? allowedDomains : DEFAULT_ALLOWED_DOMAINS)
       .split(',')
       .map((d) => d.trim().toLowerCase())
       .filter((d) => d !== '');
@@ -357,14 +380,14 @@ export default function AdminNewEventPage() {
       payment_required: paymentRequired,
       payment_visit_required: paymentRequired && paymentVisitRequired,
       payment_visit_window_days: paymentVisitWindowDays,
-      is_reservation_suspended: isReservationSuspended,
-      is_walkin_suspended: isWalkinSuspended,
-      is_ticket_use_suspended: isTicketUseSuspended,
-      auto_suspend_at: jstLocalToIso(autoSuspendAt),
-      auto_hide_at: jstLocalToIso(autoHideAt),
-      post_reservation_notes: postReservationNotes.trim() || null,
-      low_remaining_threshold: Number.isNaN(parseInt(lowRemainingThreshold, 10)) ? 10 : Math.max(0, parseInt(lowRemainingThreshold, 10)),
-      low_remaining_threshold_type: lowRemainingThresholdType,
+      is_reservation_suspended: false,
+      is_walkin_suspended: false,
+      is_ticket_use_suspended: false,
+      auto_suspend_at: useAutoStop ? jstLocalToIso(autoSuspendAt) : null,
+      auto_hide_at: useAutoStop ? jstLocalToIso(autoHideAt) : null,
+      post_reservation_notes: usePostReservationNotes ? postReservationNotes.trim() || null : null,
+      low_remaining_threshold: !useCustomThreshold || Number.isNaN(parseInt(lowRemainingThreshold, 10)) ? DEFAULT_LOW_REMAINING_THRESHOLD : Math.max(0, parseInt(lowRemainingThreshold, 10)),
+      low_remaining_threshold_type: useCustomThreshold ? lowRemainingThresholdType : DEFAULT_LOW_REMAINING_THRESHOLD_TYPE,
     };
 
     try {
@@ -413,8 +436,8 @@ export default function AdminNewEventPage() {
         return;
       }
 
-      // Success: Redirect to dashboard
-      router.push('/admin/events');
+      // 券種・アンケートは企画IDが必要なので、作成後は編集画面に移って続きを設定できるようにする
+      router.push(`/admin/event?id=${data.id}`);
     } catch (err) {
       console.error('Error creating event:', err);
       setError('サーバー処理中にエラーが発生しました。');
@@ -507,11 +530,17 @@ export default function AdminNewEventPage() {
             </div>
 
 
-            <div className="form-group">
-              <label className="form-label" htmlFor="postReservationNotes">予約完了後の注意事項（利用者のチケット画面上部に表示）</label>
+            <OptionalSection
+              label="予約後の注意事項を表示する"
+              hint="持ち物や集合時間など、利用者のチケット画面の上に出すお知らせです。"
+              checked={usePostReservationNotes}
+              onChange={setUsePostReservationNotes}
+              disabled={saving}
+            >
               <FormatToolbar targetId="postReservationNotes" onChange={setPostReservationNotes} disabled={saving} />
               <textarea
                 id="postReservationNotes"
+                aria-label="予約完了後の注意事項"
                 className="form-input"
                 rows={3}
                 placeholder="例：当日は学生証を必ず持参してください。10分前には集合してください。"
@@ -519,12 +548,18 @@ export default function AdminNewEventPage() {
                 onChange={(e) => setPostReservationNotes(e.target.value)}
                 disabled={saving}
               />
-            </div>
+            </OptionalSection>
 
-            <div className="form-group">
-              <label className="form-label" htmlFor="allowedDomains">許可する大学メールのドメイン (カンマ区切り)</label>
+            <OptionalSection
+              label="予約できる大学メールのドメインを変更する"
+              hint={`チェックしない場合は ${DEFAULT_ALLOWED_DOMAINS} のみ予約できます。`}
+              checked={useCustomDomains}
+              onChange={setUseCustomDomains}
+              disabled={saving}
+            >
               <input
                 id="allowedDomains"
+                aria-label="許可する大学メールのドメイン"
                 type="text"
                 className="form-input"
                 placeholder="ge.osaka-sandai.ac.jp,osaka-sandai.ac.jp"
@@ -533,7 +568,7 @@ export default function AdminNewEventPage() {
                 disabled={saving}
               />
               <span className="form-hint">複数のドメインを許可する場合は、カンマ(,)で区切って入力してください。</span>
-            </div>
+            </OptionalSection>
           </div>
 
           {/* Section: Timings & Slots */}
@@ -591,40 +626,32 @@ export default function AdminNewEventPage() {
 
             {/* Slot selection mode */}
             <div className="form-group" style={{ marginTop: '16px' }}>
-              <label className="form-label">枠選択モード</label>
-              <div style={{ display: 'flex', gap: '24px', marginTop: '4px' }}>
-                <label className="form-checkbox-label">
-                  <input
-                    type="radio"
-                    name="slotSelectionMode"
-                    className="form-checkbox"
-                    checked={slotSelectionMode === 'single'}
-                    onChange={() => setSlotSelectionMode('single')}
-                    disabled={saving}
-                  />
-                  1つだけ選択（単一枠）
-                </label>
-                <label className="form-checkbox-label">
-                  <input
-                    type="radio"
-                    name="slotSelectionMode"
-                    className="form-checkbox"
-                    checked={slotSelectionMode === 'multiple'}
-                    onChange={() => setSlotSelectionMode('multiple')}
-                    disabled={saving}
-                  />
-                  複数選択可能
-                </label>
-              </div>
-              <span className="form-hint">ユーザーが予約時に選択できる開催枠の数を制限します。</span>
+              <label className="form-checkbox-label">
+                <input
+                  type="checkbox"
+                  className="form-checkbox"
+                  checked={slotSelectionMode === 'multiple'}
+                  onChange={(e) => setSlotSelectionMode(e.target.checked ? 'multiple' : 'single')}
+                  disabled={saving}
+                />
+                1人が複数の開催枠をまとめて予約できるようにする
+              </label>
+              <span className="form-hint" style={{ marginLeft: 28 }}>チェックしない場合、1人1枠だけ予約できます（券種を設定した企画は常に1枠です）。</span>
             </div>
 
             {/* Remaining Threshold Setting */}
-            <div className="form-group" style={{ marginTop: '16px', background: 'var(--card-bg)', padding: '16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--card-border)' }}>
-              <label className="form-label" style={{ marginBottom: '8px' }}>「残りわずか」表示の基準（利用者画面の表示）</label>
+            <OptionalSection
+              label="「残りわずか」と表示する基準を変更する"
+              hint={`チェックしない場合は、残り${DEFAULT_LOW_REMAINING_THRESHOLD}人以下で「残りわずか」と表示します。`}
+              checked={useCustomThreshold}
+              onChange={setUseCustomThreshold}
+              disabled={saving}
+            >
               <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.85rem' }}>残り</span>
                 <input
                   type="number"
+                  aria-label="残りわずか表示の基準値"
                   className="form-input"
                   style={{ width: '120px' }}
                   min="0"
@@ -633,6 +660,7 @@ export default function AdminNewEventPage() {
                   disabled={saving}
                 />
                 <select
+                  aria-label="基準の単位"
                   className="form-input"
                   style={{ width: '120px' }}
                   value={lowRemainingThresholdType}
@@ -644,10 +672,9 @@ export default function AdminNewEventPage() {
                 </select>
               </div>
               <span className="form-hint" style={{ marginTop: '8px' }}>
-                ※ 残数がこの基準を下回った場合、予約画面で具体的な人数ではなく「残りわずか」と表示されます。<br/>
-                ※ 基準値以上残っている場合は「余裕あり」、定員に達した場合は「満席」と表示されます。
+                基準より多く残っていれば「余裕あり」、定員に達したら「満席」と表示されます。
               </span>
-            </div>
+            </OptionalSection>
 
             {/* Slot management */}
             <div className="slot-panel" style={{ marginTop: '20px', background: 'var(--card-bg)', padding: '16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--card-border)' }}>
@@ -922,7 +949,7 @@ export default function AdminNewEventPage() {
                       />
                     </div>
                     <div>
-                      <label className="form-label" style={{ fontSize: '0.75rem' }}>予約枠</label>
+                      <label className="form-label" style={{ fontSize: '0.75rem' }}>予約枠（うち事前予約できる人数）</label>
                       <input
                         type="number"
                         className="form-input"
@@ -953,6 +980,24 @@ export default function AdminNewEventPage() {
                       }}
                     >
                       <Copy size={14} aria-hidden="true" />この枠を複製
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => duplicateSlotToNextDay(row.id)}
+                      disabled={saving || !row.date}
+                      title={row.date ? '' : '開催日を入れると使えます'}
+                      style={{
+                        background: 'transparent',
+                        border: '1px solid var(--color-primary-border)',
+                        color: 'var(--color-primary)',
+                        borderRadius: 'var(--radius-sm)',
+                        padding: '8px 16px',
+                        cursor: saving || !row.date ? 'not-allowed' : 'pointer',
+                        opacity: saving || !row.date ? 0.5 : 1,
+                        fontSize: '0.85rem',
+                      }}
+                    >
+                      <CalendarPlus size={14} aria-hidden="true" />翌日に複製
                     </button>
                     <button
                       type="button"
@@ -1051,7 +1096,7 @@ export default function AdminNewEventPage() {
                 </div>
 
                 <div style={{ marginLeft: '24px', padding: '10px 14px', borderRadius: 'var(--radius-sm)', background: 'rgba(99, 102, 241, 0.06)', border: '1px solid rgba(99, 102, 241, 0.15)', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                  チケットの使用可能時間は、各開催枠の「予約券使用時間」「当日券受付時間」で設定してください。
+                  チケットの使用可能時間は、各開催枠の「チケット使用可能期間」「当日券発行期間」で設定してください（開催時刻から自動で入ります）。
                 </div>
               </>
             )}
@@ -1172,10 +1217,14 @@ export default function AdminNewEventPage() {
             />
           </div>
 
+          <div className="form-hint" style={{ marginBottom: '24px', padding: '10px 14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--card-border)' }}>
+            券種（ドリンク選択など）と予約時アンケートは、作成後に開く編集画面で設定できます。
+          </div>
+
           {/* Section: Status */}
           <div className="glass-card" style={{ marginBottom: '24px' }}>
             <h3 style={{ fontSize: '1.1rem', marginBottom: '16px', color: 'var(--color-primary)' }}>
-              6. 公開・一時停止設定
+              6. 公開設定
             </h3>
             
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -1205,71 +1254,40 @@ export default function AdminNewEventPage() {
                 </label>
               </div>
 
-              <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-                <div className="form-group">
-                  <label className="form-checkbox-label">
+              <OptionalSection
+                label="決まった日時に自動で停止・非公開にする"
+                hint="一時停止のボタンは、作成後の編集画面にあります。"
+                checked={useAutoStop}
+                onChange={setUseAutoStop}
+                disabled={saving}
+              >
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
+                  <div>
+                    <label className="form-label" htmlFor="autoSuspendAt">自動停止日時（予約・当日券・チケット使用を停止）</label>
                     <input
-                      type="checkbox"
-                      className="form-checkbox"
-                      checked={isReservationSuspended}
-                      onChange={(e) => setIsReservationSuspended(e.target.checked)}
+                      id="autoSuspendAt"
+                      type="datetime-local"
+                      className="form-input"
+                      value={autoSuspendAt}
+                      onChange={(e) => setAutoSuspendAt(e.target.value)}
                       disabled={saving}
                     />
-                    予約受付を一時停止
-                  </label>
-                </div>
-                <div className="form-group">
-                  <label className="form-checkbox-label">
+                    <span className="form-hint">空欄なら自動停止しません。</span>
+                  </div>
+                  <div>
+                    <label className="form-label" htmlFor="autoHideAt">自動非公開日時（一覧から消す）</label>
                     <input
-                      type="checkbox"
-                      className="form-checkbox"
-                      checked={isWalkinSuspended}
-                      onChange={(e) => setIsWalkinSuspended(e.target.checked)}
+                      id="autoHideAt"
+                      type="datetime-local"
+                      className="form-input"
+                      value={autoHideAt}
+                      onChange={(e) => setAutoHideAt(e.target.value)}
                       disabled={saving}
                     />
-                    当日券発行を一時停止
-                  </label>
+                    <span className="form-hint">空欄なら自動で非公開にしません。</span>
+                  </div>
                 </div>
-                <div className="form-group">
-                  <label className="form-checkbox-label">
-                    <input
-                      type="checkbox"
-                      className="form-checkbox"
-                      checked={isTicketUseSuspended}
-                      onChange={(e) => setIsTicketUseSuspended(e.target.checked)}
-                      disabled={saving}
-                    />
-                    チケット使用を一時停止
-                  </label>
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px', marginTop: '8px' }}>
-                <div className="form-group">
-                  <label className="form-label" htmlFor="autoSuspendAt">自動停止日時（予約・当日券・チケット使用を停止）</label>
-                  <input
-                    id="autoSuspendAt"
-                    type="datetime-local"
-                    className="form-input"
-                    value={autoSuspendAt}
-                    onChange={(e) => setAutoSuspendAt(e.target.value)}
-                    disabled={saving}
-                  />
-                  <span className="form-hint">指定した日時以降、すべての受付・使用が自動停止します。</span>
-                </div>
-                <div className="form-group">
-                  <label className="form-label" htmlFor="autoHideAt">自動非公開日時（企画を非公開にする）</label>
-                  <input
-                    id="autoHideAt"
-                    type="datetime-local"
-                    className="form-input"
-                    value={autoHideAt}
-                    onChange={(e) => setAutoHideAt(e.target.value)}
-                    disabled={saving}
-                  />
-                  <span className="form-hint">指定した日時以降、一覧から自動的に非表示になります。</span>
-                </div>
-              </div>
+              </OptionalSection>
             </div>
           </div>
 
