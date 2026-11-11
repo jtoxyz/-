@@ -73,8 +73,14 @@ export default function RootLayout({
                 </Link>
                 <span className="header-nav-sep" aria-hidden="true">|</span>
                 <StudentAccountMenu />
-                <ThemeSwitcher />
+                <Link href="/admin" className="header-nav-link">
+                  管理画面
+                </Link>
               </nav>
+              {/* スマホではロゴと同じ行の右端に出す（メニューが多いときに3行にならないように） */}
+              <div className="header-theme">
+                <ThemeSwitcher />
+              </div>
             </div>
           </header>
 
@@ -88,9 +94,7 @@ export default function RootLayout({
               製作：<a href="https://osu-denken.github.io/" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text-secondary)', textDecoration: 'underline' }}>電子計算研究部</a>
             </p>
             <p style={{ fontSize: '0.8rem', marginTop: '10px' }}>
-              <Link href="/staff" style={{ color: 'var(--text-secondary)' }}>スタッフ用</Link>
-              <span aria-hidden="true" style={{ margin: '0 8px' }}>·</span>
-              <Link href="/admin" style={{ color: 'var(--text-secondary)' }}>管理画面</Link>
+              <Link href="/staff" style={{ color: 'var(--text-secondary)' }}>スタッフ用画面（自治会など）</Link>
             </p>
           </footer>
         </div>

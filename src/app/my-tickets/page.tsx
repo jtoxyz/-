@@ -238,7 +238,7 @@ export default function MyTicketPage() {
 
           {ticket.status === 'reserved' && (
             <>
-              <button type="button" className="btn btn-primary" onClick={handleUse} disabled={!useAllowed || usingTicket} aria-describedby={blockReason ? 'use-block-reason' : undefined}>
+              <button type="button" className="btn btn-primary" onClick={handleUse} disabled={!useAllowed || usingTicket} style={{ width: '100%' }} aria-describedby={blockReason ? 'use-block-reason' : undefined}>
                 {usingTicket ? '処理中...' : useAllowed ? 'このチケットを使用する' : '現在は使用できません'}
               </button>
               {blockReason && <p id="use-block-reason" style={{ marginTop: 10, textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.88rem' }}>{blockReason}</p>}

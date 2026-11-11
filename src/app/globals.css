@@ -575,6 +575,7 @@ a.btn-secondary:hover {
   gap: 8px;
 }
 .header-nav {
+  margin-left: auto;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -584,6 +585,11 @@ a.btn-secondary:hover {
 }
 .header-nav-sep {
   color: var(--card-border);
+}
+.header-theme {
+  margin-left: 10px;
+  display: flex;
+  align-items: center;
 }
 .header-nav-link {
   color: var(--text-secondary);
@@ -616,9 +622,15 @@ a.btn-secondary:hover {
     white-space: nowrap;
   }
   .header-nav {
-    flex: 1 1 auto;
+    order: 2;
+    flex: 1 1 100%;
+    justify-content: flex-start;
     gap: 6px 10px;
     font-size: 0.8rem;
+  }
+  .header-theme {
+    order: 1;
+    margin-left: auto;
   }
   /* ログイン中は項目が増えるので、氏名は短く切って1行に収める */
   .header-nav .header-nav-link span {
