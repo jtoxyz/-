@@ -78,6 +78,7 @@ export default function StudentLoginPage() {
         className="btn btn-primary"
         onClick={handleLogin}
         disabled={loading}
+        style={{ width: '100%' }}
       >
         <LogIn size={19} aria-hidden="true" />
         {loading ? 'Googleログインを開始しています...' : 'Googleでログイン'}

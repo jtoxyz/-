@@ -221,7 +221,7 @@ export default function AccountReservationPage() {
         <div style={{ display: 'grid', gap: 10 }}>
           {results.map((result) => <Link key={result.id} href={`/my-tickets?reservationId=${encodeURIComponent(result.id)}`} className="glass-card interactive" style={{ padding: 14, display: 'flex', justifyContent: 'space-between' }}><span>{result.slot_label}</span><strong>チケットを表示</strong></Link>)}
         </div>
-        <Link href="/" className="btn btn-secondary" style={{ marginTop: 18 }}>企画一覧へ戻る</Link>
+        <Link href="/" className="btn btn-secondary" style={{ width: '100%', marginTop: 18 }}>企画一覧へ戻る</Link>
       </div>
     );
   }
