@@ -223,8 +223,24 @@ export default function MyTicketPage() {
               <div style={{ marginTop: 10, fontSize: '1.5rem', fontWeight: 900, fontVariantNumeric: 'tabular-nums' }} aria-label="現在時刻">
                 現在 {formatClock(nowTick)}
               </div>
-              <div style={{ marginTop: 8, fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
-                この画面を受付のスタッフに見せてください（あと {formatRemaining(ticketReveal.remainingMs)} 表示されます）
+              <div style={{ marginTop: 14, padding: '10px 12px', borderRadius: 10, background: 'var(--card-bg)', border: '1px solid var(--color-success-border)' }}>
+                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)' }}>表示の残り時間</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: 900, fontVariantNumeric: 'tabular-nums', color: 'var(--color-success)' }}>
+                  {formatRemaining(ticketReveal.remainingMs)}
+                </div>
+                <div
+                  role="progressbar"
+                  aria-label="表示の残り時間"
+                  aria-valuemin={0}
+                  aria-valuemax={ticket.ticket_reveal_minutes * 60}
+                  aria-valuenow={Math.ceil(ticketReveal.remainingMs / 1000)}
+                  style={{ marginTop: 6, height: 8, borderRadius: 999, background: 'var(--color-success-bg)', overflow: 'hidden' }}
+                >
+                  <div style={{ height: '100%', width: `${Math.min(100, (ticketReveal.remainingMs / (ticket.ticket_reveal_minutes * 60_000)) * 100)}%`, background: 'var(--color-success)', transition: 'width 1s linear' }} />
+                </div>
+              </div>
+              <div style={{ marginTop: 10, fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                この画面を受付のスタッフに見せてください。残り時間が0になると表示が終わります。
               </div>
             </div>
           )}
