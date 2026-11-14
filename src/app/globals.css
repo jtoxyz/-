@@ -1133,3 +1133,17 @@ a.btn[aria-disabled="true"] {
   border-color: var(--color-primary);
   color: #ffffff;
 }
+
+/* 使用済みチケットの確認表示：動いていることでスクリーンショットではないと分かるようにする */
+.ticket-used-live {
+  animation: ticket-used-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes ticket-used-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.45); }
+  50% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ticket-used-live { animation: none; }
+}
