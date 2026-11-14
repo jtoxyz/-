@@ -1147,3 +1147,109 @@ a.btn[aria-disabled="true"] {
 @media (prefers-reduced-motion: reduce) {
   .ticket-used-live { animation: none; }
 }
+
+/* ===== チケット（マイチケット画面） ===== */
+.ticket {
+  --ticket-accent: var(--color-primary);
+  --ticket-notch: 14px;
+  filter: drop-shadow(0 6px 18px rgba(15, 23, 42, 0.12));
+}
+.ticket--used { --ticket-accent: #64748b; }
+.ticket--cancelled { --ticket-accent: var(--color-danger); }
+
+/* 切り取り線の左右に半円の切り欠きを作る（背景色に関係なく透けるよう mask を使う） */
+.ticket-head,
+.ticket-stub {
+  position: relative;
+  -webkit-mask:
+    radial-gradient(circle var(--ticket-notch) at 0 var(--notch-y), #0000 98%, #000) left / 51% 100% no-repeat,
+    radial-gradient(circle var(--ticket-notch) at 100% var(--notch-y), #0000 98%, #000) right / 51% 100% no-repeat;
+  mask:
+    radial-gradient(circle var(--ticket-notch) at 0 var(--notch-y), #0000 98%, #000) left / 51% 100% no-repeat,
+    radial-gradient(circle var(--ticket-notch) at 100% var(--notch-y), #0000 98%, #000) right / 51% 100% no-repeat;
+}
+.ticket-head {
+  --notch-y: 100%;
+  overflow: hidden;
+  padding: 22px 24px 26px;
+  border-radius: 18px 18px 0 0;
+  color: #fff;
+  background:
+    repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.06) 0 12px, transparent 12px 24px),
+    linear-gradient(135deg, var(--ticket-accent), color-mix(in srgb, var(--ticket-accent) 70%, #000));
+}
+.ticket-stub {
+  --notch-y: 0;
+  padding: 22px 24px 24px;
+  border-radius: 0 0 18px 18px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+.ticket-perf {
+  height: 0;
+  margin: 0 var(--ticket-notch);
+  border-top: 2px dashed color-mix(in srgb, var(--ticket-accent) 45%, transparent);
+  position: relative;
+  z-index: 1;
+}
+.ticket-kind {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  opacity: 0.95;
+}
+.ticket-status-chip {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  letter-spacing: 0.08em;
+}
+.ticket-title {
+  margin: 14px 0 8px;
+  font-size: 1.6rem;
+  line-height: 1.3;
+  color: #fff;
+  -webkit-text-fill-color: #fff;
+  background: none;
+}
+.ticket-when {
+  font-size: 0.92rem;
+  font-weight: 600;
+  opacity: 0.92;
+}
+.ticket-stamp {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  padding: 2px 12px;
+  border: 3px solid rgba(255, 255, 255, 0.85);
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 1.15rem;
+  font-weight: 900;
+  letter-spacing: 0.2em;
+  transform: rotate(-10deg);
+  pointer-events: none;
+}
+.ticket-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 0;
+}
+.ticket-fields dt {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--text-secondary);
+}
+.ticket-fields dd {
+  margin: 2px 0 0;
+  font-size: 1.15rem;
+  font-weight: 900;
+}
