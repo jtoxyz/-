@@ -1036,7 +1036,7 @@ export default function AdminNewEventPage() {
                 </div>
 
                 <div className="form-group" style={{ marginLeft: '24px', maxWidth: 220 }}>
-                  <label className="form-label" htmlFor="ticketRevealMinutes">使用後にチケットコードを表示する時間（分）</label>
+                  <label className="form-label" htmlFor="ticketRevealMinutes">使用後に「使用しました」を表示する時間（分）</label>
                   <input
                     id="ticketRevealMinutes"
                     type="number"
@@ -1047,7 +1047,7 @@ export default function AdminNewEventPage() {
                     onChange={(e) => setTicketRevealMinutes(e.target.value)}
                     disabled={saving}
                   />
-                  <span className="form-hint">「使用する」を押した後、この時間が過ぎるとチケットコードが非表示になります（1〜60分）。</span>
+                  <span className="form-hint">「使用する」を押した後、受付確認用の「使用しました」画面をこの時間だけ表示します。過ぎると「使用済み」の表示だけになります（1〜60分）。</span>
                 </div>
 
                 <div style={{ marginLeft: '24px', padding: '10px 14px', borderRadius: 'var(--radius-sm)', background: 'rgba(99, 102, 241, 0.06)', border: '1px solid rgba(99, 102, 241, 0.15)', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>

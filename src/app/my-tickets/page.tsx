@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { BadgeCheck, Clock3, ExternalLink, TicketCheck } from 'lucide-react';
+import { BadgeCheck, CircleCheckBig, Clock3, ExternalLink, TicketCheck } from 'lucide-react';
 import RichText from '@/components/RichText';
 import { supabase } from '@/lib/supabase';
 import { formatAccountDate } from '@/lib/studentAccount';
@@ -16,7 +16,6 @@ type TicketDetails = {
   student_number: string;
   status: 'reserved' | 'used' | 'cancelled';
   ticket_type: 'reservation' | 'walkin';
-  ticket_code: string;
   used_at: string | null;
   created_at: string;
   payment_status: 'not_required' | 'pending' | 'paid' | 'expired';
@@ -49,6 +48,16 @@ function formatRemaining(ms: number): string {
   const seconds = totalSeconds % 60;
   if (hours > 0) return `${hours}時間${minutes}分`;
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
+
+/** 使用済み表示に出す現在時刻（スクリーンショットではないことを受付で確かめるため秒まで出す） */
+function formatClock(ms: number): string {
+  return new Date(ms).toLocaleTimeString('ja-JP', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    timeZone: 'Asia/Tokyo',
+  });
 }
 
 /** チケットを今使えない理由（使えるときは null） */
@@ -137,7 +146,7 @@ export default function MyTicketPage() {
 
   const handleUse = async () => {
     if (!ticket || !reservationId || !useAllowed) return;
-    if (!confirm(`このチケットを使用済みにします。使用後、チケットコードは${ticket.ticket_reveal_minutes}分間だけ表示され、その後は見られなくなります。この操作は取り消せません。よろしいですか？`)) return;
+    if (!confirm(`このチケットを使用済みにします。受付のスタッフの前で押してください。使用済みの確認画面は${ticket.ticket_reveal_minutes}分間だけ表示されます。この操作は取り消せません。よろしいですか？`)) return;
     setUsingTicket(true);
     setError(null);
     const { error: rpcError } = await supabase.rpc('use_my_ticket', {
@@ -179,8 +188,19 @@ export default function MyTicketPage() {
       {error && <div className="error-banner" role="alert" style={{ marginBottom: 16 }}>{error}</div>}
 
       <div className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
-        <div style={{ padding: '14px 20px', textAlign: 'center', fontWeight: 900, background: ticket.status === 'used' ? 'var(--color-warning-bg)' : ticket.status === 'cancelled' ? 'rgba(244,63,94,.12)' : 'var(--color-primary-glow)', color: ticket.status === 'cancelled' ? 'var(--color-danger)' : 'var(--text-primary)' }}>
-          {ticket.status === 'used' ? '使用済み' : ticket.status === 'cancelled' ? 'キャンセル済み' : ticket.ticket_type === 'walkin' ? '当日券（未使用）' : '予約券（未使用）'}
+        {/* 状態は色と文字の両方で示す（未使用=緑、使用済み=灰、キャンセル=赤） */}
+        <div
+          style={{
+            padding: '16px 20px',
+            textAlign: 'center',
+            fontWeight: 900,
+            fontSize: '1.25rem',
+            letterSpacing: '.08em',
+            background: ticket.status === 'used' ? 'var(--text-secondary)' : ticket.status === 'cancelled' ? 'var(--color-danger)' : 'var(--color-success)',
+            color: '#fff',
+          }}
+        >
+          {ticket.status === 'used' ? '使用済み' : ticket.status === 'cancelled' ? 'キャンセル済み' : ticket.ticket_type === 'walkin' ? '当日券・未使用' : '予約券・未使用'}
         </div>
 
         <div style={{ padding: 26 }}>
@@ -196,22 +216,45 @@ export default function MyTicketPage() {
           </div>
 
           {ticket.status === 'used' && ticketReveal?.visible && (
-            <div style={{ textAlign: 'center', padding: 18, borderRadius: 12, border: '2px solid var(--color-primary)', background: 'var(--color-primary-glow)', marginBottom: 18 }}>
-              <small style={{ color: 'var(--text-secondary)' }}>チケットコード</small>
-              <div style={{ marginTop: 5, fontSize: '2rem', fontWeight: 900, letterSpacing: '.12em' }}>{ticket.ticket_code}</div>
-              <div style={{ marginTop: 8, fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
-                あと {formatRemaining(ticketReveal.remainingMs)} で表示が終了します
+            <div className="ticket-used-live" style={{ textAlign: 'center', padding: '20px 16px', borderRadius: 14, border: '3px solid var(--color-success)', background: 'var(--color-success-bg)', marginBottom: 18 }}>
+              <CircleCheckBig size={52} style={{ color: 'var(--color-success)' }} aria-hidden="true" />
+              <div style={{ marginTop: 6, fontSize: '1.9rem', fontWeight: 900, letterSpacing: '.1em' }}>使用しました</div>
+              {ticket.used_at && <div style={{ marginTop: 6, fontWeight: 700 }}>使用日時：{formatAccountDate(ticket.used_at)}</div>}
+              <div style={{ marginTop: 10, fontSize: '1.5rem', fontWeight: 900, fontVariantNumeric: 'tabular-nums' }} aria-label="現在時刻">
+                現在 {formatClock(nowTick)}
+              </div>
+              <div style={{ marginTop: 14, padding: '10px 12px', borderRadius: 10, background: 'var(--card-bg)', border: '1px solid var(--color-success-border)' }}>
+                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)' }}>表示の残り時間</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: 900, fontVariantNumeric: 'tabular-nums', color: 'var(--color-success)' }}>
+                  {formatRemaining(ticketReveal.remainingMs)}
+                </div>
+                <div
+                  role="progressbar"
+                  aria-label="表示の残り時間"
+                  aria-valuemin={0}
+                  aria-valuemax={ticket.ticket_reveal_minutes * 60}
+                  aria-valuenow={Math.ceil(ticketReveal.remainingMs / 1000)}
+                  style={{ marginTop: 6, height: 8, borderRadius: 999, background: 'var(--color-success-bg)', overflow: 'hidden' }}
+                >
+                  <div style={{ height: '100%', width: `${Math.min(100, (ticketReveal.remainingMs / (ticket.ticket_reveal_minutes * 60_000)) * 100)}%`, background: 'var(--color-success)', transition: 'width 1s linear' }} />
+                </div>
+              </div>
+              <div style={{ marginTop: 10, fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                この画面を受付のスタッフに見せてください。残り時間が0になると表示が終わります。
               </div>
             </div>
           )}
           {ticket.status === 'used' && !ticketReveal?.visible && (
             <div style={{ textAlign: 'center', padding: 18, borderRadius: 12, border: '2px solid var(--card-border-hover)', color: 'var(--text-secondary)', marginBottom: 18 }}>
-              チケットコードの表示時間は終了しました（使用済み）
+              <div style={{ fontWeight: 900, fontSize: '1.2rem', color: 'var(--text-primary)' }}>このチケットは使用済みです</div>
+              {ticket.used_at && <div style={{ marginTop: 6 }}>使用日時：{formatAccountDate(ticket.used_at)}</div>}
+              <div style={{ marginTop: 6, fontSize: '0.82rem' }}>受付確認用の表示時間は終了しました</div>
             </div>
           )}
           {ticket.status === 'reserved' && (
-            <div style={{ textAlign: 'center', padding: 14, borderRadius: 12, border: '1px dashed var(--card-border-hover)', color: 'var(--text-secondary)', marginBottom: 18, fontSize: '0.85rem' }}>
-              「使用する」を押すとチケットコードが表示されます（表示は{ticket.ticket_reveal_minutes}分間のみです）
+            <div style={{ textAlign: 'center', padding: 14, borderRadius: 12, border: '1px dashed var(--card-border-hover)', color: 'var(--text-secondary)', marginBottom: 18, fontSize: '0.85rem', lineHeight: 1.7 }}>
+              まだ使用していません。受付でスタッフの前で「このチケットを使用する」を押してください。
+              <br />押すと「使用しました」の確認画面が{ticket.ticket_reveal_minutes}分間表示されます。
             </div>
           )}
 
@@ -244,7 +287,6 @@ export default function MyTicketPage() {
               {blockReason && <p id="use-block-reason" style={{ marginTop: 10, textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.88rem' }}>{blockReason}</p>}
             </>
           )}
-          {ticket.status === 'used' && ticket.used_at && <div style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>使用日時：{formatAccountDate(ticket.used_at)}</div>}
 
           {surveyUrl && (
             <div className="glass-card" style={{ marginTop: 18, borderColor: 'var(--card-border-hover)' }}>

@@ -61,7 +61,7 @@ export default function StudentAccountMenu() {
   const { profile, isStaff } = state;
   if (hidden || (!profile && !isStaff)) return null;
 
-  // 区切り線もここで出す（未ログイン・管理画面では区切り線が二重にならないように）
+  // スタッフとアカウントの間の区切り線もここで出す（未ログイン・管理画面では何も出さない）
   return (
     <>
       {isStaff && (
@@ -94,7 +94,6 @@ export default function StudentAccountMenu() {
           <LogOut size={17} aria-hidden="true" />
         </button>
       </div>
-      <span className="header-nav-sep" aria-hidden="true">|</span>
     </>
   );
 }

@@ -12,7 +12,6 @@ function destinationLabel(nextPath: string): string {
   if (nextPath.startsWith('/pay')) return '支払い確認画面へ戻ります';
   if (nextPath.startsWith('/reserve')) return '予約画面へ進みます';
   if (nextPath.startsWith('/staff')) return 'スタッフ画面へ進みます';
-  if (nextPath.startsWith('/tickets/find')) return 'チケットを探す画面へ進みます';
   return '企画一覧へ進みます';
 }
 
