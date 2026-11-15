@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { BadgeCheck, CircleCheckBig, Clock3, ExternalLink } from 'lucide-react';
+import { BadgeCheck, CircleCheckBig, Clock3, ExternalLink, MapPin, TriangleAlert } from 'lucide-react';
 import RichText from '@/components/RichText';
 import { supabase } from '@/lib/supabase';
 import { formatAccountDate } from '@/lib/studentAccount';
@@ -192,6 +192,33 @@ export default function MyTicketPage() {
     <div style={{ maxWidth: 520, margin: '0 auto' }}>
       <div style={{ marginBottom: 18 }}><Link href="/#my-tickets">← 自分の予約へ戻る</Link></div>
       {error && <div className="error-banner" role="alert" style={{ marginBottom: 16 }}>{error}</div>}
+
+      {/* 支払い待ちの間は、何より先に「いつ・どこへ支払いに来るか」を大きく出す（説明文を読まない人向け） */}
+      {ticket.status === 'reserved' && ticket.payment_status === 'pending' && (visitSlot || ticket.payment_due_at) && (
+        <section className="pay-visit-callout" role="alert" aria-labelledby="pay-visit-callout-title">
+          <h2 id="pay-visit-callout-title" className="pay-visit-callout-title">
+            <TriangleAlert size={26} aria-hidden="true" />
+            まだ予約は確定していません
+          </h2>
+          <p className="pay-visit-callout-lead">この日時に、必ず受付へ支払いに来てください。</p>
+          {visitSlot ? (
+            <div className="pay-visit-callout-when">
+              <div className="pay-visit-callout-time">
+                {formatVisitSlot(visitSlot)}
+                {visitSlot.note && <span className="pay-visit-callout-note">（{visitSlot.note}）</span>}
+              </div>
+              <div className="pay-visit-callout-place"><MapPin size={20} aria-hidden="true" />{visitSlotPlace(visitSlot)}</div>
+            </div>
+          ) : (
+            <div className="pay-visit-callout-when">
+              <div className="pay-visit-callout-time">{formatAccountDate(ticket.payment_due_at)}まで</div>
+            </div>
+          )}
+          <p className="pay-visit-callout-warn">
+            この時間までに支払いがないと、予約は<strong>自動でキャンセル</strong>されます。
+          </p>
+        </section>
+      )}
 
       {/* 紙のチケットの形：上が企画（券面）、切り取り線の下が本人情報と使用状態（半券） */}
       <article className={`ticket ticket--${ticket.status}`} aria-label={`${ticket.event_title}の${kindLabel}（${statusLabel}）`}>
