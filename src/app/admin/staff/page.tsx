@@ -5,7 +5,7 @@ import { IdCard, Plus, Save, Trash2, TriangleAlert } from 'lucide-react';
 import AdminNav from '@/components/AdminNav';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { useLoadEffect } from '@/hooks/useLoadEffect';
-import { STUDENT_EMAIL_DOMAIN } from '@/lib/config';
+import { STUDENT_EMAIL_DOMAIN, studentNumberFromEmail } from '@/lib/config';
 import { formatJstDateTime } from '@/lib/jst';
 import { adminSupabase as supabase } from '@/lib/supabase';
 
@@ -20,7 +20,18 @@ type StaffRow = {
   staff_event_access: { event_id: string }[];
 };
 
-const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+$/;
+/** 学籍番号（例: 24B123。先頭の s は省略可）。大学Googleアカウントのメールアドレスは s + 小文字の学籍番号 + @STUDENT_EMAIL_DOMAIN */
+const STUDENT_NUMBER_PATTERN = /^s?([0-9]{2}[a-z][0-9]{3})$/i;
+
+function studentNumberToEmail(input: string): string | null {
+  const match = input.normalize('NFKC').replace(/[\s-]/g, '').match(STUDENT_NUMBER_PATTERN);
+  return match ? `s${match[1].toLowerCase()}@${STUDENT_EMAIL_DOMAIN}` : null;
+}
+
+/** 一覧に出す学籍番号。学生のアドレスでなければメールアドレスをそのまま出す */
+function staffLabel(email: string): string {
+  return studentNumberFromEmail(email) || email;
+}
 
 /** 担当企画のチェックボックス */
 function EventPicker({ events, selected, onChange, idPrefix }: {
@@ -66,7 +77,7 @@ export default function AdminStaffPage() {
   const [saving, setSaving] = useState<string | null>(null);
 
   // 追加フォーム
-  const [email, setEmail] = useState('');
+  const [studentNumber, setStudentNumber] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [note, setNote] = useState('');
   const [newEvents, setNewEvents] = useState<string[]>([]);
@@ -103,13 +114,13 @@ export default function AdminStaffPage() {
     event.preventDefault();
     setError(null);
     setNotice(null);
-    const cleanEmail = email.trim().toLowerCase();
-    if (!EMAIL_PATTERN.test(cleanEmail)) {
-      setError('メールアドレスの形が正しくありません。');
+    const cleanEmail = studentNumberToEmail(studentNumber);
+    if (!cleanEmail) {
+      setError('学籍番号の形が正しくありません（例：24B123）。');
       return;
     }
     if (staff.some((row) => row.email === cleanEmail)) {
-      setError('このメールアドレスはすでに登録されています。');
+      setError('この学籍番号はすでに登録されています。');
       return;
     }
     setSaving('new');
@@ -129,11 +140,11 @@ export default function AdminStaffPage() {
         .insert(newEvents.map((eventId) => ({ staff_id: data.id, event_id: eventId })));
       if (accessError) setError(`スタッフは追加しましたが、担当企画を保存できませんでした：${accessError.message}`);
     }
-    setEmail('');
+    setStudentNumber('');
     setDisplayName('');
     setNote('');
     setNewEvents([]);
-    setNotice(`${cleanEmail} をスタッフに追加しました。`);
+    setNotice(`${staffLabel(cleanEmail)} をスタッフに追加しました。`);
     setSaving(null);
     await load();
   };
@@ -162,7 +173,7 @@ export default function AdminStaffPage() {
         return;
       }
     }
-    setNotice(`${row.display_name || row.email} の担当企画を保存しました。`);
+    setNotice(`${row.display_name || staffLabel(row.email)} の担当企画を保存しました。`);
     setSaving(null);
     await load();
   };
@@ -176,11 +187,11 @@ export default function AdminStaffPage() {
   };
 
   const removeStaff = async (row: StaffRow) => {
-    if (!confirm(`${row.display_name || row.email} をスタッフから外しますか？担当企画の割り当ても消えます。`)) return;
+    if (!confirm(`${row.display_name || staffLabel(row.email)} をスタッフから外しますか？担当企画の割り当ても消えます。`)) return;
     setSaving(row.id);
     const { error: deleteError } = await supabase.from('staff_members').delete().eq('id', row.id);
     if (deleteError) setError(deleteError.message);
-    else setNotice(`${row.display_name || row.email} をスタッフから外しました。`);
+    else setNotice(`${row.display_name || staffLabel(row.email)} をスタッフから外しました。`);
     setSaving(null);
     await load();
   };
@@ -203,7 +214,7 @@ export default function AdminStaffPage() {
               動的支払いQR・1日支払いQR・受付状況（予約数・受付数・支払い数などの人数）を使えます。企画の編集や予約者の氏名などの個人情報は見られません。
             </p>
             <p style={{ color: 'var(--text-secondary)', lineHeight: 1.7, fontSize: '0.88rem' }}>
-              スタッフは大学Googleアカウント（@{STUDENT_EMAIL_DOMAIN}）でログインします。そのメールアドレスを登録してください。
+              スタッフは大学Googleアカウントでログインします。その人の学籍番号を登録してください（例：24B123）。
             </p>
           </div>
 
@@ -214,8 +225,8 @@ export default function AdminStaffPage() {
             <h2 style={{ fontSize: '1.15rem', marginBottom: 14 }}>スタッフを追加</h2>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
               <div className="form-group">
-                <label className="form-label" htmlFor="staff-email">大学Googleアカウントのメールアドレス</label>
-                <input id="staff-email" className="form-input" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder={`s24b123@${STUDENT_EMAIL_DOMAIN}`} autoComplete="off" />
+                <label className="form-label" htmlFor="staff-student-number">学籍番号</label>
+                <input id="staff-student-number" className="form-input" required value={studentNumber} maxLength={20} onChange={(e) => setStudentNumber(e.target.value)} placeholder="24B123" autoComplete="off" autoCapitalize="characters" spellCheck={false} />
               </div>
               <div className="form-group">
                 <label className="form-label" htmlFor="staff-name">表示名（任意）</label>
@@ -247,9 +258,9 @@ export default function AdminStaffPage() {
                   <section key={row.id} className="glass-card" style={{ margin: 0, padding: 16, opacity: row.is_active ? 1 : 0.65 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'flex-start' }}>
                       <div style={{ minWidth: 0 }}>
-                        <strong>{row.display_name || row.email}</strong>
+                        <strong>{row.display_name || staffLabel(row.email)}</strong>
                         {!row.is_active && <span className="badge badge-secondary" style={{ marginLeft: 8 }}>停止中</span>}
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', wordBreak: 'break-all' }}>{row.email}</div>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', wordBreak: 'break-all' }}>学籍番号：{staffLabel(row.email)}</div>
                         {row.note && <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: 2 }}>{row.note}</div>}
                         <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 4 }}>
                           担当：{before.length > 0 ? before.map(eventTitle).join('、') : 'なし'}
