@@ -13,15 +13,26 @@ function randomKey(): string {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`;
 }
 
-/** このQRを読み取った端末の鍵。Googleログインから戻ってきても同じ鍵を使えるよう localStorage に置く。
- *  同じQRをほかの人が開いても鍵が違うので、確定できるのは最初に読み取った端末だけになる。 */
-function claimKeyFor(token: string): string {
+const CLAIM_KEY_PARAM = 'k';
+
+function isClaimKey(value: string | null): value is string {
+  return !!value && value.length >= 16 && value.length <= 128;
+}
+
+/** このQRを読み取った端末の鍵。同じQRをほかの人が開いても鍵が違うので、確定できるのは最初に読み取った端末だけになる。
+ *  Googleログインから戻ってきても同じ鍵を使えるよう、ログインの戻り先URL（k=）に付けて持ち回る。
+ *  localStorage だけに置くと、戻ってきたときに読めない端末があり、本人なのに「ほかの人が先に読み取りました」になっていた（2026-11-16）。
+ *  QRコード自体には鍵は入らないので、同じQRを読み取った別の人が鍵を知ることはない。 */
+function claimKeyFor(token: string, keyFromUrl: string | null): string {
   const storageKey = `${CLAIM_KEY_PREFIX}${token}`;
-  try {
-    const saved = localStorage.getItem(storageKey);
-    if (saved && saved.length >= 16) return saved;
-  } catch {}
-  const key = randomKey();
+  let key: string | null = isClaimKey(keyFromUrl) ? keyFromUrl : null;
+  if (!key) {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (isClaimKey(saved)) key = saved;
+    } catch {}
+  }
+  if (!key) key = randomKey();
   try {
     localStorage.setItem(storageKey, key);
   } catch {}
@@ -51,7 +62,8 @@ export default function PaymentQrRedeemPage() {
     let mounted = true;
 
     const redeem = async () => {
-      const token = new URLSearchParams(window.location.search).get('token') || '';
+      const params = new URLSearchParams(window.location.search);
+      const token = params.get('token') || '';
       if (!token) {
         setMessage('委員会で表示されるQRコードを読み取ると、支払い確認ができます。支払い状況は「マイチケット」で確認できます。');
         setLoading(false);
@@ -60,7 +72,7 @@ export default function PaymentQrRedeemPage() {
 
       // 読み取った時点で QR を「読み取り済み」にし、受付の画面を次の QR に切り替える（ログイン前でも行う）。
       // 同時にほかの人が読み取っていたら、ここでエラーになる（ログインする前に分かる）
-      const claimKey = claimKeyFor(token);
+      const claimKey = claimKeyFor(token, params.get(CLAIM_KEY_PARAM));
       const { error: claimError } = await supabase.rpc('claim_payment_qr', { p_token: token, p_claim_key: claimKey });
       if (!mounted) return;
       if (claimError) {
@@ -71,7 +83,7 @@ export default function PaymentQrRedeemPage() {
 
       const startLogin = async () => {
         setMessage('QRコードを読み取りました。大学Googleアカウントでログインすると支払い確認が完了します（10分以内）。');
-        const redirectTo = `${window.location.origin}/pay?token=${encodeURIComponent(token)}`;
+        const redirectTo = `${window.location.origin}/pay?token=${encodeURIComponent(token)}&${CLAIM_KEY_PARAM}=${encodeURIComponent(claimKey)}`;
         const { error } = await supabase.auth.signInWithOAuth({
           provider: 'google',
           options: {
