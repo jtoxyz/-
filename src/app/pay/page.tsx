@@ -6,6 +6,34 @@ import { CircleCheckBig } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { STUDENT_EMAIL_DOMAIN, isStudentEmail } from '@/lib/config';
 
+const CLAIM_KEY_PREFIX = 'payment-claim-key:';
+
+function randomKey(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return `${crypto.randomUUID()}${crypto.randomUUID()}`.replace(/-/g, '');
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`;
+}
+
+/** このQRを読み取った端末の鍵。Googleログインから戻ってきても同じ鍵を使えるよう localStorage に置く。
+ *  同じQRをほかの人が開いても鍵が違うので、確定できるのは最初に読み取った端末だけになる。 */
+function claimKeyFor(token: string): string {
+  const storageKey = `${CLAIM_KEY_PREFIX}${token}`;
+  try {
+    const saved = localStorage.getItem(storageKey);
+    if (saved && saved.length >= 16) return saved;
+  } catch {}
+  const key = randomKey();
+  try {
+    localStorage.setItem(storageKey, key);
+  } catch {}
+  return key;
+}
+
+function forgetClaimKey(token: string) {
+  try {
+    localStorage.removeItem(`${CLAIM_KEY_PREFIX}${token}`);
+  } catch {}
+}
+
 type RedeemResult = {
   event_id: string;
   event_title: string;
@@ -30,8 +58,10 @@ export default function PaymentQrRedeemPage() {
         return;
       }
 
-      // 読み取った時点で QR を「読み取り済み」にし、管理画面を次の QR に切り替える（ログイン前でも行う）
-      const { error: claimError } = await supabase.rpc('claim_payment_qr', { p_token: token });
+      // 読み取った時点で QR を「読み取り済み」にし、受付の画面を次の QR に切り替える（ログイン前でも行う）。
+      // 同時にほかの人が読み取っていたら、ここでエラーになる（ログインする前に分かる）
+      const claimKey = claimKeyFor(token);
+      const { error: claimError } = await supabase.rpc('claim_payment_qr', { p_token: token, p_claim_key: claimKey });
       if (!mounted) return;
       if (claimError) {
         setMessage(claimError.message || 'このQRコードは使用できません。');
@@ -68,7 +98,7 @@ export default function PaymentQrRedeemPage() {
         return;
       }
 
-      const { data, error } = await supabase.rpc('redeem_payment_qr', { p_token: token });
+      const { data, error } = await supabase.rpc('redeem_payment_qr', { p_token: token, p_claim_key: claimKey });
       if (!mounted) return;
 
       if (error) {
@@ -84,6 +114,7 @@ export default function PaymentQrRedeemPage() {
         return;
       }
 
+      forgetClaimKey(token);
       setSuccess(true);
       setPaidCount(Number(result.paid_reservations) || 0);
       setMessage(`「${result.event_title}」の支払い確認が完了しました。`);

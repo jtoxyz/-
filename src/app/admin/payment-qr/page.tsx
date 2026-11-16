@@ -6,11 +6,12 @@ import DynamicPaymentQr from '@/components/payment/DynamicPaymentQr';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { useLoadEffect } from '@/hooks/useLoadEffect';
 import { adminSupabase as supabase } from '@/lib/supabase';
-import { adminLaneQr } from '@/lib/paymentQrRpc';
+import { adminLaneQr, reissueLaneQr } from '@/lib/paymentQrRpc';
 
 type EventItem = { id: string; title: string };
 
 const fetchLaneQr = adminLaneQr(supabase);
+const reissueQr = reissueLaneQr(supabase);
 
 export default function AdminPaymentQrPage() {
   const { loading: authLoading, user } = useAdminAuth();
@@ -65,7 +66,7 @@ export default function AdminPaymentQrPage() {
                     {events.map((event) => <option key={event.id} value={event.id}>{event.title}</option>)}
                   </select>
                 </div>
-                <DynamicPaymentQr eventId={eventId} fetchQr={fetchLaneQr} />
+                <DynamicPaymentQr eventId={eventId} fetchQr={fetchLaneQr} reissueQr={reissueQr} />
               </>
             )}
           </div>

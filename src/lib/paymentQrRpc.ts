@@ -8,6 +8,10 @@ export const adminLaneQr = (client: SupabaseClient) => (eventId: string, lane: s
 export const staffLaneQr = (client: SupabaseClient) => (eventId: string, lane: string) =>
   client.rpc('staff_get_lane_payment_qr', { p_event_id: eventId, p_lane: lane });
 
+/** この端末の表示中QRを無効にして新しいQRを出す（管理者・担当スタッフ共通。権限はDB側で確認） */
+export const reissueLaneQr = (client: SupabaseClient) => (eventId: string, lane: string) =>
+  client.rpc('staff_reissue_lane_payment_qr', { p_event_id: eventId, p_lane: lane });
+
 /** 管理者：発行するたびに新しいQR（同じ日の古いQRは無効） */
 export const adminIssueDailyQr = (client: SupabaseClient) => (eventId: string, validDate: string) =>
   client.rpc('admin_create_payment_qr', {
