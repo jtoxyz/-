@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { CalendarDays, CircleX, Clock3, Tickets } from 'lucide-react';
+import { CalendarDays, CircleX, Clock3, Ticket, Tickets } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { formatTicketOption, formatYen } from '@/lib/ticketOption';
 import { type PaymentVisitSlot, fetchMyVisitSlots, formatVisitSlot, visitSlotPlace } from '@/lib/paymentVisit';
 
 type MyTicket = {
@@ -17,6 +18,8 @@ type MyTicket = {
   payment_status: 'not_required' | 'pending' | 'paid' | 'expired';
   payment_due_at: string | null;
   slot_starts_at: string | null;
+  ticket_option_label?: string | null;
+  ticket_option_price_yen?: number | null;
 };
 
 type CancelledTicket = {
@@ -27,6 +30,8 @@ type CancelledTicket = {
   ticket_type: 'reservation' | 'walkin';
   payment_status: 'not_required' | 'pending' | 'paid' | 'expired';
   cancelled_at: string | null;
+  ticket_option_label?: string | null;
+  ticket_option_price_yen?: number | null;
 };
 
 function formatDateTime(value: string): string {
@@ -44,6 +49,13 @@ function paymentLabel(ticket: MyTicket, visit?: PaymentVisitSlot): string | null
   if (ticket.payment_status === 'paid') return '支払い済み';
   if (ticket.payment_status === 'expired') return '支払期限切れ';
   if (ticket.payment_status === 'pending') {
+    if (ticket.ticket_option_price_yen != null) {
+      const amount = formatYen(ticket.ticket_option_price_yen);
+      if (visit) return `${visitSlotPlace(visit)}で${amount}を支払い：${formatVisitSlot(visit)}`;
+      return ticket.payment_due_at
+        ? `${amount}を支払い：${formatDateTime(ticket.payment_due_at)}まで`
+        : `${amount}を支払い`;
+    }
     if (visit) return `${visitSlotPlace(visit)}で支払い：${formatVisitSlot(visit)}`;
     return ticket.payment_due_at
       ? `支払待ち：${formatDateTime(ticket.payment_due_at)}まで`
@@ -119,11 +131,17 @@ export default function MyTicketsList() {
         <div style={{ display: 'grid', gap: 10 }}>
           {tickets.map((ticket) => {
             const payment = paymentLabel(ticket, visits[ticket.reservation_id]);
+            const optionText = formatTicketOption(ticket.ticket_option_label, ticket.ticket_option_price_yen);
             return (
               <Link key={ticket.reservation_id} href={`/my-tickets?reservationId=${encodeURIComponent(ticket.reservation_id)}`} style={{ display: 'block' }}>
                 <div className="glass-card interactive" style={{ padding: '13px 15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 14 }}>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontWeight: 800, marginBottom: 4 }}>{ticket.event_title}</div>
+                    {optionText && (
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginBottom: 5, fontSize: '0.8rem', fontWeight: 800 }}>
+                        <Ticket size={14} aria-hidden="true" />券種：{optionText}
+                      </div>
+                    )}
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px 12px', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
                       {ticket.slot_label && (
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
@@ -161,6 +179,9 @@ export default function MyTicketsList() {
                 <CircleX size={18} aria-hidden="true" style={{ color: 'var(--color-danger)', flexShrink: 0, marginTop: 2 }} />
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontWeight: 700 }}>{ticket.event_title}{ticket.slot_label ? `（${ticket.slot_label}）` : ''}</div>
+                  {ticket.ticket_option_label && (
+                    <div style={{ fontSize: '0.8rem', marginTop: 2 }}>券種：{formatTicketOption(ticket.ticket_option_label, ticket.ticket_option_price_yen)}</div>
+                  )}
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 3 }}>
                     {ticket.payment_status === 'expired'
                       ? '支払期限までに支払いが確認できなかったため、自動でキャンセルされました。'

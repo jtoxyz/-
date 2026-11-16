@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import AdminNav from '@/components/AdminNav';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { adminSupabase as supabase } from '@/lib/supabase';
+import { formatYen } from '@/lib/ticketOption';
 import { type PaymentVisitSlot, VISIT_SLOT_COLUMNS, formatVisitSlot, jstDateKey, visitSlotPlace } from '@/lib/paymentVisit';
 import { useLoadEffect } from '@/hooks/useLoadEffect';
 
@@ -23,6 +24,7 @@ type ReservationRow = {
   event_slots?: { label: string | null } | null;
   payment_visit_slot_id: string | null;
   payment_visit_slots?: PaymentVisitSlot | null;
+  event_ticket_options?: { label: string; price_yen: number } | null;
 };
 
 type SortKey = 'visit' | 'number' | 'created';
@@ -111,7 +113,7 @@ export default function PaymentManagementPage() {
     setLoading(true);
     const { data, error: fetchError } = await supabase
       .from('reservations')
-      .select(`id,student_name,student_number,university_email,status,payment_status,payment_due_at,paid_at,created_at,event_id,event_slots(label),payment_visit_slot_id,payment_visit_slots(${VISIT_SLOT_COLUMNS})`)
+      .select(`id,student_name,student_number,university_email,status,payment_status,payment_due_at,paid_at,created_at,event_id,event_slots(label),payment_visit_slot_id,payment_visit_slots(${VISIT_SLOT_COLUMNS}),event_ticket_options(label,price_yen)`)
       .eq('event_id', targetEventId)
       .order('created_at', { ascending: false });
     if (fetchError) {
@@ -345,13 +347,18 @@ export default function PaymentManagementPage() {
             {loading ? <div className="loading-spinner" /> : (
               <div className="admin-table-container reservations-table-desktop">
                 <table className="admin-table admin-table-stack">
-                  <thead><tr><th>氏名</th><th>学籍番号</th><th>枠</th><th>支払いに来る日時</th><th>支払い状態</th><th>期限</th><th>支払日時</th><th>操作</th></tr></thead>
+                  <thead><tr><th>氏名</th><th>学籍番号</th><th>枠</th><th>金額</th><th>支払いに来る日時</th><th>支払い状態</th><th>期限</th><th>支払日時</th><th>操作</th></tr></thead>
                   <tbody>
                     {visibleRows.map((row) => (
                       <tr key={row.id} style={{ opacity: row.status === 'cancelled' ? 0.5 : 1 }}>
                         <td data-label="氏名">{row.student_name}</td>
                         <td data-label="学籍番号">{row.student_number}</td>
                         <td data-label="枠">{row.event_slots?.label || '―'}</td>
+                        <td data-label="金額">
+                          {row.event_ticket_options ? (
+                            <span><strong>{formatYen(row.event_ticket_options.price_yen)}</strong><span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>（{row.event_ticket_options.label}）</span></span>
+                          ) : '―'}
+                        </td>
                         <td data-label="支払いに来る日時">
                           {row.payment_visit_slots ? (
                             <span>{formatVisitSlot(row.payment_visit_slots)}{row.payment_visit_slots.note ? `（${row.payment_visit_slots.note}）` : ''}</span>

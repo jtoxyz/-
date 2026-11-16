@@ -6,6 +6,7 @@ import { BadgeCheck, CircleCheckBig, Clock3, ExternalLink } from 'lucide-react';
 import RichText from '@/components/RichText';
 import { supabase } from '@/lib/supabase';
 import { formatAccountDate } from '@/lib/studentAccount';
+import { formatTicketOption, formatYen } from '@/lib/ticketOption';
 import { type PaymentVisitSlot, fetchMyVisitSlots, formatVisitSlot, visitSlotPlace } from '@/lib/paymentVisit';
 import { useQueryParam } from '@/hooks/useQueryParam';
 import { useLoadEffect } from '@/hooks/useLoadEffect';
@@ -39,6 +40,8 @@ type TicketDetails = {
   slot_ends_at: string | null;
   use_starts_at: string | null;
   use_ends_at: string | null;
+  ticket_option_label?: string | null;
+  ticket_option_price_yen?: number | null;
 };
 
 function formatRemaining(ms: number): string {
@@ -186,6 +189,7 @@ export default function MyTicketPage() {
 
   const usedAgo = ticket.used_at ? formatUsedAgo(ticket.used_at, nowTick) : null;
   const kindLabel = ticket.ticket_type === 'walkin' ? '当日券' : '予約券';
+  const optionText = formatTicketOption(ticket.ticket_option_label, ticket.ticket_option_price_yen);
   const statusLabel = ticket.status === 'used' ? '使用済み' : ticket.status === 'cancelled' ? 'キャンセル済み' : '未使用';
 
   return (
@@ -194,13 +198,14 @@ export default function MyTicketPage() {
       {error && <div className="error-banner" role="alert" style={{ marginBottom: 16 }}>{error}</div>}
 
       {/* 紙のチケットの形：上が企画（券面）、切り取り線の下が本人情報と使用状態（半券） */}
-      <article className={`ticket ticket--${ticket.status}`} aria-label={`${ticket.event_title}の${kindLabel}（${statusLabel}）`}>
+      <article className={`ticket ticket--${ticket.status}`} aria-label={`${ticket.event_title}の${kindLabel}${optionText ? `・${optionText}` : ''}（${statusLabel}）`}>
         <div className="ticket-head">
           <div className="ticket-kind">
             <span>{kindLabel}</span>
             {ticket.status === 'reserved' && <span className="ticket-status-chip">{statusLabel}</span>}
           </div>
           <h1 className="ticket-title">{ticket.event_title}</h1>
+          {optionText && <div className="ticket-option"><span className="ticket-option-key">券種</span>{optionText}</div>}
           {ticket.slot_label && <div className="ticket-when">{ticket.slot_label}</div>}
           {ticket.slot_starts_at && <div className="ticket-when">{formatAccountDate(ticket.slot_starts_at)} 〜 {formatAccountDate(ticket.slot_ends_at)}</div>}
           {ticket.status === 'used' && <div className="ticket-stamp" aria-hidden="true">使用済</div>}
@@ -268,6 +273,12 @@ export default function MyTicketPage() {
             <div>
               <small style={{ color: 'var(--text-secondary)' }}>支払い状態</small>
               <div style={{ fontWeight: 800 }}>{paymentText}</div>
+              {ticket.ticket_option_price_yen != null && ticket.payment_status !== 'not_required' && (
+                <div style={{ marginTop: 4 }}>
+                  {ticket.payment_status === 'pending' ? '受付で払う金額' : '金額'}：
+                  <strong style={{ fontSize: ticket.payment_status === 'pending' ? '1.3rem' : undefined }}>{formatYen(ticket.ticket_option_price_yen)}</strong>
+                </div>
+              )}
               {visitSlot && ticket.payment_status === 'pending' && (
                 <div style={{ marginTop: 4, fontSize: '0.88rem' }}>
                   <strong>{visitSlotPlace(visitSlot)}</strong>で支払い：<strong>{formatVisitSlot(visitSlot)}</strong>
