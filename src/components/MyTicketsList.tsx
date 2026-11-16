@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { CalendarDays, CircleX, Clock3, Ticket, Tickets } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { formatTicketOption } from '@/lib/ticketOption';
+import { formatTicketOption, formatYen } from '@/lib/ticketOption';
 import { type PaymentVisitSlot, fetchMyVisitSlots, formatVisitSlot, visitSlotPlace } from '@/lib/paymentVisit';
 
 type MyTicket = {
@@ -49,6 +49,13 @@ function paymentLabel(ticket: MyTicket, visit?: PaymentVisitSlot): string | null
   if (ticket.payment_status === 'paid') return '支払い済み';
   if (ticket.payment_status === 'expired') return '支払期限切れ';
   if (ticket.payment_status === 'pending') {
+    if (ticket.ticket_option_price_yen != null) {
+      const amount = formatYen(ticket.ticket_option_price_yen);
+      if (visit) return `${visitSlotPlace(visit)}で${amount}を支払い：${formatVisitSlot(visit)}`;
+      return ticket.payment_due_at
+        ? `${amount}を支払い：${formatDateTime(ticket.payment_due_at)}まで`
+        : `${amount}を支払い`;
+    }
     if (visit) return `${visitSlotPlace(visit)}で支払い：${formatVisitSlot(visit)}`;
     return ticket.payment_due_at
       ? `支払待ち：${formatDateTime(ticket.payment_due_at)}まで`

@@ -6,7 +6,7 @@ import { BadgeCheck, CircleCheckBig, Clock3, ExternalLink } from 'lucide-react';
 import RichText from '@/components/RichText';
 import { supabase } from '@/lib/supabase';
 import { formatAccountDate } from '@/lib/studentAccount';
-import { formatTicketOption } from '@/lib/ticketOption';
+import { formatTicketOption, formatYen } from '@/lib/ticketOption';
 import { type PaymentVisitSlot, fetchMyVisitSlots, formatVisitSlot, visitSlotPlace } from '@/lib/paymentVisit';
 import { useQueryParam } from '@/hooks/useQueryParam';
 import { useLoadEffect } from '@/hooks/useLoadEffect';
@@ -273,6 +273,12 @@ export default function MyTicketPage() {
             <div>
               <small style={{ color: 'var(--text-secondary)' }}>支払い状態</small>
               <div style={{ fontWeight: 800 }}>{paymentText}</div>
+              {ticket.ticket_option_price_yen != null && ticket.payment_status !== 'not_required' && (
+                <div style={{ marginTop: 4 }}>
+                  {ticket.payment_status === 'pending' ? '受付で払う金額' : '金額'}：
+                  <strong style={{ fontSize: ticket.payment_status === 'pending' ? '1.3rem' : undefined }}>{formatYen(ticket.ticket_option_price_yen)}</strong>
+                </div>
+              )}
               {visitSlot && ticket.payment_status === 'pending' && (
                 <div style={{ marginTop: 4, fontSize: '0.88rem' }}>
                   <strong>{visitSlotPlace(visitSlot)}</strong>で支払い：<strong>{formatVisitSlot(visitSlot)}</strong>

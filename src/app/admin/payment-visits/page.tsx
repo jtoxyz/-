@@ -5,6 +5,7 @@ import AdminNav from '@/components/AdminNav';
 import { PAYMENT_ROOM_LABEL } from '@/lib/config';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { adminSupabase as supabase } from '@/lib/supabase';
+import { formatYen } from '@/lib/ticketOption';
 import { type PaymentVisitSlot, VISIT_SLOT_COLUMNS, formatVisitSlot, jstDateKey, visitSlotPlace } from '@/lib/paymentVisit';
 import { useLoadEffect } from '@/hooks/useLoadEffect';
 
@@ -17,6 +18,7 @@ type VisitReservation = {
   paid_at: string | null;
   payment_visit_slot_id: string;
   events: { title: string } | null;
+  event_ticket_options: { label: string; price_yen: number } | null;
 };
 
 const paymentLabels: Record<VisitReservation['payment_status'], string> = {
@@ -75,7 +77,7 @@ export default function PaymentVisitsPage() {
     }
     const { data: rowData, error: rowError } = await supabase
       .from('reservations')
-      .select('id,student_name,student_number,status,payment_status,paid_at,payment_visit_slot_id,events(title)')
+      .select('id,student_name,student_number,status,payment_status,paid_at,payment_visit_slot_id,events(title),event_ticket_options(label,price_yen)')
       .in('payment_visit_slot_id', slots.map((slot) => slot.id))
       .order('student_number', { ascending: true });
     if (rowError) throw rowError;
@@ -234,24 +236,36 @@ export default function PaymentVisitsPage() {
               {daySlots.map((slot) => {
                 const slotRows = rows.filter((row) => row.payment_visit_slot_id === slot.id);
                 const count = slotRows.filter(isCounted).length;
+                const pricedRows = slotRows.filter((row) => isCounted(row) && row.event_ticket_options);
+                const unpaidYen = pricedRows
+                  .filter((row) => row.payment_status === 'pending')
+                  .reduce((sum, row) => sum + (row.event_ticket_options?.price_yen ?? 0), 0);
                 return (
                   <div key={slot.id} className="glass-card" style={{ padding: 16 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 10 }}>
                       <strong style={{ fontSize: '1.05rem' }}>{formatVisitSlot(slot)} {visitSlotPlace(slot)}{slot.note && <span style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>（{slot.note}）</span>}</strong>
-                      <span className="badge badge-success">{count}人</span>
+                      <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        {pricedRows.length > 0 && <span className="badge badge-warning">未払い合計 {unpaidYen.toLocaleString('ja-JP')}円</span>}
+                        <span className="badge badge-success">{count}人</span>
+                      </span>
                     </div>
                     {slotRows.length === 0 ? (
                       <p style={{ color: 'var(--text-secondary)', margin: 0 }}>この枠を選んだ予約はありません。</p>
                     ) : (
                       <div className="admin-table-container reservations-table-desktop">
                         <table className="admin-table admin-table-stack">
-                          <thead><tr><th>氏名</th><th>学籍番号</th><th>企画</th><th>支払い状態</th><th>操作</th></tr></thead>
+                          <thead><tr><th>氏名</th><th>学籍番号</th><th>企画</th><th>金額</th><th>支払い状態</th><th>操作</th></tr></thead>
                           <tbody>
                             {slotRows.map((row) => (
                               <tr key={row.id} style={{ opacity: row.status === 'cancelled' ? 0.5 : 1 }}>
                                 <td data-label="氏名">{row.student_name}</td>
                                 <td data-label="学籍番号">{row.student_number}</td>
                                 <td data-label="企画">{row.events?.title || '―'}</td>
+                                <td data-label="金額">
+                                  {row.event_ticket_options ? (
+                                    <span><strong>{formatYen(row.event_ticket_options.price_yen)}</strong><span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>（{row.event_ticket_options.label}）</span></span>
+                                  ) : '―'}
+                                </td>
                                 <td data-label="支払い状態"><span><strong>{paymentLabels[row.payment_status]}</strong>{row.status === 'cancelled' ? '（キャンセル済み）' : ''}</span></td>
                                 <td className="admin-table-stack-actions">
                                   {row.status !== 'cancelled' && row.payment_status !== 'not_required' && (
