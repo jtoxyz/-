@@ -9,6 +9,7 @@ import { adminSupabase as supabase } from '@/lib/supabase';
 import { type SurveyAnswers, type SurveyQuestion, type SurveyQuestionSummary, describeShowIf, formatSurveyAnswer, summarizeSurvey } from '@/lib/survey';
 import { type XlsxCell, type XlsxSheet, downloadXlsx } from '@/lib/xlsx';
 import { useLoadEffect } from '@/hooks/useLoadEffect';
+import { type PaymentVisitSlot, VISIT_SLOT_COLUMNS, formatVisitSlot, visitSlotPlace } from '@/lib/paymentVisit';
 
 interface ReservationItem {
   id: string;
@@ -25,6 +26,8 @@ interface ReservationItem {
   created_at: string;
   event_slots: { label: string } | null;
   event_ticket_options: { label: string; price_yen: number } | null;
+  payment_visit_slot_id?: string | null;
+  payment_visit_slots?: PaymentVisitSlot | null;
   survey_answers: SurveyAnswers | null;
 }
 
@@ -87,6 +90,9 @@ export default function AdminReservationsPage({ id }: { id: string }) {
   const [wipeConfirmText, setWipeConfirmText] = useState('');
   const [wiping, setWiping] = useState(false);
   const [surveyQuestions, setSurveyQuestions] = useState<SurveyQuestion[]>([]);
+  // 支払い日時の変更に使う、まだ終わっていない有効な支払い日時
+  const [visitSlots, setVisitSlots] = useState<PaymentVisitSlot[]>([]);
+  const [changingVisitId, setChangingVisitId] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -99,7 +105,7 @@ export default function AdminReservationsPage({ id }: { id: string }) {
 
       const { data: resData, error: resError } = await supabase
         .from('reservations')
-        .select('*, event_slots(label), event_ticket_options(label, price_yen)')
+        .select(`*, event_slots(label), event_ticket_options(label, price_yen), payment_visit_slots(${VISIT_SLOT_COLUMNS})`)
         .eq('event_id', id)
         .order('created_at', { ascending: false });
       if (resError) throw resError;
@@ -108,6 +114,15 @@ export default function AdminReservationsPage({ id }: { id: string }) {
       const { data: slotsData, error: slotsError } = await supabase.rpc('get_event_slots', { p_event_id: id });
       if (slotsError) throw slotsError;
       setSlots((slotsData as AdminEventSlot[]) || []);
+
+      const { data: visitData, error: visitError } = await supabase
+        .from('payment_visit_slots')
+        .select(VISIT_SLOT_COLUMNS)
+        .eq('is_active', true)
+        .gt('ends_at', new Date().toISOString())
+        .order('starts_at', { ascending: true });
+      if (visitError) console.error(visitError);
+      setVisitSlots((visitData as PaymentVisitSlot[]) || []);
     } catch (err) {
       console.error(err);
       setError(err instanceof Error ? err.message : 'データの読み込みに失敗しました。');
@@ -184,6 +199,22 @@ export default function AdminReservationsPage({ id }: { id: string }) {
     if (cancelError) setError(cancelError.message);
     else await loadData();
     setCancellingId(null);
+  };
+
+  // 未払いの予約の「支払いに来る日時」を変更する（支払い期限も新しい日時の終了時刻になる）
+  const handleChangeVisitSlot = async (res: ReservationItem, slotId: string) => {
+    if (!slotId || slotId === res.payment_visit_slot_id) return;
+    const next = visitSlots.find((slot) => slot.id === slotId);
+    if (!next) return;
+    if (!confirm(`${res.student_name}さんの支払い日時を「${formatVisitSlot(next)}」に変更しますか？`)) return;
+    setChangingVisitId(res.id);
+    const { error: changeError } = await supabase.rpc('admin_change_payment_visit_slot', {
+      p_reservation_id: res.id,
+      p_payment_visit_slot_id: slotId,
+    });
+    if (changeError) setError(changeError.message);
+    else await loadData();
+    setChangingVisitId(null);
   };
 
   const closeWipeModal = () => {
@@ -459,6 +490,29 @@ export default function AdminReservationsPage({ id }: { id: string }) {
                         <span className={`badge ${res.payment_status === 'paid' ? 'badge-success' : res.payment_status === 'pending' ? 'badge-warning' : res.payment_status === 'expired' ? 'badge-danger' : 'badge-secondary'}`}>
                           {PAYMENT_LABEL[res.payment_status] ?? res.payment_status}
                         </span>
+                        {res.payment_visit_slots && (
+                          <div style={{ fontSize: '0.8rem', marginTop: 4 }}>
+                            {formatVisitSlot(res.payment_visit_slots)}{res.payment_visit_slots.note ? `（${res.payment_visit_slots.note}）` : ''}
+                            <div>{visitSlotPlace(res.payment_visit_slots)}</div>
+                          </div>
+                        )}
+                        {res.status !== 'cancelled' && res.payment_status === 'pending' && visitSlots.length > 0 && (
+                          <select
+                            className="form-select"
+                            style={{ fontSize: '0.8rem', padding: '4px 6px', marginTop: 4 }}
+                            aria-label={`${res.student_name}さんの支払い日時を変更`}
+                            value=""
+                            disabled={changingVisitId === res.id}
+                            onChange={(e) => void handleChangeVisitSlot(res, e.target.value)}
+                          >
+                            <option value="">{changingVisitId === res.id ? '変更中...' : '支払い日時を変更'}</option>
+                            {visitSlots.filter((slot) => slot.id !== res.payment_visit_slot_id).map((slot) => (
+                              <option key={slot.id} value={slot.id}>
+                                {formatVisitSlot(slot)}{slot.note ? `（${slot.note}）` : ''}
+                              </option>
+                            ))}
+                          </select>
+                        )}
                       </td>
                     )}
                     <td className="admin-table-stack-actions">{res.status !== 'cancelled' && <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleCancelReservation(res.id)} disabled={cancellingId === res.id}><X size={15} aria-hidden="true" />取消</button>}</td>
