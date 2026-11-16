@@ -21,11 +21,12 @@ alter table public.payment_qr_codes
 comment on column public.payment_qr_codes.claim_key_hash is
   '動的QRを読み取った端末の鍵（sha256）。支払い確定はこの鍵を持つ端末だけが行える。null は鍵なしの読み取り（旧画面）';
 
--- 引数を増やすので古い定義を外す（同じ名前の関数を1つに保つ）。p_claim_key は省略可能なので旧画面からの呼び出しも通る。
-drop function if exists public.claim_payment_qr(text);
-drop function if exists public.redeem_payment_qr(text);
+-- 互換期間：引数1つの旧版（claim_payment_qr(text) / redeem_payment_qr(text)）は削除せず、
+-- 鍵なしで新版を呼ぶ薄い関数に置き換える（ファイル末尾）。更新前の画面を開いたままの端末もそのまま動く。
+-- 新版は既定値なしの引数2つにして、PostgREST が引数名で1つに決められるようにする。
+-- 旧版は全端末が新しい画面に切り替わった後、別のマイグレーションで削除する。
 
-create or replace function public.claim_payment_qr(p_token text, p_claim_key text default null)
+create or replace function public.claim_payment_qr(p_token text, p_claim_key text)
 returns table(status text, event_title text)
 language plpgsql
 security definer
@@ -96,7 +97,7 @@ end $$;
 revoke all on function public.claim_payment_qr(text, text) from public;
 grant execute on function public.claim_payment_qr(text, text) to anon, authenticated;
 
-create or replace function public.redeem_payment_qr(p_token text, p_claim_key text default null)
+create or replace function public.redeem_payment_qr(p_token text, p_claim_key text)
 returns table(event_id uuid, event_title text, paid_reservations integer, qr_mode text)
 language plpgsql
 security definer
@@ -262,6 +263,30 @@ end $$;
 
 revoke all on function public.staff_reissue_lane_payment_qr(uuid, text) from public, anon;
 grant execute on function public.staff_reissue_lane_payment_qr(uuid, text) to authenticated;
+
+-- 旧版（互換用）。鍵なしの読み取り・確定として新版に渡す。
+-- 鍵付きで読み取られたQRは、鍵なしでは確定できない（横取り防止）。
+create or replace function public.claim_payment_qr(p_token text)
+returns table(status text, event_title text)
+language sql
+set search_path = public
+as $$
+  select * from public.claim_payment_qr(p_token, null::text);
+$$;
+
+revoke all on function public.claim_payment_qr(text) from public;
+grant execute on function public.claim_payment_qr(text) to anon, authenticated;
+
+create or replace function public.redeem_payment_qr(p_token text)
+returns table(event_id uuid, event_title text, paid_reservations integer, qr_mode text)
+language sql
+set search_path = public
+as $$
+  select * from public.redeem_payment_qr(p_token, null::text);
+$$;
+
+revoke all on function public.redeem_payment_qr(text) from public, anon;
+grant execute on function public.redeem_payment_qr(text) to authenticated;
 
 notify pgrst, 'reload schema';
 commit;
