@@ -8,7 +8,7 @@ import DynamicPaymentQr from '@/components/payment/DynamicPaymentQr';
 import { useLoadEffect } from '@/hooks/useLoadEffect';
 import { formatJstDateTime } from '@/lib/jst';
 import { formatVisitSlot, visitSlotPlace } from '@/lib/paymentVisit';
-import { staffDailyQr, staffLaneQr } from '@/lib/paymentQrRpc';
+import { reissueLaneQr, staffDailyQr, staffLaneQr } from '@/lib/paymentQrRpc';
 import { supabase } from '@/lib/supabase';
 
 type StaffEvent = { id: string; title: string; payment_required: boolean; is_public: boolean; starts_at: string | null; ends_at: string | null };
@@ -52,6 +52,7 @@ type Access =
 type Tab = 'stats' | 'dynamic' | 'daily';
 
 const fetchLaneQr = staffLaneQr(supabase);
+const reissueQr = reissueLaneQr(supabase);
 const fetchDailyQr = staffDailyQr(supabase);
 const STATS_REFRESH_MS = 30_000;
 
@@ -183,7 +184,7 @@ export default function StaffPage() {
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', lineHeight: 1.7, marginBottom: 12 }}>
                   このスマホ・タブレット専用の一回限りのQRです。学生が読み取ると、この端末だけ次のQRに切り替わります。複数の端末で同時に開けます。
                 </p>
-                <DynamicPaymentQr eventId={event.id} fetchQr={fetchLaneQr} />
+                <DynamicPaymentQr eventId={event.id} fetchQr={fetchLaneQr} reissueQr={reissueQr} />
               </>
             )}
             {activeTab === 'daily' && (

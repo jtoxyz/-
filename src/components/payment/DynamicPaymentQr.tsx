@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
-import { Copy, TriangleAlert } from 'lucide-react';
+import { Copy, RefreshCw, TriangleAlert } from 'lucide-react';
 import { formatJstDateTime } from '@/lib/jst';
 
 type CurrentQr = { qr_id: string; qr_token: string; created_at: string };
@@ -30,17 +30,24 @@ function getDeviceLane(): string {
 /**
  * 端末ごとの一回限りの支払いQR。学生が読み取った瞬間に、この端末だけ次のQRへ切り替わる。
  * fetchQr は管理者用（admin_get_lane_payment_qr）とスタッフ用（staff_get_lane_payment_qr）を渡し分ける。
+ * reissueQr は「新しいQRにする」ボタン用（staff_reissue_lane_payment_qr。管理者も使える）。
  */
 export default function DynamicPaymentQr({
   eventId,
   fetchQr,
+  reissueQr,
 }: {
   eventId: string;
   fetchQr: (eventId: string, lane: string) => PromiseLike<QrResult>;
+  /** この端末の表示中QRを無効にして新しいQRを出す */
+  reissueQr: (eventId: string, lane: string) => PromiseLike<QrResult>;
 }) {
   const [current, setCurrent] = useState<CurrentQr | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [reissuing, setReissuing] = useState(false);
+  // 作り直しのたびに増やす。作り直し前に送った確認の結果（古いQR）で表示を戻さないようにする
+  const generation = useRef(0);
   // 端末IDはブラウザでしか作れない。最初の描画は読み込み中表示なので、サーバー側では空のままでよい
   const [lane] = useState(() => (typeof window === 'undefined' ? '' : getDeviceLane()));
 
@@ -53,9 +60,10 @@ export default function DynamicPaymentQr({
       // 画面が裏にあるとき（別のアプリを開いている等）は問い合わせない
       if (inFlight || document.visibilityState === 'hidden') return;
       inFlight = true;
+      const startedAt = generation.current;
       try {
         const { data, error: rpcError } = await fetchQr(eventId, lane);
-        if (!active) return;
+        if (!active || startedAt !== generation.current) return;
         if (rpcError) {
           setError(rpcError.message);
           return;
@@ -85,6 +93,21 @@ export default function DynamicPaymentQr({
     if (!current || typeof window === 'undefined') return '';
     return `${window.location.origin}/pay?token=${encodeURIComponent(current.qr_token)}`;
   }, [current]);
+
+  const reissue = async () => {
+    if (!eventId || !lane || reissuing) return;
+    setReissuing(true);
+    generation.current += 1;
+    const { data, error: rpcError } = await reissueQr(eventId, lane);
+    generation.current += 1;
+    if (rpcError) setError(rpcError.message);
+    else {
+      setError(null);
+      const row = (Array.isArray(data) ? data[0] : data) as CurrentQr | undefined;
+      if (row) setCurrent(row);
+    }
+    setReissuing(false);
+  };
 
   const copyUrl = async () => {
     try {
@@ -123,9 +146,17 @@ export default function DynamicPaymentQr({
           <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-secondary)' }}>
             発行日時: {formatJstDateTime(current.created_at)}
           </div>
-          <button type="button" className="btn btn-secondary btn-sm" style={{ marginTop: 16 }} onClick={copyUrl}>
-            <Copy size={15} aria-hidden="true" />{copied ? 'コピーしました' : 'URLをコピー'}
-          </button>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 10, flexWrap: 'wrap', marginTop: 16 }}>
+            <button type="button" className="btn btn-primary btn-sm" onClick={() => void reissue()} disabled={reissuing}>
+              <RefreshCw size={15} aria-hidden="true" />{reissuing ? '作り直しています…' : '新しいQRにする'}
+            </button>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={copyUrl}>
+              <Copy size={15} aria-hidden="true" />{copied ? 'コピーしました' : 'URLをコピー'}
+            </button>
+          </div>
+          <p style={{ marginTop: 10, fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+            「新しいQRにする」を押すと、いま表示しているQRは使えなくなります。読み取り済みでログイン中の人の支払い確定には影響しません。
+          </p>
         </div>
       )}
     </div>
