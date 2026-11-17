@@ -6,8 +6,9 @@ import { BarChart3, CalendarDays, ClipboardCopy, Download, GraduationCap, Mail, 
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import AdminNav from '@/components/AdminNav';
 import { adminSupabase as supabase } from '@/lib/supabase';
-import { type SurveyAnswers, type SurveyQuestion, type SurveyQuestionSummary, describeShowIf, formatSurveyAnswer, summarizeSurvey } from '@/lib/survey';
-import { type XlsxCell, type XlsxSheet, downloadXlsx } from '@/lib/xlsx';
+import { type SurveyAnswers, type SurveyQuestion, type SurveyQuestionSummary, formatSurveyAnswer, summarizeSurvey } from '@/lib/survey';
+import { PAYMENT_LABEL, formatDateTime, reservationListSheet, summaryNote, surveyStatsSheet, totalsSheet } from '@/lib/reservationExport';
+import { type XlsxSheet, downloadXlsx } from '@/lib/xlsx';
 import { useLoadEffect } from '@/hooks/useLoadEffect';
 import { type PaymentVisitSlot, VISIT_SLOT_COLUMNS, formatVisitSlot, visitSlotPlace } from '@/lib/paymentVisit';
 
@@ -57,17 +58,6 @@ function pickupEndsAt(slot: AdminEventSlot | undefined): string | null {
 
 function safeFileName(value: string): string {
   return value.replace(/[\/:*?"<>|\s]+/g, '_').replace(/^_+|_+$/g, '') || 'event';
-}
-
-const PAYMENT_LABEL: Record<string, string> = { not_required: '不要', pending: '未払い', paid: '支払い済み', expired: '期限切れ' };
-
-function formatDateTime(dateStr: string | null): string {
-  if (!dateStr) return '-';
-  return new Date(dateStr).toLocaleString('ja-JP', {
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit',
-    timeZone: 'Asia/Tokyo',
-  });
 }
 
 export default function AdminReservationsPage({ id }: { id: string }) {
@@ -235,26 +225,11 @@ export default function AdminReservationsPage({ id }: { id: string }) {
     setWiping(false);
   };
 
-  // 予約者一覧（アンケートの回答を列に追加）と、アンケート集計を1つの .xlsx にまとめる
+  // 予約者一覧・集計・アンケート統計を1つの .xlsx にまとめる（アンケートは個別の回答ではなく統計で出す）
   const handleExportExcel = () => {
     if (reservations.length === 0) return alert('エクスポートする予約データがありません。');
-    const statusLabel = { reserved: '有効', used: '使用済み', cancelled: 'キャンセル' } as const;
-    const typeLabel = { reservation: '予約券', walkin: '当日券' } as const;
-    const paymentLabel = { not_required: '不要', pending: '未払い', paid: '支払い済み', expired: '期限切れ' } as const;
-    const hasOptions = reservations.some((res) => res.event_ticket_options);
-    const headers = [
-      '企画名', '開催枠', '券種', ...(hasOptions ? ['券種名', '金額（円）'] : []), '氏名', '学籍番号', '大学メール', '状態', '支払い',
-      '申込日時', '使用日時', '取消日時', 'チケットコード', ...surveyQuestions.map((q, i) => `Q${i + 1} ${q.text}`),
-    ];
-    const rows: XlsxCell[][] = reservations.map((res) => [
-      eventTitle, res.event_slots?.label || '-', typeLabel[res.ticket_type],
-      ...(hasOptions ? [res.event_ticket_options?.label ?? '', res.event_ticket_options?.price_yen ?? ''] : []),
-      res.student_name, res.student_number, res.university_email, statusLabel[res.status], paymentLabel[res.payment_status] ?? res.payment_status,
-      formatDateTime(res.created_at), res.used_at ? formatDateTime(res.used_at) : '', res.cancelled_at ? formatDateTime(res.cancelled_at) : '', res.ticket_code,
-      ...surveyQuestions.map((q) => formatSurveyAnswer(res.survey_answers?.[q.id])),
-    ]);
-    const sheets: XlsxSheet[] = [{ name: '予約者一覧', rows: [headers, ...rows], boldRows: [0], freezeHeader: true }];
-    if (surveyQuestions.length > 0) sheets.push(surveySummarySheet(surveyQuestions, surveySummary));
+    const sheets: XlsxSheet[] = [reservationListSheet(reservations, slots), totalsSheet(eventTitle, reservations, slots)];
+    if (surveyQuestions.length > 0) sheets.push(surveyStatsSheet(surveyQuestions, surveySummary));
     const date = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
     downloadXlsx(sheets, `reservations_${safeFileName(eventTitle)}_${date}.xlsx`);
   };
@@ -549,22 +524,13 @@ export default function AdminReservationsPage({ id }: { id: string }) {
 
 const percent = (count: number, total: number) => (total > 0 ? `${Math.round((count / total) * 1000) / 10}%` : '-');
 
-function summaryNote(questions: SurveyQuestion[], row: SurveyQuestionSummary): string {
-  const parts = [`回答 ${row.respondents}人`];
-  if (row.question.type === 'multiple') parts.push('複数回答（割合は回答者に対する割合）');
-  if (row.average !== null) parts.push(`平均 ${row.average.toFixed(2)}`);
-  const cond = describeShowIf(questions, row.question);
-  if (cond) parts.push(`${cond}に表示`);
-  return parts.join('・');
-}
-
 /** 設問ごとに、選択肢ごとの人数と割合を表示する（キャンセルを除く） */
 function SurveySummaryCard({ questions, summary }: { questions: SurveyQuestion[]; summary: SurveyQuestionSummary[] }) {
   const muted = { fontSize: 12, color: 'var(--text-secondary)' } as const;
   return (
     <div className="glass-card" style={{ marginTop: 20 }}>
       <h2 style={{ marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}><BarChart3 size={22} aria-hidden="true" />アンケート集計</h2>
-      <p style={{ marginTop: 0, ...muted, fontSize: 13 }}>キャンセルを除いた予約の回答です。「Excelでダウンロード」の「アンケート集計」シートにも同じ内容が入ります。</p>
+      <p style={{ marginTop: 0, ...muted, fontSize: 13 }}>キャンセルを除いた予約の回答です。「Excelでダウンロード」の「アンケート統計」シートにも同じ内容が入ります。</p>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 12 }}>
         {summary.map((row, index) => {
           const max = Math.max(1, ...row.counts.map((c) => c.count));
@@ -600,20 +566,4 @@ function SurveySummaryCard({ questions, summary }: { questions: SurveyQuestion[]
       </div>
     </div>
   );
-}
-
-function surveySummarySheet(questions: SurveyQuestion[], summary: SurveyQuestionSummary[]): XlsxSheet {
-  const rows: XlsxCell[][] = [['設問', '選択肢・回答', '人数', '割合']];
-  const boldRows = [0];
-  summary.forEach((row, index) => {
-    boldRows.push(rows.length);
-    rows.push([`Q${index + 1} ${row.question.text}`, summaryNote(questions, row)]);
-    if (row.question.type === 'text') {
-      row.texts.forEach((text) => rows.push(['', text]));
-    } else {
-      row.counts.forEach((c) => rows.push(['', c.label, c.count, percent(c.count, row.respondents)]));
-    }
-    rows.push([]);
-  });
-  return { name: 'アンケート集計', rows, boldRows, freezeHeader: true, columnWidths: [40, 50, 8, 10] };
 }
