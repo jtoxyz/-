@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { BadgeCheck, CircleCheckBig, Clock3, ExternalLink } from 'lucide-react';
+import { BadgeCheck, CircleCheckBig, Clock3, ExternalLink, TriangleAlert } from 'lucide-react';
 import RichText from '@/components/RichText';
 import { supabase } from '@/lib/supabase';
 import { formatAccountDate } from '@/lib/studentAccount';
@@ -10,6 +10,8 @@ import { formatTicketOption, formatYen } from '@/lib/ticketOption';
 import { type PaymentVisitSlot, fetchMyVisitSlots, formatVisitSlot, visitSlotPlace } from '@/lib/paymentVisit';
 import { useQueryParam } from '@/hooks/useQueryParam';
 import { useLoadEffect } from '@/hooks/useLoadEffect';
+import { useAccessStatus } from '@/components/AccessStatusContext';
+import { NOSHOW_RULE_TEXT } from '@/lib/accessStatus';
 
 type TicketDetails = {
   reservation_id: string;
@@ -92,6 +94,7 @@ function safeHttpUrl(value: string | null): string | null {
 
 export default function MyTicketPage() {
   const reservationId = useQueryParam('reservationId');
+  const accessStatus = useAccessStatus();
   const [ticket, setTicket] = useState<TicketDetails | null>(null);
   const [visitSlot, setVisitSlot] = useState<PaymentVisitSlot | null>(null);
   const [loading, setLoading] = useState(true);
@@ -283,6 +286,22 @@ export default function MyTicketPage() {
                 <div style={{ marginTop: 4, fontSize: '0.88rem' }}>
                   <strong>{visitSlotPlace(visitSlot)}</strong>で支払い：<strong>{formatVisitSlot(visitSlot)}</strong>
                   {visitSlot.note && <span style={{ color: 'var(--text-secondary)' }}>（{visitSlot.note}）</span>}
+                </div>
+              )}
+              {ticket.payment_status === 'pending' && (
+                <div
+                  style={{
+                    display: 'flex', gap: 6, alignItems: 'flex-start', marginTop: 8, padding: '8px 10px', borderRadius: 8,
+                    fontSize: '0.82rem', lineHeight: 1.6,
+                    color: 'var(--color-warning)', background: 'var(--color-warning-bg)', border: '1px solid var(--color-warning-border)',
+                  }}
+                >
+                  <TriangleAlert size={16} aria-hidden="true" style={{ flexShrink: 0, marginTop: 2 }} />
+                  <span>
+                    {accessStatus?.level === 'yellow'
+                      ? <strong>この時間内に支払いに来なかった場合、予約サイトを利用できなくなります。</strong>
+                      : <strong>{NOSHOW_RULE_TEXT}</strong>}
+                  </span>
                 </div>
               )}
             </div>

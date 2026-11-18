@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Banknote, CalendarDays, MapPin, Ticket, UserRound } from 'lucide-react';
+import { Banknote, CalendarDays, MapPin, Ticket, TriangleAlert, UserRound } from 'lucide-react';
 import RichText from '@/components/RichText';
 import { supabase } from '@/lib/supabase';
 import { type PaymentVisitSlot, fetchSelectableVisitSlots, formatVisitSlot, visitSlotPlace, visitWindowNotice } from '@/lib/paymentVisit';
@@ -18,6 +18,8 @@ import {
 } from '@/lib/studentAccount';
 import { type SurveyQuestion, missingRequiredAnswer, pruneHiddenAnswers, visibleQuestionIds } from '@/lib/survey';
 import { useQueryParam } from '@/hooks/useQueryParam';
+import { useAccessStatus } from '@/components/AccessStatusContext';
+import { NOSHOW_BLACKLIST_COUNT, NOSHOW_RULE_TEXT } from '@/lib/accessStatus';
 
 type BulkResult = { id: string; slot_label: string };
 
@@ -29,6 +31,9 @@ type TicketOptionRow = {
 export default function AccountReservationPage() {
   const router = useRouter();
   const eventId = useQueryParam('id');
+  const accessStatus = useAccessStatus();
+  const noShowCount = accessStatus?.noshow_count ?? 0;
+  const isYellow = accessStatus?.level === 'yellow';
   const [event, setEvent] = useState<AccountEvent | null>(null);
   const [profile, setProfile] = useState<StudentProfile | null>(null);
   const [slots, setSlots] = useState<AccountEventSlot[]>([]);
@@ -154,6 +159,18 @@ export default function AccountReservationPage() {
 
   const reserve = async () => {
     if (!event || !reservable) return;
+    // イエローリストの人は、支払いが必要な企画を予約する前に必ず確認してもらう
+    if (
+      visitRequired &&
+      isYellow &&
+      !confirm(
+        `【最終警告】支払いに来なかったことが${noShowCount}回あります。\n\n` +
+        `この予約で選んだ支払い日時に来なかった場合、予約サイトを利用できなくなります。\n\n` +
+        `必ず支払いに来られる場合だけ「OK」を押してください。`,
+      )
+    ) {
+      return;
+    }
     setSaving(true);
     setError(null);
 
@@ -311,9 +328,25 @@ export default function AccountReservationPage() {
               {visitPlaces.length > 1
                 ? '支払い場所は日によって違います。各日時に書いてある場所で支払ってください。'
                 : `選んだ日時に${visitPlaces[0] ?? ''}で支払ってください。`}
-              時間内に支払いがない場合、予約は自動でキャンセルされます。
               {visitWindowNotice(event.payment_visit_window_days)}
             </p>
+            <div
+              style={{
+                display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 12, padding: '10px 12px', borderRadius: 10,
+                fontSize: '0.85rem', lineHeight: 1.7,
+                color: 'var(--color-warning)', background: 'var(--color-warning-bg)', border: '1px solid var(--color-warning-border)',
+              }}
+            >
+              <TriangleAlert size={18} aria-hidden="true" style={{ flexShrink: 0, marginTop: 2 }} />
+              <div>
+                <strong>{NOSHOW_RULE_TEXT}</strong>
+                {accessStatus && (
+                  <div style={{ marginTop: 2 }}>
+                    あなたが支払いに来なかった回数：<strong>{noShowCount}回</strong>（{NOSHOW_BLACKLIST_COUNT}回で利用停止）
+                  </div>
+                )}
+              </div>
+            </div>
             <div style={{ display: 'grid', gap: 8 }}>
               {visitSlots.map((visit) => {
                 const active = visitSlotId === visit.id;
@@ -328,6 +361,24 @@ export default function AccountReservationPage() {
             </div>
             {visitSlots.length === 0 && <p style={{ color: 'var(--text-secondary)' }}>今は選べる支払い日時がないため予約できません。委員会にお問い合わせください。</p>}
             {selectedVisit && <p style={{ marginTop: 12, fontWeight: 700 }}>支払い場所：{visitSlotPlace(selectedVisit)}（{formatVisitSlot(selectedVisit)}）</p>}
+          </div>
+        )}
+
+        {visitRequired && isYellow && (
+          <div
+            role="alert"
+            className="error-banner"
+            style={{ marginTop: 20, padding: '16px 18px', display: 'flex', gap: 12, alignItems: 'flex-start', lineHeight: 1.8, border: '2px solid var(--color-danger)' }}
+          >
+            <TriangleAlert size={28} aria-hidden="true" style={{ flexShrink: 0, marginTop: 2 }} />
+            <div>
+              <strong style={{ fontSize: '1.15rem', display: 'block' }}>次に支払いに来なかった場合、予約サイトを利用できなくなります。</strong>
+              <div>
+                あなたは予約した支払い日時に来なかったことが<strong>{noShowCount}回</strong>あります。
+                この予約で選んだ日時{selectedVisit ? `（${formatVisitSlot(selectedVisit)}・${visitSlotPlace(selectedVisit)}）` : ''}に必ず支払いに来てください。
+                来られない場合は予約しないでください。
+              </div>
+            </div>
           </div>
         )}
 
