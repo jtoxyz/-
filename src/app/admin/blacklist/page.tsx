@@ -50,6 +50,23 @@ type NoShowUser = {
   is_blacklisted: boolean;
 };
 
+// ブラックリスト行に表示する氏名・来なかった回数（予約履歴から算出）
+type BlacklistPersonInfo = {
+  student_name: string | null;
+  noshow_count: number;
+  last_noshow_at: string | null;
+};
+
+type ReservationNoShowRow = {
+  student_number: string | null;
+  student_name: string | null;
+  status: string;
+  payment_status: string | null;
+  cancelled_at: string | null;
+  payment_due_at: string | null;
+  created_at: string;
+};
+
 export default function AdminBlacklistPage() {
   const { loading: authLoading, user } = useAdminAuth();
   const [entries, setEntries] = useState<BlacklistEntry[]>([]);
@@ -63,6 +80,60 @@ export default function AdminBlacklistPage() {
   const [showInactive, setShowInactive] = useState(false);
   const [search, setSearch] = useState('');
   const [noShowUsers, setNoShowUsers] = useState<NoShowUser[]>([]);
+  const [personInfo, setPersonInfo] = useState<Record<string, BlacklistPersonInfo>>({});
+
+  // ブラックリストの学籍番号ごとに、氏名と（最後の解除以降の）来なかった回数を予約履歴から集計する
+  const loadPersonInfo = async (list: BlacklistEntry[]) => {
+    const studentNumbers = Array.from(
+      new Set(list.map((entry) => entry.student_number).filter((value): value is string => !!value)),
+    );
+    if (studentNumbers.length === 0) {
+      setPersonInfo({});
+      return;
+    }
+
+    const { data, error: loadError } = await supabase
+      .from('reservations')
+      .select('student_number, student_name, status, payment_status, cancelled_at, payment_due_at, created_at')
+      .in('student_number', studentNumbers);
+
+    if (loadError) {
+      console.error(loadError);
+      return;
+    }
+
+    const lastRemovedAt: Record<string, number> = {};
+    for (const entry of list) {
+      if (!entry.student_number || !entry.removed_at) continue;
+      const removed = new Date(entry.removed_at).getTime();
+      lastRemovedAt[entry.student_number] = Math.max(lastRemovedAt[entry.student_number] ?? -Infinity, removed);
+    }
+
+    const info: Record<string, BlacklistPersonInfo & { name_at: number }> = {};
+    for (const row of (data as ReservationNoShowRow[]) || []) {
+      if (!row.student_number) continue;
+      const current = info[row.student_number] ?? { student_name: null, noshow_count: 0, last_noshow_at: null, name_at: -Infinity };
+      const createdAt = new Date(row.created_at).getTime();
+      if (row.student_name && createdAt > current.name_at) {
+        current.student_name = row.student_name;
+        current.name_at = createdAt;
+      }
+      const noShowAt = row.cancelled_at ?? row.payment_due_at;
+      if (
+        row.status === 'cancelled' &&
+        row.payment_status === 'expired' &&
+        noShowAt &&
+        new Date(noShowAt).getTime() > (lastRemovedAt[row.student_number] ?? -Infinity)
+      ) {
+        current.noshow_count += 1;
+        if (!current.last_noshow_at || new Date(noShowAt) > new Date(current.last_noshow_at)) {
+          current.last_noshow_at = noShowAt;
+        }
+      }
+      info[row.student_number] = current;
+    }
+    setPersonInfo(info);
+  };
 
   // 支払いに2回以上来なかった人（2回：イエローリスト、3回で自動的にブラックリスト）
   const loadNoShowUsers = async () => {
@@ -83,7 +154,9 @@ export default function AdminBlacklistPage() {
         .order('created_at', { ascending: false });
 
       if (loadError) throw loadError;
-      setEntries((data as BlacklistEntry[]) || []);
+      const list = (data as BlacklistEntry[]) || [];
+      setEntries(list);
+      void loadPersonInfo(list);
     } catch (loadError) {
       console.error(loadError);
       setError(loadError instanceof Error ? loadError.message : 'ブラックリストの読み込みに失敗しました。');
@@ -104,13 +177,18 @@ export default function AdminBlacklistPage() {
     return entries.filter((entry) => {
       if (!showInactive && !entry.active) return false;
       if (!query) return true;
+      const name = entry.student_number ? personInfo[entry.student_number]?.student_name : null;
       return (
+        name?.toLowerCase().includes(query) ||
         entry.student_number?.toLowerCase().includes(query) ||
         entry.university_email?.toLowerCase().includes(query) ||
         entry.reason.toLowerCase().includes(query)
       );
     });
-  }, [entries, search, showInactive]);
+  }, [entries, search, showInactive, personInfo]);
+
+  // ブラックリスト登録中の人は上のブラックリストに出るので、イエローリストには出さない
+  const yellowUsers = useMemo(() => noShowUsers.filter((row) => !row.is_blacklisted), [noShowUsers]);
 
   const handleAdd = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -148,7 +226,7 @@ export default function AdminBlacklistPage() {
       setUniversityEmail('');
       setReason('');
       setExpiresAt('');
-      await loadEntries();
+      await Promise.all([loadEntries(), loadNoShowUsers()]);
     } catch (insertError) {
       console.error(insertError);
       setError(insertError instanceof Error ? insertError.message : 'ブラックリストへの登録に失敗しました。');
@@ -172,7 +250,7 @@ export default function AdminBlacklistPage() {
       return;
     }
 
-    await loadEntries();
+    await Promise.all([loadEntries(), loadNoShowUsers()]);
   };
 
   const handleReactivate = async (entry: BlacklistEntry) => {
@@ -186,7 +264,7 @@ export default function AdminBlacklistPage() {
       return;
     }
 
-    await loadEntries();
+    await Promise.all([loadEntries(), loadNoShowUsers()]);
   };
 
   if (authLoading || loading) {
@@ -198,12 +276,101 @@ export default function AdminBlacklistPage() {
       <div className="admin-layout-sidebar">
         <AdminNav />
         <div className="form-container-responsive">
-          <h1 style={{ marginBottom: 20 }}>ブラックリスト管理</h1>
+          <h1 style={{ marginBottom: 20 }}>ブラックリスト・イエローリスト管理</h1>
 
           {error && <div className="error-banner" role="alert"><TriangleAlert size={20} aria-hidden="true" style={{ flexShrink: 0 }} /><span>{error}</span></div>}
 
+          <div className="glass-card" style={{ marginBottom: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+              <h2 style={{ fontSize: '1.1rem', margin: 0 }}>ブラックリスト（利用停止中の人）</h2>
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                <input
+                  className="form-input"
+                  placeholder="氏名・学籍番号・メール・理由で検索"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  style={{ flex: '1 1 250px', minWidth: 0 }}
+                />
+                <label className="form-checkbox-label">
+                  <input
+                    type="checkbox"
+                    className="form-checkbox"
+                    checked={showInactive}
+                    onChange={(event) => setShowInactive(event.target.checked)}
+                  />
+                  解除済みも表示
+                </label>
+              </div>
+            </div>
+
+            <div className="admin-table-container" style={{ marginTop: 16 }}>
+              <table className="admin-table admin-table-stack">
+                <thead>
+                  <tr>
+                    <th>状態</th>
+                    <th>氏名</th>
+                    <th>学籍番号</th>
+                    <th>来なかった回数</th>
+                    <th>最後に来なかった日時</th>
+                    <th>理由</th>
+                    <th>解除予定</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredEntries.map((entry) => {
+                    const info = entry.student_number ? personInfo[entry.student_number] : undefined;
+                    return (
+                      <tr key={entry.id} style={{ opacity: entry.active ? 1 : 0.55 }}>
+                        <td data-label="状態">
+                          <strong>{entry.active ? 'ブラックリスト' : '解除済み'}</strong>
+                          <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>登録 {formatDateTime(entry.created_at)}</span>
+                          {!entry.active && entry.removed_at && (
+                            <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>解除 {formatDateTime(entry.removed_at)}</span>
+                          )}
+                        </td>
+                        <td data-label="氏名">{info?.student_name || '-'}</td>
+                        <td data-label="学籍番号">
+                          {entry.student_number || '-'}
+                          {entry.university_email && <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{entry.university_email}</span>}
+                        </td>
+                        <td data-label="来なかった回数">
+                          {entry.active
+                            ? `${info?.noshow_count ?? 0}回`
+                            : entry.noshow_count_at_removal !== null
+                              ? `解除時 ${entry.noshow_count_at_removal}回（0回にリセット済み）`
+                              : '-'}
+                        </td>
+                        <td data-label="最後に来なかった日時">{entry.active ? formatDateTime(info?.last_noshow_at ?? null) : '-'}</td>
+                        <td data-label="理由" style={{ whiteSpace: 'pre-wrap', minWidth: 220 }}>{entry.reason}</td>
+                        <td data-label="解除予定">{entry.expires_at ? formatDateTime(entry.expires_at) : '期限なし'}</td>
+                        <td className="admin-table-stack-actions">
+                          {entry.active ? (
+                            <button className="btn btn-secondary btn-sm" type="button" onClick={() => handleDeactivate(entry)}>
+                              解除
+                            </button>
+                          ) : (
+                            <button className="btn btn-secondary btn-sm" type="button" onClick={() => handleReactivate(entry)}>
+                              再登録
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {filteredEntries.length === 0 && (
+              <p style={{ textAlign: 'center', color: 'var(--text-secondary)', marginTop: 20 }}>
+                条件に一致する登録はありません。
+              </p>
+            )}
+          </div>
+
           <form onSubmit={handleAdd} className="glass-card" style={{ marginBottom: 24 }}>
-            <h2 style={{ fontSize: '1.1rem', marginBottom: 16 }}>利用停止対象を登録</h2>
+            <h2 style={{ fontSize: '1.1rem', marginBottom: 16 }}>ブラックリストに登録</h2>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
               <div className="form-group">
@@ -263,10 +430,10 @@ export default function AdminBlacklistPage() {
             </button>
           </form>
 
-          <div className="glass-card" style={{ marginBottom: 24 }}>
+          <div className="glass-card">
             <h2 style={{ fontSize: '1.1rem', marginBottom: 6 }}>イエローリスト（支払いに来なかった人）</h2>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: 0, lineHeight: 1.7 }}>
-              予約した支払い日時に来ず、自動キャンセルになった回数を全企画で数えています。2回でイエローリストになり、本人の予約サイトに警告が出ます。3回目で自動的にブラックリストへ登録されます。ブラックリストを解除すると回数は0に戻ります（解除前の回数は、下の登録一覧で「解除済みも表示」にすると確認できます）。
+              予約した支払い日時に来ず、自動キャンセルになった回数を全企画で数えています。2回でイエローリストになり、本人の予約サイトに警告が出ます。3回目で自動的にブラックリストへ登録されます。ブラックリストを解除すると回数は0に戻ります（解除前の回数は、上のブラックリストで「解除済みも表示」にすると確認できます）。
             </p>
             <div className="admin-table-container">
               <table className="admin-table admin-table-stack">
@@ -280,9 +447,9 @@ export default function AdminBlacklistPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {noShowUsers.map((row) => (
+                  {yellowUsers.map((row) => (
                     <tr key={row.student_number}>
-                      <td data-label="状態"><strong>{row.is_blacklisted ? 'ブラックリスト' : 'イエローリスト'}</strong></td>
+                      <td data-label="状態"><strong>イエローリスト</strong></td>
                       <td data-label="氏名">{row.student_name || '-'}</td>
                       <td data-label="学籍番号">{row.student_number}</td>
                       <td data-label="来なかった回数">{row.noshow_count}回</td>
@@ -292,89 +459,8 @@ export default function AdminBlacklistPage() {
                 </tbody>
               </table>
             </div>
-            {noShowUsers.length === 0 && (
+            {yellowUsers.length === 0 && (
               <p style={{ textAlign: 'center', color: 'var(--text-secondary)', marginTop: 16 }}>該当する人はいません。</p>
-            )}
-          </div>
-
-          <div className="glass-card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-              <h2 style={{ fontSize: '1.1rem', margin: 0 }}>登録一覧</h2>
-              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                <input
-                  className="form-input"
-                  placeholder="学籍番号・メール・理由で検索"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  style={{ flex: '1 1 250px', minWidth: 0 }}
-                />
-                <label className="form-checkbox-label">
-                  <input
-                    type="checkbox"
-                    className="form-checkbox"
-                    checked={showInactive}
-                    onChange={(event) => setShowInactive(event.target.checked)}
-                  />
-                  解除済みも表示
-                </label>
-              </div>
-            </div>
-
-            <div className="admin-table-container" style={{ marginTop: 16 }}>
-              <table className="admin-table admin-table-stack">
-                <thead>
-                  <tr>
-                    <th>状態</th>
-                    <th>学籍番号</th>
-                    <th>大学メール</th>
-                    <th>理由</th>
-                    <th>登録日時</th>
-                    <th>解除予定</th>
-                    <th>操作</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredEntries.map((entry) => (
-                    <tr key={entry.id} style={{ opacity: entry.active ? 1 : 0.55 }}>
-                      <td data-label="状態">
-                        {entry.active ? '利用停止中' : (
-                          <span>
-                            解除済み
-                            {entry.removed_at && <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{formatDateTime(entry.removed_at)}</span>}
-                            {entry.noshow_count_at_removal !== null && (
-                              <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                                来なかった回数：解除時 {entry.noshow_count_at_removal}回（0回にリセット済み）
-                              </span>
-                            )}
-                          </span>
-                        )}
-                      </td>
-                      <td data-label="学籍番号">{entry.student_number || '-'}</td>
-                      <td data-label="大学メール">{entry.university_email || '-'}</td>
-                      <td data-label="理由" style={{ whiteSpace: 'pre-wrap', minWidth: 260 }}>{entry.reason}</td>
-                      <td data-label="登録日時">{formatDateTime(entry.created_at)}</td>
-                      <td data-label="解除予定">{entry.expires_at ? formatDateTime(entry.expires_at) : '期限なし'}</td>
-                      <td className="admin-table-stack-actions">
-                        {entry.active ? (
-                          <button className="btn btn-secondary btn-sm" type="button" onClick={() => handleDeactivate(entry)}>
-                            解除
-                          </button>
-                        ) : (
-                          <button className="btn btn-secondary btn-sm" type="button" onClick={() => handleReactivate(entry)}>
-                            再登録
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {filteredEntries.length === 0 && (
-              <p style={{ textAlign: 'center', color: 'var(--text-secondary)', marginTop: 20 }}>
-                条件に一致する登録はありません。
-              </p>
             )}
           </div>
         </div>
