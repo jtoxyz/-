@@ -3,9 +3,11 @@
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import type { Session } from '@supabase/supabase-js';
-import { TriangleAlert } from 'lucide-react';
+import { Ban, TriangleAlert } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { isStudentEmail } from '@/lib/config';
+import { type AccessStatus, fetchMyAccessStatus } from '@/lib/accessStatus';
+import { AccessStatusContext } from '@/components/AccessStatusContext';
 
 function isExcludedPath(pathname: string): boolean {
   return (
@@ -34,8 +36,21 @@ function loginPath(pathname: string, reason?: string): string {
 
 // 初回登録まで確認できた利用者。ページを移るたびにプロフィールを読み直さないよう覚えておく
 let verifiedUserId: string | null = null;
+// 確認済みの利用状態（ページを移るたびに待たせないよう覚えておき、裏で読み直す）
+let cachedAccess: { userId: string; status: AccessStatus | null } | null = null;
 
-type GateState = 'checking' | 'ready' | 'error';
+type GateState = 'checking' | 'ready' | 'blocked' | 'error';
+
+function formatDateTime(value: string): string {
+  return new Date(value).toLocaleString('ja-JP', {
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Asia/Tokyo',
+  });
+}
 
 export default function StudentAuthGate({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -43,6 +58,7 @@ export default function StudentAuthGate({ children }: { children: React.ReactNod
   const excluded = isExcludedPath(pathname);
   const [state, setState] = useState<GateState>('checking');
   const [attempt, setAttempt] = useState(0);
+  const [access, setAccess] = useState<AccessStatus | null>(null);
 
   useEffect(() => {
     if (excluded) return;
@@ -53,6 +69,7 @@ export default function StudentAuthGate({ children }: { children: React.ReactNod
 
       if (!session?.user) {
         verifiedUserId = null;
+        cachedAccess = null;
         setState('checking');
         router.replace(loginPath(pathname));
         return;
@@ -61,6 +78,7 @@ export default function StudentAuthGate({ children }: { children: React.ReactNod
       if (!isStudentEmail(session.user.email)) {
         // 管理者のログインは別のクライアント（adminSupabase）にあるので、ここでログアウトしても管理画面はそのまま
         verifiedUserId = null;
+        cachedAccess = null;
         await supabase.auth.signOut({ scope: 'local' });
         if (!active) return;
         setState('checking');
@@ -68,8 +86,25 @@ export default function StudentAuthGate({ children }: { children: React.ReactNod
         return;
       }
 
+      // ブラックリストの人は、どのページを開いても中に入れない
+      const applyAccess = (status: AccessStatus | null) => {
+        if (!active) return;
+        cachedAccess = { userId: session.user.id, status };
+        setAccess(status);
+        setState(status?.level === 'blacklisted' ? 'blocked' : 'ready');
+      };
+
       if (verifiedUserId === session.user.id) {
-        setState('ready');
+        if (cachedAccess?.userId === session.user.id) {
+          applyAccess(cachedAccess.status);
+          // 管理者が登録・解除したときのために裏で読み直す
+          // 読めなかったとき（null）は前の状態のままにする（停止中の人が通信エラーで入れないように）
+          void fetchMyAccessStatus().then((status) => {
+            if (status) applyAccess(status);
+          });
+        } else {
+          applyAccess(await fetchMyAccessStatus());
+        }
         return;
       }
 
@@ -96,7 +131,7 @@ export default function StudentAuthGate({ children }: { children: React.ReactNod
       }
 
       verifiedUserId = session.user.id;
-      setState('ready');
+      applyAccess(await fetchMyAccessStatus());
     };
 
     void supabase.auth.getSession().then(({ data }) => checkAccount(data.session));
@@ -113,7 +148,44 @@ export default function StudentAuthGate({ children }: { children: React.ReactNod
     };
   }, [excluded, pathname, router, attempt]);
 
-  if (excluded || state === 'ready') return <>{children}</>;
+  if (excluded) return <>{children}</>;
+
+  if (state === 'ready') {
+    return <AccessStatusContext.Provider value={access}>{children}</AccessStatusContext.Provider>;
+  }
+
+  if (state === 'blocked') {
+    return (
+      <div className="glass-card" style={{ maxWidth: 560, margin: '40px auto', padding: 28 }} role="alert">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--color-danger)', marginBottom: 14 }}>
+          <Ban size={28} aria-hidden="true" style={{ flexShrink: 0 }} />
+          <h1 style={{ fontSize: '1.3rem', margin: 0 }}>予約サイトを利用できません</h1>
+        </div>
+        <p style={{ lineHeight: 1.8, marginBottom: 14 }}>
+          {access?.blacklist_reason ? '次の理由により、予約サイトの利用を停止しています。' : '予約サイトの利用を停止しています。'}
+        </p>
+        {access?.blacklist_reason && (
+          <div className="error-banner" style={{ marginBottom: 14, whiteSpace: 'pre-wrap' }}>
+            <span><strong>理由：</strong>{access.blacklist_reason}</span>
+          </div>
+        )}
+        <p style={{ lineHeight: 1.8, color: 'var(--text-secondary)', marginBottom: 20 }}>
+          {access?.blacklist_expires_at ? `停止期限：${formatDateTime(access.blacklist_expires_at)}まで。` : ''}
+          お問い合わせは学生健康保険委員会までお願いします。
+        </p>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          style={{ width: '100%' }}
+          onClick={() => {
+            void supabase.auth.signOut({ scope: 'local' });
+          }}
+        >
+          別のアカウントでログインする（ログアウト）
+        </button>
+      </div>
+    );
+  }
 
   if (state === 'error') {
     return (

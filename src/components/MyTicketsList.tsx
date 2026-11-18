@@ -6,6 +6,7 @@ import { CalendarDays, CircleX, Clock3, Ticket, Tickets } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { formatTicketOption, formatYen } from '@/lib/ticketOption';
 import { type PaymentVisitSlot, fetchMyVisitSlots, formatVisitSlot, visitSlotPlace } from '@/lib/paymentVisit';
+import { NOSHOW_BLACKLIST_COUNT } from '@/lib/accessStatus';
 
 type MyTicket = {
   reservation_id: string;
@@ -153,6 +154,11 @@ export default function MyTicketsList() {
                     {payment && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 7, fontSize: '0.78rem', fontWeight: 700, color: ticket.payment_status === 'expired' ? 'var(--color-danger)' : 'var(--color-warning)' }}>
                         <Clock3 size={14} aria-hidden="true" />{payment}
+                      </div>
+                    )}
+                    {ticket.payment_status === 'pending' && (
+                      <div style={{ marginTop: 4, fontSize: '0.75rem', color: 'var(--color-warning)', lineHeight: 1.6 }}>
+                        時間内に来ないと自動キャンセルされ、来なかった回数に数えられます（{NOSHOW_BLACKLIST_COUNT}回で利用停止）。
                       </div>
                     )}
                   </div>
