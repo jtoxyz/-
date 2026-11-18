@@ -51,6 +51,15 @@ export default function AccountSetupPage() {
         return;
       }
 
+      // 大学Googleアカウントの名前（例: 24B123山田 太郎）から氏名をDB側で取り出して自動登録する。
+      // 取り出せないときだけ、下の入力フォームで氏名を入力してもらう。
+      const { error: autoError } = await supabase.rpc('create_my_profile', {});
+      if (!autoError) {
+        router.replace(next);
+        router.refresh();
+        return;
+      }
+
       setEmail(accountEmail);
       setLoading(false);
     };
@@ -97,7 +106,7 @@ export default function AccountSetupPage() {
         <BadgeCheck size={46} style={{ color: 'var(--color-primary)', marginBottom: 10 }} aria-hidden="true" />
         <h1 style={{ fontSize: '1.55rem', marginBottom: 8 }}>初回アカウント登録</h1>
         <p style={{ color: 'var(--text-secondary)', lineHeight: 1.7 }}>
-          予約券に表示する正式な氏名を登録してください。
+          大学Googleアカウントから氏名を取得できませんでした。予約券に表示する正式な氏名を入力してください。
         </p>
       </div>
 
