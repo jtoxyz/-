@@ -2,13 +2,14 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { BarChart3, CalendarDays, ClipboardCopy, Download, GraduationCap, Mail, Trash2, TriangleAlert, UserRound, X } from 'lucide-react';
+import { BarChart3, CalendarDays, Ticket, ClipboardCopy, Download, GraduationCap, Mail, Trash2, TriangleAlert, UserRound, X } from 'lucide-react';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import AdminNav from '@/components/AdminNav';
 import { adminSupabase as supabase } from '@/lib/supabase';
 import { type SurveyAnswers, type SurveyQuestion, type SurveyQuestionSummary, formatSurveyAnswer, summarizeSurvey } from '@/lib/survey';
 import { PAYMENT_LABEL, formatDateTime, reservationListSheet, summaryNote, surveyStatsSheet, totalsSheet } from '@/lib/reservationExport';
 import { type XlsxSheet, downloadXlsx } from '@/lib/xlsx';
+import { formatTicketOption } from '@/lib/ticketOption';
 import { useLoadEffect } from '@/hooks/useLoadEffect';
 import { type PaymentVisitSlot, VISIT_SLOT_COLUMNS, formatVisitSlot, visitSlotPlace } from '@/lib/paymentVisit';
 
@@ -26,6 +27,7 @@ interface ReservationItem {
   cancelled_at: string | null;
   created_at: string;
   event_slots: { label: string } | null;
+  ticket_option_id?: string | null;
   event_ticket_options: { label: string; price_yen: number } | null;
   payment_visit_slot_id?: string | null;
   payment_visit_slots?: PaymentVisitSlot | null;
@@ -46,6 +48,14 @@ interface AdminEventSlot {
   walkin_limit: number | null;
   ticket_use_ends_at?: string | null;
   is_walkin_enabled?: boolean;
+}
+
+interface TicketOptionRow {
+  id: string;
+  label: string;
+  price_yen: number;
+  is_enabled: boolean;
+  sort_order: number;
 }
 
 type PickupFilter = { slotId: string; kind: 'used' | 'not_used' } | null;
@@ -80,6 +90,8 @@ export default function AdminReservationsPage({ id }: { id: string }) {
   const [wipeConfirmText, setWipeConfirmText] = useState('');
   const [wiping, setWiping] = useState(false);
   const [surveyQuestions, setSurveyQuestions] = useState<SurveyQuestion[]>([]);
+  // 券種ごとの人数を出すための券種一覧（まだ誰も選んでいない券種も0人で出す）
+  const [ticketOptions, setTicketOptions] = useState<TicketOptionRow[]>([]);
   // 支払い日時の変更に使う、まだ終わっていない有効な支払い日時
   const [visitSlots, setVisitSlots] = useState<PaymentVisitSlot[]>([]);
   const [changingVisitId, setChangingVisitId] = useState<string | null>(null);
@@ -100,6 +112,14 @@ export default function AdminReservationsPage({ id }: { id: string }) {
         .order('created_at', { ascending: false });
       if (resError) throw resError;
       setReservations((resData as unknown as ReservationItem[]) || []);
+
+      const { data: optionData, error: optionError } = await supabase
+        .from('event_ticket_options')
+        .select('id, label, price_yen, is_enabled, sort_order')
+        .eq('event_id', id)
+        .order('sort_order', { ascending: true });
+      if (optionError) console.error(optionError);
+      setTicketOptions((optionData as TicketOptionRow[]) || []);
 
       const { data: slotsData, error: slotsError } = await supabase.rpc('get_event_slots', { p_event_id: id });
       if (slotsError) throw slotsError;
@@ -380,6 +400,9 @@ export default function AdminReservationsPage({ id }: { id: string }) {
                 </p>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
                   {rows.map(({ slot, active, walkinIssued, held, occupied, used, notUsed, closed, showWalkin }) => {
+                    const optionBreakdown = ticketOptions
+                      .map((option) => ({ label: option.label, count: active.filter((r) => r.ticket_option_id === option.id).length }))
+                      .filter((item) => item.count > 0);
                     const capacity = slot.total_capacity;
                     const rate = capacity > 0 ? Math.min((occupied / capacity) * 100, 100) : 0;
                     const full = occupied >= capacity;
@@ -397,6 +420,11 @@ export default function AdminReservationsPage({ id }: { id: string }) {
                           {held > 0 && `・事前確保 ${held}人`}
                           {showWalkin && `・当日券 ${walkinIssued}人（今から ${slot.remaining_walkin_slots}人）`}
                         </div>
+                        {optionBreakdown.length > 0 && (
+                          <div style={{ ...muted, marginTop: 2 }}>
+                            券種：{optionBreakdown.map((item) => `${item.label} ${item.count}人`).join('・')}
+                          </div>
+                        )}
                         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
                           <button type="button" className="btn btn-secondary btn-sm" onClick={() => showPickupList(slot.id, 'used')} disabled={used === 0}>
                             受け取り済み {used}人
@@ -421,6 +449,8 @@ export default function AdminReservationsPage({ id }: { id: string }) {
               </div>
             );
           })()}
+
+          {ticketOptions.length > 0 && <TicketOptionSummaryCard options={ticketOptions} reservations={reservations} paymentRequired={paymentRequired} />}
 
           {surveyQuestions.length > 0 && <SurveySummaryCard questions={surveyQuestions} summary={surveySummary} />}
 
@@ -563,6 +593,53 @@ function SurveySummaryCard({ questions, summary }: { questions: SurveyQuestion[]
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+/** 券種ごとに、何人が選んだかを表示する（キャンセルを除く） */
+function TicketOptionSummaryCard({ options, reservations, paymentRequired }: { options: TicketOptionRow[]; reservations: ReservationItem[]; paymentRequired: boolean }) {
+  const muted = { fontSize: 12, color: 'var(--text-secondary)' } as const;
+  const active = reservations.filter((r) => r.status !== 'cancelled');
+  const rows = options.map((option) => {
+    const items = active.filter((r) => r.ticket_option_id === option.id);
+    return {
+      option,
+      count: items.length,
+      paid: items.filter((r) => r.payment_status === 'paid').length,
+      pending: items.filter((r) => r.payment_status === 'pending').length,
+      used: items.filter((r) => r.status === 'used').length,
+      cancelled: reservations.filter((r) => r.status === 'cancelled' && r.ticket_option_id === option.id).length,
+    };
+  });
+  const total = rows.reduce((sum, row) => sum + row.count, 0);
+  const max = Math.max(1, ...rows.map((row) => row.count));
+  return (
+    <div className="glass-card" style={{ marginTop: 20 }}>
+      <h2 style={{ marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}><Ticket size={22} aria-hidden="true" />券種ごとの人数</h2>
+      <p style={{ marginTop: 0, ...muted, fontSize: 13 }}>
+        券種を選んだ人の合計 <strong style={{ fontSize: 16, color: 'var(--text-primary)' }}>{total}人</strong>（キャンセルを除く）。「Excelでダウンロード」の集計シートにも金額つきで入ります。
+      </p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
+        {rows.map(({ option, count, paid, pending, used, cancelled }) => (
+          <div key={option.id} className="glass-card" style={{ margin: 0, padding: 14 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+              <strong>{formatTicketOption(option.label, option.price_yen)}</strong>
+              <span style={{ fontWeight: 800, whiteSpace: 'nowrap' }}>{count}人</span>
+            </div>
+            <div style={{ marginTop: 8, height: 6, borderRadius: 999, background: 'rgba(127,127,127,0.25)', overflow: 'hidden' }}>
+              <div style={{ width: `${(count / max) * 100}%`, height: '100%', background: 'var(--color-primary)' }} />
+            </div>
+            <div style={{ ...muted, marginTop: 4 }}>
+              全体の {percent(count, total)}
+              {paymentRequired && `・支払い済み ${paid}人・未払い ${pending}人`}
+              {`・受け取り済み ${used}人`}
+              {cancelled > 0 && `・キャンセル ${cancelled}人`}
+              {!option.is_enabled && '・受付停止中'}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
