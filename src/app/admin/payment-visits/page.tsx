@@ -214,7 +214,7 @@ export default function PaymentVisitsPage() {
             <h1 style={{ marginTop: 0 }}>委員会室 支払い受付</h1>
             <p style={{ color: 'var(--text-secondary)', lineHeight: 1.7 }}>
               予約時に学生が選んだ来室日時ごとの一覧です。支払いを受け取ったら「支払い済みにする」を押してください。
-              選んだ枠の終了時刻を過ぎても未払いの予約は、自動でキャンセルされます。
+              選んだ枠の終了時刻を過ぎても未払いの予約は、自動でキャンセルされます。終了間際に来る人のため、表示の終了時刻から5分間は猶予があり、その間は支払いを受け付けられます（学生側の表示は変わりません）。
             </p>
 
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 16 }}>
