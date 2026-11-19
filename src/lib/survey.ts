@@ -119,3 +119,34 @@ export function summarizeSurvey(questions: SurveyQuestion[], answersList: Array<
     return summary;
   });
 }
+
+export type SurveyConditionBreakdown = {
+  /** 条件元の設問 */
+  parent: SurveyQuestion;
+  /** 条件元の回答ごとの内訳（例：「自治会の投稿」を選んだ人の X / Instagram） */
+  groups: Array<{ value: string; summary: SurveyQuestionSummary }>;
+};
+
+/**
+ * 「前の設問で A か B を選んだ人だけ」に出す選択式の設問を、A を選んだ人・B を選んだ人に分けて集計する。
+ * 条件の値が1つだけの設問や、条件元が選択式でない設問は null。
+ * 条件元で A と B の両方を選んだ人は、両方の内訳に数える。
+ */
+export function breakdownByCondition(
+  questions: SurveyQuestion[],
+  question: SurveyQuestion,
+  answersList: Array<SurveyAnswers | null | undefined>,
+): SurveyConditionBreakdown | null {
+  const cond = question.show_if;
+  if (!cond || cond.values.length < 2 || question.type === 'text') return null;
+  const parent = questions.find((q) => q.id === cond.question_id);
+  if (!parent || !isChoiceQuestion(parent)) return null;
+  const groups = cond.values.map((value) => {
+    const matched = answersList.filter((answers) => {
+      const parentValue = answers?.[parent.id];
+      return Array.isArray(parentValue) ? parentValue.includes(value) : String(parentValue ?? '') === value;
+    });
+    return { value, summary: summarizeSurvey([question], matched)[0] };
+  });
+  return { parent, groups };
+}

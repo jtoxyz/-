@@ -7,7 +7,7 @@ import { useAdminAuth } from '@/hooks/useAdminAuth';
 import AdminNav from '@/components/AdminNav';
 import { adminSupabase as supabase } from '@/lib/supabase';
 import { type SurveyAnswers, type SurveyQuestion, type SurveyQuestionSummary, formatSurveyAnswer, summarizeSurvey } from '@/lib/survey';
-import { PAYMENT_LABEL, formatDateTime, reservationListSheet, summaryNote, surveyStatsSheet, totalsSheet } from '@/lib/reservationExport';
+import { PAYMENT_LABEL, facultyGradeSheet, formatDateTime, reservationListSheet, summaryNote, surveyStatsSheet, totalsSheet } from '@/lib/reservationExport';
 import { type XlsxSheet, downloadXlsx } from '@/lib/xlsx';
 import { formatTicketOption } from '@/lib/ticketOption';
 import { useLoadEffect } from '@/hooks/useLoadEffect';
@@ -245,11 +245,13 @@ export default function AdminReservationsPage({ id }: { id: string }) {
     setWiping(false);
   };
 
-  // 予約者一覧・集計・アンケート統計を1つの .xlsx にまとめる（アンケートは個別の回答ではなく統計で出す）
+  // 予約者一覧・集計・学部と学年・アンケート統計を1つの .xlsx にまとめる（アンケートは個別の回答ではなく統計で出す）
   const handleExportExcel = () => {
     if (reservations.length === 0) return alert('エクスポートする予約データがありません。');
-    const sheets: XlsxSheet[] = [reservationListSheet(reservations, slots), totalsSheet(eventTitle, reservations, slots)];
-    if (surveyQuestions.length > 0) sheets.push(surveyStatsSheet(surveyQuestions, surveySummary));
+    const sheets: XlsxSheet[] = [
+      reservationListSheet(reservations, slots), totalsSheet(eventTitle, reservations, slots), facultyGradeSheet(reservations),
+    ];
+    if (surveyQuestions.length > 0) sheets.push(surveyStatsSheet(surveyQuestions, surveySummary, activeSurveyAnswers));
     const date = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
     downloadXlsx(sheets, `reservations_${safeFileName(eventTitle)}_${date}.xlsx`);
   };
@@ -261,10 +263,8 @@ export default function AdminReservationsPage({ id }: { id: string }) {
   };
 
   // アンケート集計はキャンセルを除いた予約で数える
-  const surveySummary = summarizeSurvey(
-    surveyQuestions,
-    reservations.filter((r) => r.status !== 'cancelled').map((r) => r.survey_answers),
-  );
+  const activeSurveyAnswers = reservations.filter((r) => r.status !== 'cancelled').map((r) => r.survey_answers);
+  const surveySummary = summarizeSurvey(surveyQuestions, activeSurveyAnswers);
 
   const filteredReservations = reservations.filter((res) => {
     if (pickupFilter) {
