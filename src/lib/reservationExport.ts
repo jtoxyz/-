@@ -1,6 +1,7 @@
-// 予約者一覧の Excel 出力（予約者一覧・集計・アンケート統計の3シート）を組み立てる。
+// 予約者一覧の Excel 出力（予約者一覧・集計・学部と学年・アンケート統計）を組み立てる。
 
-import { type SurveyQuestion, type SurveyQuestionSummary, describeShowIf } from '@/lib/survey';
+import { type SurveyAnswers, type SurveyQuestion, type SurveyQuestionSummary, breakdownByCondition, describeShowIf } from '@/lib/survey';
+import { GRADE_LABELS, facultyLabel, gradeAt, gradeLabel } from '@/lib/studentProfile';
 import { type XlsxCell, type XlsxSheet, styledRow } from '@/lib/xlsx';
 
 export type ExportReservation = {
@@ -126,8 +127,30 @@ export function totalsSheet(eventTitle: string, reservations: ExportReservation[
   return { name: '集計', rows, columnWidths: [28, 12, 12, 12, 12, 22, 12] };
 }
 
-/** アンケート統計：設問ごとに、選択肢ごとの人数・割合・横棒を出す（キャンセルを除く） */
-export function surveyStatsSheet(questions: SurveyQuestion[], summary: SurveyQuestionSummary[]): XlsxSheet {
+/** 選択肢ごとの人数・割合・横棒の表 */
+function choiceTableRows(row: SurveyQuestionSummary): XlsxCell[][] {
+  const rows: XlsxCell[][] = [styledRow(['選択肢', '人数', '割合', 'グラフ'], 'header')];
+  row.counts.forEach((c) => {
+    const ratio = row.respondents > 0 ? c.count / row.respondents : null;
+    rows.push([
+      { value: c.label, style: 'wrap' },
+      { value: c.count, style: 'integer' },
+      { value: ratio ?? '-', style: 'percent' },
+      { value: '█'.repeat(Math.round((ratio ?? 0) * 20)), style: 'bar' },
+    ]);
+  });
+  return rows;
+}
+
+/**
+ * アンケート統計：設問ごとに、選択肢ごとの人数・割合・横棒を出す（キャンセルを除く）。
+ * 「前の設問で A か B を選んだ人だけ」の設問は、全体に加えて A・B それぞれの内訳も出す。
+ */
+export function surveyStatsSheet(
+  questions: SurveyQuestion[],
+  summary: SurveyQuestionSummary[],
+  answersList: Array<SurveyAnswers | null | undefined> = [],
+): XlsxSheet {
   const rows: XlsxCell[][] = [
     [{ value: 'アンケート統計', style: 'title' }],
     [{ value: 'キャンセルを除いた予約の回答を集計しています。', style: 'note' }],
@@ -140,18 +163,88 @@ export function surveyStatsSheet(questions: SurveyQuestion[], summary: SurveyQue
       if (row.texts.length === 0) rows.push([{ value: '回答はありません', style: 'note' }]);
       row.texts.forEach((text) => rows.push([{ value: text, style: 'wrap' }]));
     } else {
-      rows.push(styledRow(['選択肢', '人数', '割合', 'グラフ'], 'header'));
-      row.counts.forEach((c) => {
-        const ratio = row.respondents > 0 ? c.count / row.respondents : null;
-        rows.push([
-          { value: c.label, style: 'wrap' },
-          { value: c.count, style: 'integer' },
-          { value: ratio ?? '-', style: 'percent' },
-          { value: '█'.repeat(Math.round((ratio ?? 0) * 20)), style: 'bar' },
-        ]);
-      });
+      rows.push(...choiceTableRows(row));
+      const breakdown = breakdownByCondition(questions, row.question, answersList);
+      if (breakdown) {
+        const parentNo = questions.findIndex((q) => q.id === breakdown.parent.id) + 1;
+        breakdown.groups.forEach((group) => {
+          rows.push([]);
+          rows.push([{ value: `▼ Q${parentNo}で「${group.value}」を選んだ人（回答 ${group.summary.respondents}人）`, style: 'bold' }]);
+          rows.push(...choiceTableRows(group.summary));
+        });
+        rows.push([{ value: `Q${parentNo}で複数選んだ人は、それぞれの内訳に数えています。`, style: 'note' }]);
+      }
     }
     rows.push([]);
   });
   return { name: 'アンケート統計', rows, columnWidths: [56, 9, 9, 24] };
+}
+
+/** 学部と学年：何学部・何年生が多いか、学部ごとの学年の内訳（キャンセルを除き、同じ学籍番号は1人として数える） */
+export function facultyGradeSheet(reservations: ExportReservation[]): XlsxSheet {
+  const students = new Map<string, { faculty: string; grade: string }>();
+  for (const res of reservations) {
+    if (res.status === 'cancelled') continue;
+    const key = res.student_number.trim().toUpperCase();
+    if (students.has(key)) continue;
+    students.set(key, { faculty: facultyLabel(key), grade: gradeLabel(gradeAt(key, new Date(res.created_at))) });
+  }
+  const list = [...students.values()];
+  const total = list.length;
+
+  const rankTable = (title: string, header: string, labels: string[], keyOf: (s: { faculty: string; grade: string }) => string, sortByCount: boolean) => {
+    const counts = new Map<string, number>(labels.map((l) => [l, 0]));
+    list.forEach((s) => counts.set(keyOf(s), (counts.get(keyOf(s)) ?? 0) + 1));
+    let entries = [...counts].filter(([label, n]) => n > 0 || (!sortByCount && label !== '不明'));
+    if (sortByCount) entries = entries.sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'ja'));
+    const out: XlsxCell[][] = [[{ value: title, style: 'bold' }], styledRow([header, '人数', '割合', 'グラフ'], 'header')];
+    entries.forEach(([label, n]) => {
+      const ratio = total > 0 ? n / total : null;
+      out.push([
+        { value: label, style: 'body' },
+        { value: n, style: 'integer' },
+        { value: ratio ?? '-', style: 'percent' },
+        { value: '█'.repeat(Math.round((ratio ?? 0) * 20)), style: 'bar' },
+      ]);
+    });
+    out.push(styledRow(['合計', total, total > 0 ? 1 : '-', ''], 'section'));
+    return out;
+  };
+
+  const rows: XlsxCell[][] = [
+    [{ value: '学部と学年', style: 'title' }],
+    [{ value: 'キャンセルを除いた予約者を、学籍番号から読み取って集計しています（同じ学籍番号は1人）。学年は申込日時点です。', style: 'note' }],
+    [],
+    ...rankTable('学部ごとの人数（多い順）', '学部', [], (s) => s.faculty, true),
+    [],
+    ...rankTable('学年ごとの人数', '学年', [...GRADE_LABELS], (s) => s.grade, false),
+    [],
+  ];
+
+  // 学部 × 学年
+  const grades = GRADE_LABELS.filter((g) => g !== '不明' || list.some((s) => s.grade === '不明'));
+  const faculties = [...new Set(list.map((s) => s.faculty))]
+    .map((f) => ({ f, n: list.filter((s) => s.faculty === f).length }))
+    .sort((a, b) => b.n - a.n || a.f.localeCompare(b.f, 'ja'));
+  const cell = (f: string | null, g: string | null) => list.filter((s) => (f === null || s.faculty === f) && (g === null || s.grade === g)).length;
+
+  rows.push([{ value: '学部ごとの学年の内訳（人数）', style: 'bold' }]);
+  rows.push(styledRow(['学部', ...grades, '合計', '最も多い学年'], 'header'));
+  faculties.forEach(({ f, n }) => {
+    const counts = grades.map((g) => cell(f, g));
+    const max = Math.max(...counts);
+    const top = max > 0 ? grades.filter((_, i) => counts[i] === max).join('・') : '-';
+    rows.push([{ value: f, style: 'body' }, ...styledRow([...counts, n], 'integer'), { value: top, style: 'body' }]);
+  });
+  rows.push(styledRow(['合計', ...grades.map((g) => cell(null, g)), total, ''], 'section'));
+  rows.push([]);
+
+  rows.push([{ value: '学部ごとの学年の内訳（学部内の割合）', style: 'bold' }]);
+  rows.push(styledRow(['学部', ...grades], 'header'));
+  faculties.forEach(({ f, n }) => {
+    rows.push([{ value: f, style: 'body' }, ...grades.map((g) => ({ value: n > 0 ? cell(f, g) / n : '-', style: 'percent' as const }))]);
+  });
+  rows.push([{ value: '各行の合計が100%になります。学部によって学年の偏りがあるかを比べられます。', style: 'note' }]);
+
+  return { name: '学部と学年', rows, columnWidths: [24, 10, 10, 10, 10, 10, 10, 10, 14] };
 }
