@@ -1337,3 +1337,23 @@ a.btn[aria-disabled="true"] {
   font-size: 1.15rem;
   font-weight: 900;
 }
+
+/* 支払いQR読み取り結果：受付の係が一目で判別できるよう、テーマに関係なく濃い赤／緑で塗る */
+.pay-result--success { border: 4px solid #16a34a; }
+.pay-result--failed { border: 4px solid #dc2626; }
+.pay-result__banner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 28px 16px 24px;
+  color: #ffffff;
+}
+.pay-result__banner--success { background: #16a34a; }
+.pay-result__banner--failed {
+  background: #dc2626;
+  background-image: repeating-linear-gradient(-45deg, rgba(0, 0, 0, 0.08) 0 14px, transparent 14px 28px);
+}
+.pay-result__banner-title { font-size: clamp(1.6rem, 8vw, 2.2rem); font-weight: 900; line-height: 1.2; }
+.pay-result__banner-count { font-size: 1.6rem; font-weight: 800; }
+.pay-result__banner-sub { font-size: 1rem; font-weight: 700; }
