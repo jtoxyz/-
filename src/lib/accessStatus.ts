@@ -6,6 +6,9 @@ export type AccessStatus = {
   level: 'normal' | 'yellow' | 'blacklisted';
   blacklist_reason: string | null;
   blacklist_expires_at: string | null;
+  /** 管理者が手動でイエローリストに登録した理由（手動登録がなければ null。DB反映前は未定義） */
+  yellow_reason?: string | null;
+  yellow_expires_at?: string | null;
 };
 
 /** 来なかった回数がこの回数になるとブラックリストに自動登録される（DBの auto_blacklist_payment_noshow と同じ） */

@@ -34,6 +34,10 @@ export default function AccountReservationPage() {
   const accessStatus = useAccessStatus();
   const noShowCount = accessStatus?.noshow_count ?? 0;
   const isYellow = accessStatus?.level === 'yellow';
+  // 理由の文言：手動でイエローリストに登録された人と、来なかった回数でイエローになった人で分ける
+  const yellowCause = accessStatus?.yellow_reason
+    ? `イエローリストに登録されています（理由：${accessStatus.yellow_reason}）。`
+    : `支払いに来なかったことが${noShowCount}回あります。`;
   const [event, setEvent] = useState<AccountEvent | null>(null);
   const [profile, setProfile] = useState<StudentProfile | null>(null);
   const [slots, setSlots] = useState<AccountEventSlot[]>([]);
@@ -164,7 +168,7 @@ export default function AccountReservationPage() {
       visitRequired &&
       isYellow &&
       !confirm(
-        `【最終警告】支払いに来なかったことが${noShowCount}回あります。\n\n` +
+        `【最終警告】${yellowCause}\n\n` +
         `この予約で選んだ支払い日時に来なかった場合、予約サイトを利用できなくなります。\n\n` +
         `必ず支払いに来られる場合だけ「OK」を押してください。`,
       )
@@ -374,7 +378,9 @@ export default function AccountReservationPage() {
             <div>
               <strong style={{ fontSize: '1.15rem', display: 'block' }}>次に支払いに来なかった場合、予約サイトを利用できなくなります。</strong>
               <div>
-                あなたは予約した支払い日時に来なかったことが<strong>{noShowCount}回</strong>あります。
+                {accessStatus?.yellow_reason
+                  ? <>あなたはイエローリストに登録されています（理由：{accessStatus.yellow_reason}）。</>
+                  : <>あなたは予約した支払い日時に来なかったことが<strong>{noShowCount}回</strong>あります。</>}
                 この予約で選んだ日時{selectedVisit ? `（${formatVisitSlot(selectedVisit)}・${visitSlotPlace(selectedVisit)}）` : ''}に必ず支払いに来てください。
                 来られない場合は予約しないでください。
               </div>

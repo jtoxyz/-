@@ -41,6 +41,22 @@ function formatDateTime(value: string | null): string {
   });
 }
 
+// 手動で登録したイエローリスト（user_yellowlist）
+interface YellowlistEntry {
+  id: string;
+  student_number: string | null;
+  university_email: string | null;
+  reason: string;
+  active: boolean;
+  expires_at: string | null;
+  created_at: string;
+  removed_at: string | null;
+}
+
+type ListType = 'black' | 'yellow';
+
+const LIST_LABEL: Record<ListType, string> = { black: 'ブラックリスト', yellow: 'イエローリスト' };
+
 type NoShowUser = {
   student_number: string;
   student_name: string | null;
@@ -70,6 +86,9 @@ type ReservationNoShowRow = {
 export default function AdminBlacklistPage() {
   const { loading: authLoading, user } = useAdminAuth();
   const [entries, setEntries] = useState<BlacklistEntry[]>([]);
+  const [yellowEntries, setYellowEntries] = useState<YellowlistEntry[]>([]);
+  const [showInactiveYellow, setShowInactiveYellow] = useState(false);
+  const [listType, setListType] = useState<ListType>('black');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -145,6 +164,21 @@ export default function AdminBlacklistPage() {
     setNoShowUsers((data as NoShowUser[]) || []);
   };
 
+  const loadYellowEntries = async () => {
+    const { data, error: loadError } = await supabase
+      .from('user_yellowlist')
+      .select('id, student_number, university_email, reason, active, expires_at, created_at, removed_at')
+      .order('created_at', { ascending: false });
+    if (loadError) {
+      console.error(loadError);
+      setError(loadError.message);
+      return;
+    }
+    setYellowEntries((data as YellowlistEntry[]) || []);
+  };
+
+  const reloadAll = () => Promise.all([loadEntries(), loadYellowEntries(), loadNoShowUsers()]);
+
   const loadEntries = async () => {
     try {
       setError(null);
@@ -167,8 +201,7 @@ export default function AdminBlacklistPage() {
 
   useLoadEffect(() => {
     if (!authLoading && user) {
-      void loadEntries();
-      void loadNoShowUsers();
+      void reloadAll();
     }
   }, [authLoading, user]);
 
@@ -189,6 +222,33 @@ export default function AdminBlacklistPage() {
 
   // ブラックリスト登録中の人は上のブラックリストに出るので、イエローリストには出さない
   const yellowUsers = useMemo(() => noShowUsers.filter((row) => !row.is_blacklisted), [noShowUsers]);
+
+  // 手動で登録したイエローリストの学籍番号・メール（自動の一覧と重複して出さないため）
+  const manualYellowKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const entry of yellowEntries) {
+      if (!entry.active) continue;
+      if (entry.student_number) keys.add(entry.student_number);
+      if (entry.university_email) keys.add(entry.university_email);
+    }
+    return keys;
+  }, [yellowEntries]);
+
+  const autoYellowUsers = useMemo(
+    () => yellowUsers.filter((row) => !manualYellowKeys.has(row.student_number) && !(row.university_email && manualYellowKeys.has(row.university_email))),
+    [yellowUsers, manualYellowKeys],
+  );
+
+  const noShowByStudent = useMemo(() => {
+    const map: Record<string, NoShowUser> = {};
+    for (const row of noShowUsers) map[row.student_number] = row;
+    return map;
+  }, [noShowUsers]);
+
+  const visibleYellowEntries = useMemo(
+    () => yellowEntries.filter((entry) => showInactiveYellow || entry.active),
+    [yellowEntries, showInactiveYellow],
+  );
 
   const handleAdd = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -212,7 +272,8 @@ export default function AdminBlacklistPage() {
 
     setSaving(true);
     try {
-      const { error: insertError } = await supabase.from('user_blacklist').insert({
+      const table = listType === 'yellow' ? 'user_yellowlist' : 'user_blacklist';
+      const { error: insertError } = await supabase.from(table).insert({
         student_number: normalizedStudentNumber || null,
         university_email: normalizedEmail || null,
         reason: reason.trim(),
@@ -226,10 +287,15 @@ export default function AdminBlacklistPage() {
       setUniversityEmail('');
       setReason('');
       setExpiresAt('');
-      await Promise.all([loadEntries(), loadNoShowUsers()]);
+      await reloadAll();
     } catch (insertError) {
       console.error(insertError);
-      setError(insertError instanceof Error ? insertError.message : 'ブラックリストへの登録に失敗しました。');
+      const message = insertError instanceof Error ? insertError.message : '';
+      setError(
+        message.includes('duplicate key')
+          ? `この人はすでに${LIST_LABEL[listType]}に登録されています。`
+          : message || `${LIST_LABEL[listType]}への登録に失敗しました。`,
+      );
     } finally {
       setSaving(false);
     }
@@ -250,7 +316,7 @@ export default function AdminBlacklistPage() {
       return;
     }
 
-    await Promise.all([loadEntries(), loadNoShowUsers()]);
+    await reloadAll();
   };
 
   const handleReactivate = async (entry: BlacklistEntry) => {
@@ -264,7 +330,31 @@ export default function AdminBlacklistPage() {
       return;
     }
 
-    await Promise.all([loadEntries(), loadNoShowUsers()]);
+    await reloadAll();
+  };
+
+  const handleYellowDeactivate = async (entry: YellowlistEntry) => {
+    if (!confirm(`${entry.student_number || entry.university_email || '対象者'}をイエローリストから解除しますか？`)) {
+      return;
+    }
+    const { error: updateError } = await supabase.from('user_yellowlist').update({ active: false }).eq('id', entry.id);
+    if (updateError) {
+      setError(updateError.message);
+      return;
+    }
+    await reloadAll();
+  };
+
+  const handleYellowReactivate = async (entry: YellowlistEntry) => {
+    const { error: updateError } = await supabase
+      .from('user_yellowlist')
+      .update({ active: true, expires_at: null })
+      .eq('id', entry.id);
+    if (updateError) {
+      setError(updateError.message.includes('duplicate key') ? 'この人はすでにイエローリストに登録されています。' : updateError.message);
+      return;
+    }
+    await reloadAll();
   };
 
   if (authLoading || loading) {
@@ -370,7 +460,31 @@ export default function AdminBlacklistPage() {
           </div>
 
           <form onSubmit={handleAdd} className="glass-card" style={{ marginBottom: 24 }}>
-            <h2 style={{ fontSize: '1.1rem', marginBottom: 16 }}>ブラックリストに登録</h2>
+            <h2 style={{ fontSize: '1.1rem', marginBottom: 16 }}>リストに登録</h2>
+
+            <div className="form-group">
+              <span className="form-label" id="listTypeLabel">登録先</span>
+              <div role="radiogroup" aria-labelledby="listTypeLabel" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {(['black', 'yellow'] as const).map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    role="radio"
+                    aria-checked={listType === type}
+                    className={`btn btn-sm ${listType === type ? (type === 'black' ? 'btn-danger' : 'btn-primary') : 'btn-secondary'}`}
+                    onClick={() => setListType(type)}
+                    disabled={saving}
+                  >
+                    {LIST_LABEL[type]}
+                  </button>
+                ))}
+              </div>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', margin: '6px 0 0', lineHeight: 1.6 }}>
+                {listType === 'black'
+                  ? 'ブラックリスト：予約サイトを利用できなくなります。'
+                  : 'イエローリスト：本人の予約サイトに警告が出ます。登録中に支払いに来なかった場合は、自動的にブラックリストへ登録されます。'}
+              </p>
+            </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
               <div className="form-group">
@@ -425,15 +539,27 @@ export default function AdminBlacklistPage() {
               />
             </div>
 
-            <button className="btn btn-danger" type="submit" disabled={saving}>
-              {saving ? '登録中...' : 'ブラックリストへ登録'}
+            <button className={`btn ${listType === 'black' ? 'btn-danger' : 'btn-primary'}`} type="submit" disabled={saving}>
+              {saving ? '登録中...' : `${LIST_LABEL[listType]}へ登録`}
             </button>
           </form>
 
           <div className="glass-card">
-            <h2 style={{ fontSize: '1.1rem', marginBottom: 6 }}>イエローリスト（支払いに来なかった人）</h2>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'center', marginBottom: 6 }}>
+              <h2 style={{ fontSize: '1.1rem', margin: 0 }}>イエローリスト（警告中の人）</h2>
+              <label className="form-checkbox-label">
+                <input
+                  type="checkbox"
+                  className="form-checkbox"
+                  checked={showInactiveYellow}
+                  onChange={(event) => setShowInactiveYellow(event.target.checked)}
+                />
+                解除済みも表示
+              </label>
+            </div>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: 0, lineHeight: 1.7 }}>
-              予約した支払い日時に来ず、自動キャンセルになった回数を全企画で数えています。2回でイエローリストになり、本人の予約サイトに警告が出ます。3回目で自動的にブラックリストへ登録されます。ブラックリストを解除すると回数は0に戻ります（解除前の回数は、上のブラックリストで「解除済みも表示」にすると確認できます）。
+              「手動登録」は上のフォームで登録した人です。登録中に支払いに来なかった場合は自動的にブラックリストへ登録されます。
+              「自動」は予約した支払い日時に来ず、自動キャンセルになった回数（全企画）が2回になった人です。3回目で自動的にブラックリストへ登録されます。ブラックリストを解除すると回数は0に戻ります（解除前の回数は、上のブラックリストで「解除済みも表示」にすると確認できます）。
             </p>
             <div className="admin-table-container">
               <table className="admin-table admin-table-stack">
@@ -444,22 +570,63 @@ export default function AdminBlacklistPage() {
                     <th>学籍番号</th>
                     <th>来なかった回数</th>
                     <th>最後に来なかった日時</th>
+                    <th>理由</th>
+                    <th>解除予定</th>
+                    <th>操作</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {yellowUsers.map((row) => (
-                    <tr key={row.student_number}>
-                      <td data-label="状態"><strong>イエローリスト</strong></td>
+                  {visibleYellowEntries.map((entry) => {
+                    const noShow = entry.student_number ? noShowByStudent[entry.student_number] : undefined;
+                    const name = noShow?.student_name || (entry.student_number ? personInfo[entry.student_number]?.student_name : null);
+                    return (
+                      <tr key={entry.id} style={{ opacity: entry.active ? 1 : 0.55 }}>
+                        <td data-label="状態">
+                          <strong>{entry.active ? 'イエローリスト（手動登録）' : '解除済み'}</strong>
+                          <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>登録 {formatDateTime(entry.created_at)}</span>
+                          {!entry.active && entry.removed_at && (
+                            <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>解除 {formatDateTime(entry.removed_at)}</span>
+                          )}
+                        </td>
+                        <td data-label="氏名">{name || '-'}</td>
+                        <td data-label="学籍番号">
+                          {entry.student_number || '-'}
+                          {entry.university_email && <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{entry.university_email}</span>}
+                        </td>
+                        <td data-label="来なかった回数">{noShow ? `${noShow.noshow_count}回` : '-'}</td>
+                        <td data-label="最後に来なかった日時">{formatDateTime(noShow?.last_noshow_at ?? null)}</td>
+                        <td data-label="理由" style={{ whiteSpace: 'pre-wrap', minWidth: 220 }}>{entry.reason}</td>
+                        <td data-label="解除予定">{entry.expires_at ? formatDateTime(entry.expires_at) : '期限なし'}</td>
+                        <td className="admin-table-stack-actions">
+                          {entry.active ? (
+                            <button className="btn btn-secondary btn-sm" type="button" onClick={() => handleYellowDeactivate(entry)}>
+                              解除
+                            </button>
+                          ) : (
+                            <button className="btn btn-secondary btn-sm" type="button" onClick={() => handleYellowReactivate(entry)}>
+                              再登録
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {autoYellowUsers.map((row) => (
+                    <tr key={`auto-${row.student_number}`}>
+                      <td data-label="状態"><strong>イエローリスト（自動）</strong></td>
                       <td data-label="氏名">{row.student_name || '-'}</td>
                       <td data-label="学籍番号">{row.student_number}</td>
                       <td data-label="来なかった回数">{row.noshow_count}回</td>
                       <td data-label="最後に来なかった日時">{formatDateTime(row.last_noshow_at)}</td>
+                      <td data-label="理由">支払いに{row.noshow_count}回来なかったため</td>
+                      <td data-label="解除予定">-</td>
+                      <td className="admin-table-stack-actions" />
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-            {yellowUsers.length === 0 && (
+            {visibleYellowEntries.length === 0 && autoYellowUsers.length === 0 && (
               <p style={{ textAlign: 'center', color: 'var(--text-secondary)', marginTop: 16 }}>該当する人はいません。</p>
             )}
           </div>
