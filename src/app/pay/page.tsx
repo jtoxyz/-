@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { CircleCheckBig } from 'lucide-react';
+import { CircleCheckBig, CircleX } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { STUDENT_EMAIL_DOMAIN, isStudentEmail } from '@/lib/config';
 
@@ -56,6 +56,8 @@ export default function PaymentQrRedeemPage() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('支払い確認を準備しています…');
   const [success, setSuccess] = useState(false);
+  // 受付の係が離れた場所からでも結果が分かるよう、失敗は赤・成功は緑で画面全体を塗り分ける
+  const [failed, setFailed] = useState(false);
   const [paidCount, setPaidCount] = useState(0);
 
   useEffect(() => {
@@ -77,6 +79,7 @@ export default function PaymentQrRedeemPage() {
       if (!mounted) return;
       if (claimError) {
         setMessage(claimError.message || 'このQRコードは使用できません。');
+        setFailed(true);
         setLoading(false);
         return;
       }
@@ -93,6 +96,7 @@ export default function PaymentQrRedeemPage() {
         });
         if (mounted && error) {
           setMessage(`大学Googleログインを開始できませんでした: ${error.message}`);
+          setFailed(true);
           setLoading(false);
         }
       };
@@ -115,6 +119,7 @@ export default function PaymentQrRedeemPage() {
 
       if (error) {
         setMessage(error.message || '支払い確認に失敗しました。');
+        setFailed(true);
         setLoading(false);
         return;
       }
@@ -122,6 +127,7 @@ export default function PaymentQrRedeemPage() {
       const result = (Array.isArray(data) ? data[0] : data) as RedeemResult | undefined;
       if (!result) {
         setMessage('支払い確認結果を取得できませんでした。');
+        setFailed(true);
         setLoading(false);
         return;
       }
@@ -139,27 +145,43 @@ export default function PaymentQrRedeemPage() {
     return () => { mounted = false; };
   }, []);
 
+  const tone = success ? 'success' : failed ? 'failed' : 'pending';
+
   return (
     <div style={{ maxWidth: 620, margin: '0 auto', paddingTop: 24 }}>
-      <div className="glass-card" style={{ textAlign: 'center' }} aria-live="polite">
-        {success && <CircleCheckBig size={56} aria-hidden="true" style={{ color: 'var(--color-success)', marginBottom: 8 }} />}
-        <h1 style={{ marginTop: 0 }}>{success ? '支払い確認完了' : '支払い確認'}</h1>
-        {loading && <div className="loading-spinner" style={{ margin: '24px auto' }} />}
-        <p style={{ lineHeight: 1.8, fontSize: '1.05rem' }}>{message}</p>
-        {success && (
-          <>
-            <p style={{ fontSize: '1.4rem', fontWeight: 800, margin: '12px 0' }}>{paidCount}件の予約を支払い済みにしました</p>
-            <p style={{ color: 'var(--text-secondary)', lineHeight: 1.7, fontSize: '0.9rem' }}>
-              この画面を受付の係に見せてください。件数が支払った枚数と合っているか確認してもらえます。
+      <div
+        className={`glass-card pay-result pay-result--${tone}`}
+        style={{ textAlign: 'center', overflow: 'hidden', padding: 0 }}
+        aria-live="polite"
+      >
+        {tone !== 'pending' && (
+          <div className={`pay-result__banner pay-result__banner--${tone}`} role={failed ? 'alert' : 'status'}>
+            {success
+              ? <CircleCheckBig size={72} aria-hidden="true" strokeWidth={2.5} />
+              : <CircleX size={72} aria-hidden="true" strokeWidth={2.5} />}
+            <div className="pay-result__banner-title">{success ? '支払い確認OK' : '支払い確認NG'}</div>
+            {success && <div className="pay-result__banner-count">{paidCount}件 支払い済み</div>}
+            {failed && <div className="pay-result__banner-sub">この画面では支払い済みになっていません</div>}
+          </div>
+        )}
+        <div style={{ padding: 24 }}>
+          {tone === 'pending' && <h1 style={{ marginTop: 0 }}>支払い確認</h1>}
+          {loading && <div className="loading-spinner" style={{ margin: '24px auto' }} />}
+          <p style={{ lineHeight: 1.8, fontSize: '1.05rem', fontWeight: failed ? 700 : undefined }}>{message}</p>
+          {success && (
+            <>
+              <p style={{ color: 'var(--text-secondary)', lineHeight: 1.7, fontSize: '0.9rem' }}>
+                この画面を受付の係に見せてください。件数が支払った枚数と合っているか確認してもらえます。
+              </p>
+              <Link href="/#my-tickets" className="btn btn-primary" style={{ marginTop: 16 }}>自分の予約を見る</Link>
+            </>
+          )}
+          {failed && (
+            <p style={{ color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+              QRコードは一回限りです。うまくいかない場合は、画面に表示されている新しいQRコードを読み取ってください。
             </p>
-            <Link href="/#my-tickets" className="btn btn-primary" style={{ marginTop: 16 }}>自分の予約を見る</Link>
-          </>
-        )}
-        {!loading && !success && (
-          <p style={{ color: 'var(--text-secondary)', lineHeight: 1.7 }}>
-            QRコードは一回限りです。うまくいかない場合は、画面に表示されている新しいQRコードを読み取ってください。
-          </p>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
