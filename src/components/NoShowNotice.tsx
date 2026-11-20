@@ -11,7 +11,31 @@ import { NOSHOW_BLACKLIST_COUNT } from '@/lib/accessStatus';
  */
 export default function NoShowNotice() {
   const status = useAccessStatus();
-  if (!status || status.level === 'blacklisted' || status.noshow_count < 1) return null;
+  if (!status || status.level === 'blacklisted') return null;
+
+  // 管理者が手動でイエローリストに登録した人：次に支払いに来なかった時点でブラックリストになる
+  if (status.level === 'yellow' && status.yellow_reason) {
+    return (
+      <div role="alert" className="error-banner" style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 18, lineHeight: 1.7 }}>
+        <TriangleAlert size={22} aria-hidden="true" style={{ flexShrink: 0, marginTop: 2 }} />
+        <div>
+          <strong>イエローリストに登録されています。</strong>
+          <div style={{ whiteSpace: 'pre-wrap' }}>理由：{status.yellow_reason}</div>
+          {status.yellow_expires_at && (
+            <div>
+              解除予定：
+              {new Date(status.yellow_expires_at).toLocaleString('ja-JP', {
+                year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tokyo',
+              })}
+            </div>
+          )}
+          <div>次に予約した支払い日時に来なかった場合、予約サイトを利用できなくなります。</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (status.noshow_count < 1) return null;
 
   const remaining = Math.max(NOSHOW_BLACKLIST_COUNT - status.noshow_count, 1);
 
