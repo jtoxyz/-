@@ -12,6 +12,7 @@ import { useQueryParam } from '@/hooks/useQueryParam';
 import { useLoadEffect } from '@/hooks/useLoadEffect';
 import { useAccessStatus } from '@/components/AccessStatusContext';
 import { NOSHOW_RULE_TEXT } from '@/lib/accessStatus';
+import PaymentQrScanButton from '@/components/payment/PaymentQrScanButton';
 
 type TicketDetails = {
   reservation_id: string;
@@ -302,6 +303,14 @@ export default function MyTicketPage() {
                       ? <strong>この時間内に支払いに来なかった場合、予約サイトを利用できなくなります。</strong>
                       : <strong>{NOSHOW_RULE_TEXT}</strong>}
                   </span>
+                </div>
+              )}
+              {ticket.status === 'reserved' && ticket.payment_status === 'pending' && (
+                <div style={{ marginTop: 12 }}>
+                  <PaymentQrScanButton />
+                  <div style={{ marginTop: 6, fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                    受付で支払ったら、このボタンで受付のQRコードを読み取ってください（ログインし直す必要はありません）。
+                  </div>
                 </div>
               )}
             </div>
