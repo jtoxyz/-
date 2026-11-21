@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { CalendarDays, CircleX, Clock3, Ticket, Tickets } from 'lucide-react';
+import { CalendarDays, CircleCheckBig, CircleX, Clock3, Ticket, Tickets } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { formatTicketOption, formatYen } from '@/lib/ticketOption';
 import { type PaymentVisitSlot, fetchMyVisitSlots, formatVisitSlot, visitSlotPlace } from '@/lib/paymentVisit';
@@ -64,6 +64,47 @@ function paymentLabel(ticket: MyTicket, visit?: PaymentVisitSlot): string | null
       : '支払い待ち';
   }
   return null;
+}
+
+/**
+ * 券種を一覧でも大きく見せる。受付は予約画面で券種を見て金額を判断するため。
+ * 未払いなら払う金額を大きく、支払い済みなら「支払い済み」をはっきり出して、二重に受け取らないようにする。
+ */
+function TicketOptionBadge({ ticket }: { ticket: MyTicket }) {
+  const price = ticket.ticket_option_price_yen;
+  const pending = ticket.payment_status === 'pending';
+  const paid = ticket.payment_status === 'paid';
+  const tone = pending
+    ? { bg: 'var(--color-warning-bg)', border: 'var(--color-warning-border)' }
+    : paid
+      ? { bg: 'var(--color-success-bg)', border: 'var(--color-success-border)' }
+      : { bg: 'transparent', border: 'var(--card-border)' };
+  return (
+    <div
+      style={{
+        margin: '4px 0 8px', padding: '8px 12px', borderRadius: 10,
+        background: tone.bg, border: `1px solid ${tone.border}`,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 700 }}>
+        <Ticket size={14} aria-hidden="true" />券種
+      </div>
+      <div style={{ display: 'flex', alignItems: 'baseline', flexWrap: 'wrap', gap: '2px 10px', marginTop: 2 }}>
+        <span style={{ fontSize: '1.2rem', fontWeight: 900, lineHeight: 1.35 }}>{ticket.ticket_option_label}</span>
+        {pending && price != null && (
+          <span style={{ fontSize: '1.2rem', fontWeight: 900, color: 'var(--color-warning)' }}>{formatYen(price)}</span>
+        )}
+        {paid && (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.95rem', fontWeight: 800, color: 'var(--color-success)' }}>
+            <CircleCheckBig size={16} aria-hidden="true" />支払い済み
+          </span>
+        )}
+        {!pending && !paid && price != null && (
+          <span style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-secondary)' }}>{formatYen(price)}</span>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export default function MyTicketsList() {
@@ -142,17 +183,12 @@ export default function MyTicketsList() {
         <div style={{ display: 'grid', gap: 10 }}>
           {tickets.map((ticket) => {
             const payment = paymentLabel(ticket, visits[ticket.reservation_id]);
-            const optionText = formatTicketOption(ticket.ticket_option_label, ticket.ticket_option_price_yen);
             return (
               <Link key={ticket.reservation_id} href={`/my-tickets?reservationId=${encodeURIComponent(ticket.reservation_id)}`} style={{ display: 'block' }}>
                 <div className="glass-card interactive" style={{ padding: '13px 15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 14 }}>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontWeight: 800, marginBottom: 4 }}>{ticket.event_title}</div>
-                    {optionText && (
-                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginBottom: 5, fontSize: '0.8rem', fontWeight: 800 }}>
-                        <Ticket size={14} aria-hidden="true" />券種：{optionText}
-                      </div>
-                    )}
+                    {ticket.ticket_option_label && <TicketOptionBadge ticket={ticket} />}
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px 12px', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
                       {ticket.slot_label && (
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
@@ -161,7 +197,7 @@ export default function MyTicketsList() {
                       )}
                       {ticket.slot_starts_at && <span>{formatDateTime(ticket.slot_starts_at)}</span>}
                     </div>
-                    {payment && (
+                    {payment && !(ticket.payment_status === 'paid' && ticket.ticket_option_label) && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 7, fontSize: '0.78rem', fontWeight: 700, color: ticket.payment_status === 'expired' ? 'var(--color-danger)' : 'var(--color-warning)' }}>
                         <Clock3 size={14} aria-hidden="true" />{payment}
                       </div>
