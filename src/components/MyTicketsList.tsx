@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { formatTicketOption, formatYen } from '@/lib/ticketOption';
 import { type PaymentVisitSlot, fetchMyVisitSlots, formatVisitSlot, visitSlotPlace } from '@/lib/paymentVisit';
 import { NOSHOW_BLACKLIST_COUNT } from '@/lib/accessStatus';
+import PaymentQrScanButton from '@/components/payment/PaymentQrScanButton';
 
 type MyTicket = {
   reservation_id: string;
@@ -125,6 +126,15 @@ export default function MyTicketsList() {
       {!loading && !error && tickets.length === 0 && (
         <div style={{ padding: '20px 12px', textAlign: 'center', color: 'var(--text-secondary)' }}>
           現在、有効な予約はありません。
+        </div>
+      )}
+
+      {!loading && tickets.some((t) => t.status === 'reserved' && t.payment_status === 'pending') && (
+        <div style={{ marginBottom: 12 }}>
+          <PaymentQrScanButton />
+          <div style={{ marginTop: 6, fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+            受付で支払ったら、このボタンで受付のQRコードを読み取ってください（ログインし直す必要はありません）。
+          </div>
         </div>
       )}
 
