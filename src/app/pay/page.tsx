@@ -72,15 +72,23 @@ export default function PaymentQrRedeemPage() {
         return;
       }
 
+      // 失敗したら URL からトークンを外す。外さないと、ブラウザがタブを開き直すたびに同じ（使えない）QR で
+      // 確認をやり直してエラー画面が出る（2026-11-18、翌朝にタブが復元されて読み取りが走っていた）。
+      // 端末の鍵（localStorage）は残すので、通信エラーのあとに同じ QR を読み直せば続きから確定できる。
+      const fail = (text: string) => {
+        setMessage(text);
+        setFailed(true);
+        setLoading(false);
+        window.history.replaceState(null, '', '/pay');
+      };
+
       // 読み取った時点で QR を「読み取り済み」にし、受付の画面を次の QR に切り替える（ログイン前でも行う）。
       // 同時にほかの人が読み取っていたら、ここでエラーになる（ログインする前に分かる）
       const claimKey = claimKeyFor(token, params.get(CLAIM_KEY_PARAM));
       const { error: claimError } = await supabase.rpc('claim_payment_qr', { p_token: token, p_claim_key: claimKey });
       if (!mounted) return;
       if (claimError) {
-        setMessage(claimError.message || 'このQRコードは使用できません。');
-        setFailed(true);
-        setLoading(false);
+        fail(claimError.message || 'このQRコードは使用できません。');
         return;
       }
 
@@ -118,17 +126,13 @@ export default function PaymentQrRedeemPage() {
       if (!mounted) return;
 
       if (error) {
-        setMessage(error.message || '支払い確認に失敗しました。');
-        setFailed(true);
-        setLoading(false);
+        fail(error.message || '支払い確認に失敗しました。');
         return;
       }
 
       const result = (Array.isArray(data) ? data[0] : data) as RedeemResult | undefined;
       if (!result) {
-        setMessage('支払い確認結果を取得できませんでした。');
-        setFailed(true);
-        setLoading(false);
+        fail('支払い確認結果を取得できませんでした。');
         return;
       }
 
