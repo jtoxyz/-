@@ -4,9 +4,6 @@ do $$ begin
   assert (select payment_confirm_mode from public.events where id = '00000000-0000-4000-8000-0000000000e2') = 'student_scan', 'E2は既定でstudent_scan';
 end $$;
 
--- E1をstaff方式にする（フィクスチャ後に切り替え）
-update public.events set payment_confirm_mode = 'staff' where id in ('00000000-0000-4000-8000-0000000000e1','00000000-0000-4000-8000-0000000000e3');
-
 -- check制約
 do $$ declare ok boolean := false; begin
   begin update public.events set payment_confirm_mode = 'other' where id = '00000000-0000-4000-8000-0000000000e2';
