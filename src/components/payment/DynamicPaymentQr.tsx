@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { Copy, Maximize2, RefreshCw, TriangleAlert, X } from 'lucide-react';
 import { formatJstDateTime } from '@/lib/jst';
+import { useFullscreenOverlay } from '@/hooks/useFullscreenOverlay';
 
 type CurrentQr = { qr_id: string; qr_token: string; created_at: string };
 type QrResult = { data: unknown; error: { message: string } | null };
@@ -112,81 +113,8 @@ export default function DynamicPaymentQr({
     setReissuing(false);
   };
 
-  // 全画面表示中は、背景のスクロールを止め、画面が暗くならないようにし、可能ならブラウザも全画面にする
-  useEffect(() => {
-    if (!fullscreen) return;
-    const html = document.documentElement;
-    const body = document.body;
-    const scrollY = window.scrollY;
-    const saved = {
-      htmlOverflow: html.style.overflow,
-      bodyOverflow: body.style.overflow,
-      bodyPosition: body.style.position,
-      bodyTop: body.style.top,
-      bodyWidth: body.style.width,
-      bodyOverscroll: body.style.overscrollBehavior,
-    };
-    // iOS Safari でも背景が動かないよう、body を固定してから元の位置に戻す
-    html.style.overflow = 'hidden';
-    body.style.overflow = 'hidden';
-    body.style.position = 'fixed';
-    body.style.top = `-${scrollY}px`;
-    body.style.width = '100%';
-    body.style.overscrollBehavior = 'none';
-
-    let wakeLock: { release: () => Promise<void> } | null = null;
-    let cancelled = false;
-    const requestWakeLock = async () => {
-      try {
-        const nav = navigator as Navigator & {
-          wakeLock?: { request: (type: 'screen') => Promise<{ release: () => Promise<void> }> };
-        };
-        if (!nav.wakeLock || document.visibilityState !== 'visible') return;
-        const lock = await nav.wakeLock.request('screen');
-        if (cancelled) void lock.release().catch(() => {});
-        else wakeLock = lock;
-      } catch {}
-    };
-    void requestWakeLock();
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') void requestWakeLock();
-    };
-    document.addEventListener('visibilitychange', onVisible);
-
-    // 対応しているブラウザ（Android Chrome など）ではアドレスバーも隠す。iPhoneでは使えないので無視する
-    let enteredFullscreen = false;
-    try {
-      if (!document.fullscreenElement && html.requestFullscreen) {
-        html.requestFullscreen({ navigationUI: 'hide' }).then(() => { enteredFullscreen = true; }).catch(() => {});
-      }
-    } catch {}
-    const onFullscreenChange = () => {
-      // 戻るジェスチャー等でブラウザの全画面が解除されたら、表示も閉じる
-      if (enteredFullscreen && !document.fullscreenElement) setFullscreen(false);
-    };
-    document.addEventListener('fullscreenchange', onFullscreenChange);
-
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setFullscreen(false);
-    };
-    window.addEventListener('keydown', onKey);
-
-    return () => {
-      cancelled = true;
-      html.style.overflow = saved.htmlOverflow;
-      body.style.overflow = saved.bodyOverflow;
-      body.style.position = saved.bodyPosition;
-      body.style.top = saved.bodyTop;
-      body.style.width = saved.bodyWidth;
-      body.style.overscrollBehavior = saved.bodyOverscroll;
-      window.scrollTo(0, scrollY);
-      document.removeEventListener('visibilitychange', onVisible);
-      document.removeEventListener('fullscreenchange', onFullscreenChange);
-      window.removeEventListener('keydown', onKey);
-      if (wakeLock) void wakeLock.release().catch(() => {});
-      if (document.fullscreenElement && document.exitFullscreen) void document.exitFullscreen().catch(() => {});
-    };
-  }, [fullscreen]);
+  // 全画面表示中は、背景のスクロール固定・画面の常時点灯・ブラウザの全画面化を行う
+  useFullscreenOverlay(fullscreen, () => setFullscreen(false));
 
   const copyUrl = async () => {
     try {
