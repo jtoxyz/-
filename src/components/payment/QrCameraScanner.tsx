@@ -52,12 +52,15 @@ export default function QrCameraScanner({
   rejectHint,
   onDetect,
   onClose,
+  ariaLabel = '支払いQRの読み取り',
 }: {
   title: string;
   fallbackHint: string;
   rejectHint: string;
   onDetect: (text: string) => boolean;
   onClose: () => void;
+  /** 読み取り画面（ダイアログ）の名前。読み上げ用 */
+  ariaLabel?: string;
 }) {
   // 読み取り用の effect は一度だけ走らせたいので、最新の関数は ref 経由で呼ぶ
   const onDetectRef = useRef(onDetect);
@@ -153,7 +156,7 @@ export default function QrCameraScanner({
   }, [onClose]);
 
   return createPortal(
-    <div className="qr-scanner" role="dialog" aria-modal="true" aria-label="支払いQRの読み取り">
+    <div className="qr-scanner" role="dialog" aria-modal="true" aria-label={ariaLabel}>
       <button type="button" className="qr-scanner-close" onClick={onClose} aria-label="閉じる" autoFocus>
         <X size={28} aria-hidden="true" />
       </button>
