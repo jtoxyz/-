@@ -8,9 +8,14 @@ import { formatTicketOption, formatYen } from '@/lib/ticketOption';
 import { type PaymentVisitSlot, fetchMyVisitSlots, formatVisitSlot, visitSlotPlace } from '@/lib/paymentVisit';
 import { NOSHOW_BLACKLIST_COUNT } from '@/lib/accessStatus';
 import PaymentQrScanButton from '@/components/payment/PaymentQrScanButton';
+import ReceptionQrCard from '@/components/payment/ReceptionQrCard';
+import { getPaymentConfirmModes } from '@/lib/staffPaymentRpc';
+import type { PaymentConfirmMode } from '@/lib/staffPaymentScan';
 
 type MyTicket = {
   reservation_id: string;
+  event_id: string;
+  public_token: string;
   event_title: string;
   slot_label: string | null;
   student_name: string;
@@ -110,6 +115,7 @@ function TicketOptionBadge({ ticket }: { ticket: MyTicket }) {
 export default function MyTicketsList() {
   const [tickets, setTickets] = useState<MyTicket[]>([]);
   const [visits, setVisits] = useState<Record<string, PaymentVisitSlot>>({});
+  const [modes, setModes] = useState<Record<string, PaymentConfirmMode>>({});
   const [cancelled, setCancelled] = useState<CancelledTicket[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -133,9 +139,14 @@ export default function MyTicketsList() {
         setError(null);
         setTickets(loaded);
         const pendingIds = loaded.filter((t) => t.payment_status === 'pending').map((t) => t.reservation_id);
-        const loadedVisits = await fetchMyVisitSlots(pendingIds);
+        const pendingEventIds = [...new Set(loaded.filter((t) => t.payment_status === 'pending').map((t) => t.event_id))];
+        const [loadedVisits, loadedModes] = await Promise.all([
+          fetchMyVisitSlots(pendingIds),
+          getPaymentConfirmModes(supabase, pendingEventIds),
+        ]);
         if (!active) return;
         setVisits(loadedVisits);
+        setModes(loadedModes);
       }
       setLoading(false);
     };
@@ -150,6 +161,20 @@ export default function MyTicketsList() {
       listener.subscription.unsubscribe();
     };
   }, []);
+
+  const isStaffMode = (t: MyTicket) => modes[t.event_id] === 'staff';
+  const unpaid = tickets.filter((t) => t.status === 'reserved' && t.payment_status === 'pending');
+  // 受付の係が確認する企画ごとに、未払いの予約をまとめて1枚のQRにする
+  const receptionCards = [...new Set(unpaid.filter(isStaffMode).map((t) => t.event_id))].map((eventId) => {
+    const rows = unpaid.filter((t) => t.event_id === eventId);
+    const priced = rows.filter((t) => t.ticket_option_price_yen != null);
+    return {
+      eventId,
+      eventTitle: rows[0].event_title,
+      publicToken: rows[0].public_token,
+      totalYen: priced.length > 0 ? priced.reduce((sum, t) => sum + (t.ticket_option_price_yen ?? 0), 0) : null,
+    };
+  });
 
   return (
     <section id="my-tickets" className="glass-card" style={{ marginBottom: 28, borderColor: 'var(--card-border-hover)' }}>
@@ -170,7 +195,15 @@ export default function MyTicketsList() {
         </div>
       )}
 
-      {!loading && tickets.some((t) => t.status === 'reserved' && t.payment_status === 'pending') && (
+      {!loading && receptionCards.length > 0 && (
+        <div style={{ display: 'grid', gap: 12, marginBottom: 12 }}>
+          {receptionCards.map((card) => (
+            <ReceptionQrCard key={card.eventId} eventTitle={card.eventTitle} publicToken={card.publicToken} totalYen={card.totalYen} />
+          ))}
+        </div>
+      )}
+
+      {!loading && unpaid.some((t) => !isStaffMode(t)) && (
         <div style={{ marginBottom: 12 }}>
           <PaymentQrScanButton />
           <div style={{ marginTop: 6, fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>

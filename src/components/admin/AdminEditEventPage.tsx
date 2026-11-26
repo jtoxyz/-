@@ -14,6 +14,7 @@ import FormatToolbar from '@/components/admin/FormatToolbar';
 import { adminSupabase as supabase } from '@/lib/supabase';
 import PaymentVisitSettings from '@/components/admin/PaymentVisitSettings';
 import TicketOptionsSettings from '@/components/admin/TicketOptionsSettings';
+import type { PaymentConfirmMode } from '@/lib/staffPaymentScan';
 import { applySlotTimingChange } from '@/lib/slotTiming';
 import { formatJstShort, isoToJstDate, isoToJstLocal, isoToJstTime, jstDateTimeToIso, jstLocalToIso } from '@/lib/jst';
 
@@ -105,6 +106,8 @@ export default function AdminEditEventPage({ id }: { id: string }) {
 
   const [surveyAfterUseEnabled, setSurveyAfterUseEnabled] = useState(false);
   const [paymentRequired, setPaymentRequired] = useState(false);
+  // 列がまだ無い環境では null のまま。その間は選択肢を出さず、保存にも含めない
+  const [paymentConfirmMode, setPaymentConfirmMode] = useState<PaymentConfirmMode | null>(null);
   const [paymentVisitRequired, setPaymentVisitRequired] = useState(false);
   const [paymentVisitWindowDays, setPaymentVisitWindowDays] = useState<number | null>(1);
   const [surveyAfterUseUrl, setSurveyAfterUseUrl] = useState('');
@@ -157,6 +160,7 @@ export default function AdminEditEventPage({ id }: { id: string }) {
 
         setSurveyAfterUseEnabled(data.survey_after_use_enabled ?? false);
         setPaymentRequired(data.payment_required ?? false);
+        setPaymentConfirmMode(data.payment_confirm_mode ?? null);
         setPaymentVisitRequired(data.payment_visit_required ?? false);
         setPaymentVisitWindowDays(data.payment_visit_window_days === undefined ? 1 : data.payment_visit_window_days);
         setSurveyAfterUseUrl(data.survey_after_use_url || '');
@@ -549,6 +553,7 @@ export default function AdminEditEventPage({ id }: { id: string }) {
       payment_required: paymentRequired,
       payment_visit_required: paymentRequired && paymentVisitRequired,
       payment_visit_window_days: paymentVisitWindowDays,
+      ...(paymentConfirmMode ? { payment_confirm_mode: paymentRequired ? paymentConfirmMode : 'student_scan' } : {}),
       is_reservation_suspended: isReservationSuspended,
       is_walkin_suspended: isWalkinSuspended,
       is_ticket_use_suspended: isTicketUseSuspended,
@@ -1403,6 +1408,35 @@ export default function AdminEditEventPage({ id }: { id: string }) {
               onWindowDaysChange={setPaymentVisitWindowDays}
               disabled={saving}
             />
+            {paymentRequired && paymentConfirmMode && (
+              <div className="form-group" style={{ marginTop: '16px' }}>
+                <label className="form-label">支払いの確認方法</label>
+                <div style={{ display: 'grid', gap: '8px', marginTop: '4px' }}>
+                  <label className="form-checkbox-label">
+                    <input
+                      type="radio"
+                      name="paymentConfirmMode"
+                      className="form-checkbox"
+                      checked={paymentConfirmMode === 'student_scan'}
+                      onChange={() => setPaymentConfirmMode('student_scan')}
+                      disabled={saving}
+                    />
+                    学生がQRを読む（今まで）
+                  </label>
+                  <label className="form-checkbox-label">
+                    <input
+                      type="radio"
+                      name="paymentConfirmMode"
+                      className="form-checkbox"
+                      checked={paymentConfirmMode === 'staff'}
+                      onChange={() => setPaymentConfirmMode('staff')}
+                      disabled={saving}
+                    />
+                    受付の係が確認する（係が学生のQRをスキャナーで読む）
+                  </label>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Section: Ticket options & survey */}
