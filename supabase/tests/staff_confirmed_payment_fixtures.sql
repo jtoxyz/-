@@ -13,6 +13,7 @@
 --   public_token R1..R6 = f000000N-0000-4000-8000-000000000000 （N=1..6）
 --   企画方式  E1・E3 は payment_confirm_mode='staff'、E2 は student_scan
 --   QR token  E1の1日QR='test-daily-e1', E2の1日QR='test-daily-e2'
+-- user_profiles: a4 の行あり（admin_create_reservation_for_user 用）
 -- 学生メール: a4=s99z004@ge.osaka-sandai.ac.jp, a5=s99z005@ge.osaka-sandai.ac.jp
 -- 呼び出し者の切り替え:
 --   select set_config('request.jwt.claims','{"sub":"00000000-0000-4000-8000-0000000000a2","role":"authenticated"}',true); set local role authenticated;
@@ -66,6 +67,9 @@ insert into public.reservations(id, event_id, event_slot_id, student_name, stude
 insert into public.payment_qr_codes(event_id, mode, token, valid_date, valid_from, valid_until, is_active) values
   ('00000000-0000-4000-8000-0000000000e1','daily','test-daily-e1',(now() at time zone 'Asia/Tokyo')::date, now()-interval '1 hour', now()+interval '1 hour', true),
   ('00000000-0000-4000-8000-0000000000e2','daily','test-daily-e2',(now() at time zone 'Asia/Tokyo')::date, now()-interval '1 hour', now()+interval '1 hour', true);
+
+insert into public.user_profiles(user_id, university_email, student_number, student_name) values
+  ('00000000-0000-4000-8000-0000000000a4','s99z004@ge.osaka-sandai.ac.jp','25Z004','学生4');
 
 set local session_replication_role = origin;
 
