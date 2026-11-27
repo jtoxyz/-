@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { LogIn, ShieldCheck } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { appOAuthSupabase, supabase } from '@/lib/supabase';
+import { isNativeApp } from '@/lib/nativeApp';
 import { STUDENT_EMAIL_DOMAIN, isStudentEmail } from '@/lib/config';
 import { safeNextPath } from '@/lib/safeNextPath';
 import { useQueryParam } from '@/hooks/useQueryParam';
@@ -37,6 +38,31 @@ export default function StudentLoginPage() {
   const handleLogin = async () => {
     setError(null);
     setLoading(true);
+
+    // スマホアプリの中では、Googleがアプリの中の画面でのログインを禁止しているので、スマホのブラウザでログインして戻ってくる。
+    // （ログインのアドレスはアプリが自動でブラウザで開く。戻り先は /auth/app-return → アプリ → /auth/app-callback）
+    if (isNativeApp()) {
+      const returnUrl = new URL('/auth/app-return', window.location.origin);
+      returnUrl.searchParams.set('next', nextPath);
+      const { data, error: appError } = await appOAuthSupabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: returnUrl.toString(),
+          scopes: 'openid email profile',
+          skipBrowserRedirect: true,
+          queryParams: { hd: STUDENT_EMAIL_DOMAIN, prompt: 'select_account' },
+        },
+      });
+      if (appError || !data?.url) {
+        setError(appError?.message || 'Googleログインを開始できませんでした。');
+        setLoading(false);
+        return;
+      }
+      window.location.href = data.url;
+      // ブラウザから戻ってこなかったときのために、ボタンを押せる状態に戻しておく
+      setTimeout(() => setLoading(false), 4000);
+      return;
+    }
 
     const redirectTo = `${window.location.origin}${nextPath}`;
     const { error: signInError } = await supabase.auth.signInWithOAuth({

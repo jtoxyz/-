@@ -6,6 +6,8 @@ import ThemeSwitcher from '@/components/ThemeSwitcher';
 import StudentAuthGate from '@/components/StudentAuthGate';
 import StudentAccountMenu from '@/components/StudentAccountMenu';
 import NoShowNotice from '@/components/NoShowNotice';
+import AppDeviceLinker from '@/components/AppDeviceLinker';
+import Script from 'next/script';
 
 export const metadata: Metadata = {
   title: '大学委員会 参加型企画予約システム',
@@ -77,6 +79,8 @@ export default function RootLayout({
             </div>
           </header>
 
+          {/* スマホアプリ（がっけんぽアプリ）の中で開いたときだけ、下の切り替えバーと通知の登録をする。ブラウザでは何もしない */}
+          <AppDeviceLinker />
           <main className="main-content">
             <StudentAuthGate><NoShowNotice />{children}</StudentAuthGate>
           </main>
@@ -95,6 +99,8 @@ export default function RootLayout({
             </p>
           </footer>
         </div>
+        {/* アプリの下の切り替えバー（がっけんぽ.jp が配っている共通のスクリプト。アプリの中でだけ動く） */}
+        <Script src="https://xn--v8jk7cufve.jp/app-shell.js" strategy="afterInteractive" />
       </body>
     </html>
   );

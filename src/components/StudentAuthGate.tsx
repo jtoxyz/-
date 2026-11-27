@@ -12,6 +12,8 @@ import { AccessStatusContext } from '@/components/AccessStatusContext';
 function isExcludedPath(pathname: string): boolean {
   return (
     pathname === '/login' ||
+    // アプリのGoogleログインの戻り先（ログインの途中なので確認しない。src/app/auth/）
+    pathname.startsWith('/auth/') ||
     pathname === '/account/setup' ||
     pathname.startsWith('/admin') ||
     pathname.startsWith('/qr-maker') ||
