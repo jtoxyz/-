@@ -344,8 +344,7 @@ export default function PaymentReceiveDesk({
                 }}
               >
                 <strong style={{ color: 'var(--color-warning)' }}>未受領（読んだだけ）</strong>
-                <span>{m.studentName}</span>
-                <span style={{ color: 'var(--text-secondary)' }}>{m.studentNumber}</span>
+                <span>{m.studentName}{m.studentNumber ? `（${m.studentNumber}）` : ''}</span>
                 <span style={{ color: 'var(--text-secondary)' }}>{hhmm(m.scannedAt)}</span>
                 <button
                   type="button"
@@ -365,7 +364,8 @@ export default function PaymentReceiveDesk({
               >
                 <span style={{ color: 'var(--text-secondary)' }}>直前：</span>
                 <span style={item.reversed ? { textDecoration: 'line-through', color: 'var(--text-secondary)' } : undefined}>
-                  {item.student_name ?? '（氏名なし）'} {formatYenTotal(item.amount_yen)}{' '}
+                  {item.student_name ?? '（氏名なし）'}
+                  {item.student_number ? `（${item.student_number}）` : ''} {formatYenTotal(item.amount_yen)}{' '}
                   <span style={{ color: item.action === 'undone' ? 'var(--color-danger)' : undefined }}>
                     {item.action === 'received' ? '受領' : '取消'}
                   </span>{' '}
