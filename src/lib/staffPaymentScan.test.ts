@@ -44,6 +44,15 @@ test('reservationTokenFromScan: QRではない文字列', () => {
   assert.equal(reservationTokenFromScan('4dee369c-003c'), null)
 })
 
+test('reservationTokenFromScan: 大文字URL・ハイフン類・UUID複数', () => {
+  assert.equal(reservationTokenFromScan(`HTTPS://EXAMPLE.COM/STAFF?R=${UUID.toUpperCase()}`), UUID)
+  assert.equal(reservationTokenFromScan(UUID.replaceAll('-', '\u2212')), UUID)
+  assert.equal(reservationTokenFromScan(UUID.replaceAll('-', '\u30fc')), UUID)
+  assert.equal(reservationTokenFromScan(UUID.replaceAll('-', '\u2013')), UUID)
+  const other = '11111111-2222-4333-8444-555555555555'
+  assert.equal(reservationTokenFromScan(`${UUID} ${other}`), UUID)
+})
+
 test('staffPaymentQrUrl', () => {
   assert.equal(staffPaymentQrUrl('https://a.b', 't'), 'https://a.b/staff?r=t')
 })
@@ -91,6 +100,21 @@ test('deskViewFromFind: not_found / other_event / expired', () => {
     deskViewFromFind({ status: 'expired', student_name: '山田太郎', student_number: '24B123' }),
     { kind: 'unavailable', reason: 'expired', studentName: '山田太郎' },
   )
+})
+
+test('deskViewFromFind: cancelled', () => {
+  assert.deepEqual(
+    deskViewFromFind({ status: 'cancelled', student_name: '山田太郎', student_number: '24B123' }),
+    { kind: 'unavailable', reason: 'cancelled', studentName: '山田太郎' },
+  )
+})
+
+test('deskViewFromFind: 受領できる予約も支払い済みもない（期限切れ・支払い不要）は受領不可', () => {
+  const expired = deskViewFromFind(found([res({ payment_status: 'expired', status: 'reserved' })]))
+  assert.deepEqual(expired, { kind: 'unavailable', reason: 'expired', studentName: '山田太郎' })
+  const notRequired = deskViewFromFind(found([res({ payment_status: 'not_required', status: 'reserved' })]))
+  assert.equal(notRequired.kind, 'unavailable')
+  assert.equal(deskViewFromFind(found([])).kind, 'unavailable')
 })
 
 test('deskViewFromFind: 未払いあり', () => {

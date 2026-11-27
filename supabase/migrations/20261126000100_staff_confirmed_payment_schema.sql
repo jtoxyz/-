@@ -39,8 +39,6 @@ create index if not exists idx_payment_receipts_reservation_created
   on public.payment_receipts(reservation_id, created_at desc);
 create index if not exists idx_payment_receipts_operator
   on public.payment_receipts(operator_user_id) where operator_user_id is not null;
-create index if not exists idx_payment_receipts_reverses
-  on public.payment_receipts(reverses_receipt_id) where reverses_receipt_id is not null;
 
 alter table public.payment_receipts enable row level security;
 revoke all on table public.payment_receipts from anon, authenticated;

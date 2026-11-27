@@ -96,7 +96,6 @@ as $function$
 declare
   v_old text;
   v_status text;
-  v_new text;
   v_recv public.payment_receipts%rowtype;
   v_recv_found boolean;
 begin
@@ -139,8 +138,7 @@ begin
            end,
            paid_at = null,
            payment_confirmed_by = null
-     where id = p_reservation_id
-     returning payment_status into v_new;
+     where id = p_reservation_id;
 
     if v_old = 'paid' then
       perform public.log_payment_receipt(p_reservation_id, 'undone', case when v_recv_found then v_recv.id end);

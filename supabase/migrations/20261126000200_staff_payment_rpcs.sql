@@ -31,7 +31,7 @@ begin
   end if;
 
   v_token := (regexp_match(
-    lower(normalize(coalesce(p_query, ''), NFKC)),
+    lower(regexp_replace(normalize(coalesce(p_query, ''), NFKC), E'[\u2010-\u2015\u2212\u30fc\uff70]', '-', 'g')),
     '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
   ))[1];
   if v_token is null then
@@ -196,7 +196,7 @@ begin
         'received_by_name', (
           select pr.operator_name
             from public.payment_receipts pr
-           where pr.reservation_id = v_row.id
+           where pr.reservation_id = v_row.id and pr.action = 'received'
            order by pr.created_at desc, pr.id desc
            limit 1
         )

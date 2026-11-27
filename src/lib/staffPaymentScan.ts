@@ -78,9 +78,12 @@ export type PaymentSummary = {
 
 const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/
 
+// ハイフンに見える文字（U+2010〜2015、U+2212 −、U+30FC ー、U+FF70 ｰ）
+const HYPHEN_RE = /[\u2010-\u2015\u2212\u30fc\uff70]/g
+
 // USBスキャナは全角や記号の化けた文字列を返すことがあるので、正規化してから最初のUUIDを探す。
 export function reservationTokenFromScan(text: string): string | null {
-  const m = UUID_RE.exec(text.normalize('NFKC').toLowerCase())
+  const m = UUID_RE.exec(text.normalize('NFKC').replace(HYPHEN_RE, '-').toLowerCase())
   return m ? m[0] : null
 }
 
@@ -136,6 +139,10 @@ export function deskViewFromFind(result: FindResult): DeskView {
           reservations: result.reservations,
           paidCount: paid.length,
         }
+      }
+      if (paid.length === 0) {
+        // 期限切れ・支払い不要などで、受領できる予約も支払い済みもない
+        return { kind: 'unavailable', reason: 'expired', studentName: result.student_name }
       }
       const latest = paid.reduce<FindReservation | null>(
         (best, r) =>

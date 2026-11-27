@@ -29,6 +29,7 @@ import QrCameraScanner from './QrCameraScanner';
 // QrCameraScanner はこの2つが変わるとカメラを起動し直すので、固定の文字列にしておく
 const CAMERA_FALLBACK_HINT = '受付のノートPCでUSBスキャナーを使って読んでください。';
 const CAMERA_REJECT_HINT = '予約のQRコードではありません。学生の予約画面に出ているQRコードを写してください。';
+const BUSY_MESSAGE = '処理中です。もう一度読んでください';
 const IME_MESSAGE = '日本語入力がオンになっています。半角英数に切り替えてから、もう一度読んでください';
 
 type Shown = { view: DeskView; scannedAt: number };
@@ -116,10 +117,26 @@ export default function PaymentReceiveDesk({
     setReloadKey((k) => k + 1);
   };
 
+  // 新しい人の表示にならない読み取りでは、前の人の「未払い」表示を残さない（別の人を受領してしまうのを防ぐ）
+  const dropPendingShown = () => {
+    const previous = shownRef.current;
+    if (previous?.view.kind !== 'pending') return;
+    setMissed((list) => nextMissedList(list, previous, { kind: 'not_found' }));
+    setShown(null);
+  };
+
   const runQuery = async (raw: string) => {
-    if (busy.current) return;
+    if (busy.current) {
+      if (raw.trim()) {
+        dropPendingShown();
+        setNotices([{ tone: 'warning', text: BUSY_MESSAGE }]);
+        focusInput();
+      }
+      return;
+    }
     const token = reservationTokenFromScan(raw);
     if (!token) {
+      dropPendingShown();
       setNotices([{ tone: 'danger', text: looksLikeImeInput(raw) ? IME_MESSAGE : NOT_A_QR_MESSAGE }]);
       focusInput();
       return;
@@ -131,6 +148,7 @@ export default function PaymentReceiveDesk({
     setWorking(null);
     focusInput();
     if (res.error !== null || !res.data) {
+      dropPendingShown();
       setNotices([{ tone: 'danger', text: res.error ?? '予約を探せませんでした。もう一度読んでください' }]);
       return;
     }
@@ -247,7 +265,18 @@ export default function PaymentReceiveDesk({
             aria-label="受付で見せるQR（スキャナーで読む）"
             placeholder="QRをスキャナーで読んでください"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              const value = e.target.value;
+              // 日本語入力がオンだと Enter が変換確定に使われて送信されないので、かなが入った時点で止める
+              if (looksLikeImeInput(value)) {
+                setQuery('');
+                dropPendingShown();
+                setNotices([{ tone: 'danger', text: IME_MESSAGE }]);
+                focusInput();
+                return;
+              }
+              setQuery(value);
+            }}
             onKeyDown={(e) => {
               if (e.key !== 'Enter') return;
               e.preventDefault();
@@ -374,6 +403,12 @@ export default function PaymentReceiveDesk({
           ariaLabel="受付で見せるQRの読み取り"
           onDetect={(text) => {
             const ok = Boolean(reservationTokenFromScan(text));
+            if (ok && busy.current) {
+              // 処理中は読み取りを捨てず、カメラを開いたまま読み直してもらう
+              dropPendingShown();
+              setNotices([{ tone: 'warning', text: BUSY_MESSAGE }]);
+              return false;
+            }
             if (ok) {
               setCameraOpen(false);
               void runQuery(text);

@@ -7,12 +7,25 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 root="$(dirname "$(dirname "$here")")"
 echo 'begin;'
 if [ "${1:-}" = "--with-migrations" ]; then
-  for f in "$root"/supabase/migrations/20261126000*_*.sql; do
-    [ -e "$f" ] || continue
-    echo "-- migration: $(basename "$f")"
-    cat "$f"
-    echo
+  # 接頭辞（タイムスタンプ）は本番のバージョンに付け替えられるので、サフィックスで探す
+  count=0
+  for suffix in _staff_confirmed_payment_schema.sql _staff_payment_rpcs.sql _admin_payment_receipts.sql; do
+    matches=("$root"/supabase/migrations/*"$suffix")
+    if [ ! -e "${matches[0]}" ]; then
+      echo "ERROR: マイグレーションが見つかりません: *$suffix" >&2
+      exit 1
+    fi
+    for f in "${matches[@]}"; do
+      echo "-- migration: $(basename "$f")"
+      cat "$f"
+      echo
+      count=$((count + 1))
+    done
   done
+  if [ "$count" -eq 0 ]; then
+    echo "ERROR: マイグレーションが1つも見つかりません" >&2
+    exit 1
+  fi
 fi
 echo "-- fixtures"
 cat "$here/staff_confirmed_payment_fixtures.sql"
