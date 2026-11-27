@@ -7,6 +7,9 @@ import { adminSupabase as supabase } from '@/lib/supabase';
 import { formatYen } from '@/lib/ticketOption';
 import { type PaymentVisitSlot, VISIT_SLOT_COLUMNS, formatVisitSlot, jstDateKey, visitSlotPlace } from '@/lib/paymentVisit';
 import { useLoadEffect } from '@/hooks/useLoadEffect';
+import PaymentReconciliation from '@/components/payment/PaymentReconciliation';
+import { formatJstDateTime } from '@/lib/jst';
+import { matchesReservationSearch } from '@/lib/reservationSearch';
 
 type PaymentStatus = 'not_required' | 'pending' | 'paid' | 'expired';
 type EventItem = { id: string; title: string };
@@ -25,6 +28,13 @@ type ReservationRow = {
   payment_visit_slot_id: string | null;
   payment_visit_slots?: PaymentVisitSlot | null;
   event_ticket_options?: { label: string; price_yen: number } | null;
+};
+
+type ReceiptRow = {
+  reservation_id: string;
+  last_received_at: string | null;
+  last_received_by: string | null;
+  undone_count: number;
 };
 
 type SortKey = 'visit' | 'number' | 'created';
@@ -91,6 +101,9 @@ export default function PaymentManagementPage() {
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [receipts, setReceipts] = useState<Map<string, ReceiptRow>>(new Map());
+  const [receiptsReload, setReceiptsReload] = useState(0);
 
   const loadEvents = async () => {
     const { data, error: fetchError } = await supabase
@@ -107,10 +120,19 @@ export default function PaymentManagementPage() {
   const loadRows = async (targetEventId: string) => {
     if (!targetEventId) {
       setRows([]);
+      setReceipts(new Map());
       setLoading(false);
       return;
     }
     setLoading(true);
+    // 受領記録は補助情報。取得に失敗しても（未デプロイ等）一覧は出す
+    const receiptPromise = Promise.resolve(supabase.rpc('admin_list_payment_receipts', { p_event_id: targetEventId }))
+      .then(({ data: receiptData, error: receiptError }) => {
+        const map = new Map<string, ReceiptRow>();
+        if (!receiptError) for (const r of (receiptData as ReceiptRow[] | null) ?? []) map.set(r.reservation_id, r);
+        return map;
+      })
+      .catch(() => new Map<string, ReceiptRow>());
     const { data, error: fetchError } = await supabase
       .from('reservations')
       .select(`id,student_name,student_number,university_email,status,payment_status,payment_due_at,paid_at,created_at,event_id,event_slots(label),payment_visit_slot_id,payment_visit_slots(${VISIT_SLOT_COLUMNS}),event_ticket_options(label,price_yen)`)
@@ -120,6 +142,8 @@ export default function PaymentManagementPage() {
       setError(fetchError.message);
     } else {
       setRows((data as unknown as ReservationRow[]) || []);
+      setReceipts(await receiptPromise);
+      setReceiptsReload((n) => n + 1);
     }
     setLoading(false);
   };
@@ -141,6 +165,7 @@ export default function PaymentManagementPage() {
     setDayFilter('all');
     setSlotFilter('all');
     setPaidDayFilter(null);
+    setSearch('');
   };
 
   const todayKey = jstDateKey(new Date());
@@ -190,10 +215,12 @@ export default function PaymentManagementPage() {
     return [...map.values()].sort((a, b) => a.slot.starts_at.localeCompare(b.slot.starts_at));
   }, [dayRows]);
 
-  const scopedRows = useMemo(
-    () => (slotFilter === 'all' ? dayRows : dayRows.filter((row) => row.payment_visit_slot_id === slotFilter)),
-    [dayRows, slotFilter]
-  );
+  const searching = search.trim() !== '';
+
+  const scopedRows = useMemo(() => {
+    if (searching) return rows.filter((row) => matchesReservationSearch(row, search));
+    return slotFilter === 'all' ? dayRows : dayRows.filter((row) => row.payment_visit_slot_id === slotFilter);
+  }, [rows, dayRows, slotFilter, search, searching]);
 
   const counts = useMemo(() => ({
     all: scopedRows.length,
@@ -259,6 +286,26 @@ export default function PaymentManagementPage() {
               <button className="btn btn-secondary" onClick={expireNow}>期限切れを今すぐ反映</button>
             </div>
 
+            <div className="form-group" style={{ maxWidth: 520, marginBottom: 18 }}>
+              <input
+                type="search"
+                className="form-input"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="氏名・学籍番号・大学メールで検索..."
+                aria-label="予約者を検索"
+              />
+              {searching && <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: '6px 0 0' }}>検索中は日付・受付枠の絞り込みを使いません。</p>}
+            </div>
+
+            <details style={{ marginBottom: 18 }}>
+              <summary style={{ cursor: 'pointer', fontWeight: 700 }}>係ごとの受領（照合）</summary>
+              <div style={{ marginTop: 10 }}>
+                {eventId && <PaymentReconciliation client={supabase} eventId={eventId} isAdmin reloadKey={receiptsReload} />}
+              </div>
+            </details>
+
+            {!searching && (<>
             <div className="glass-card" style={{ padding: 16, marginBottom: 18 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
                 <div>
@@ -330,6 +377,7 @@ export default function PaymentManagementPage() {
                 {slotFilter !== 'all' && <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: '8px 0 0' }}>選んだ時間枠の人だけを表示中です。もう一度押すと解除します。</p>}
               </div>
             )}
+            </>)}
 
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 18 }}>
               {(['all','pending','paid','expired','not_required'] as const).map((key) => (
@@ -347,7 +395,7 @@ export default function PaymentManagementPage() {
             {loading ? <div className="loading-spinner" /> : (
               <div className="admin-table-container reservations-table-desktop">
                 <table className="admin-table admin-table-stack">
-                  <thead><tr><th>氏名</th><th>学籍番号</th><th>枠</th><th>金額</th><th>支払いに来る日時</th><th>支払い状態</th><th>期限</th><th>支払日時</th><th>操作</th></tr></thead>
+                  <thead><tr><th>氏名</th><th>学籍番号</th><th>枠</th><th>金額</th><th>支払いに来る日時</th><th>支払い状態</th><th>期限</th><th>支払日時</th><th>受領</th><th>操作</th></tr></thead>
                   <tbody>
                     {visibleRows.map((row) => (
                       <tr key={row.id} style={{ opacity: row.status === 'cancelled' ? 0.5 : 1 }}>
@@ -367,6 +415,18 @@ export default function PaymentManagementPage() {
                         <td data-label="支払い状態"><span><strong>{labels[row.payment_status]}</strong>{row.status === 'cancelled' ? '（キャンセル済み）' : ''}</span></td>
                         <td data-label="期限">{formatDate(row.payment_due_at)}</td>
                         <td data-label="支払日時">{formatDate(row.paid_at)}</td>
+                        <td data-label="受領">
+                          {(() => {
+                            const receipt = receipts.get(row.id);
+                            if (!receipt) return '―';
+                            return (
+                              <span>
+                                {receipt.last_received_at ? `${formatJstDateTime(receipt.last_received_at)} ${receipt.last_received_by ?? ''}` : '―'}
+                                {receipt.undone_count > 0 && <span className="badge" style={{ marginLeft: 6 }}>取消あり</span>}
+                              </span>
+                            );
+                          })()}
+                        </td>
                         <td className="admin-table-stack-actions">
                           {row.payment_status !== 'not_required' && row.status !== 'cancelled' && (
                             row.payment_status === 'paid' ?

@@ -1,15 +1,19 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { BadgeCheck, ChartColumn, DoorOpen, LogIn, QrCode, RefreshCw, TriangleAlert } from 'lucide-react';
+import { BadgeCheck, ChartColumn, DoorOpen, LogIn, QrCode, RefreshCw, ScanLine, TriangleAlert } from 'lucide-react';
 import DailyPaymentQr from '@/components/payment/DailyPaymentQr';
 import DynamicPaymentQr from '@/components/payment/DynamicPaymentQr';
+import PaymentReceiveDesk from '@/components/payment/PaymentReceiveDesk';
 import { useLoadEffect } from '@/hooks/useLoadEffect';
+import { useQueryParam } from '@/hooks/useQueryParam';
 import { formatJstDateTime } from '@/lib/jst';
 import { formatVisitSlot, visitSlotPlace } from '@/lib/paymentVisit';
 import { reissueLaneQr, staffDailyQr, staffLaneQr } from '@/lib/paymentQrRpc';
 import { supabase } from '@/lib/supabase';
+import { findPaymentTarget, getPaymentConfirmModes } from '@/lib/staffPaymentRpc';
+import type { PaymentConfirmMode } from '@/lib/staffPaymentScan';
 
 type StaffEvent = { id: string; title: string; payment_required: boolean; is_public: boolean; starts_at: string | null; ends_at: string | null };
 
@@ -49,7 +53,7 @@ type Access =
   | { status: 'error'; message: string }
   | { status: 'ok'; name: string | null; events: StaffEvent[] };
 
-type Tab = 'stats' | 'dynamic' | 'daily';
+type Tab = 'stats' | 'dynamic' | 'daily' | 'receive';
 
 const fetchLaneQr = staffLaneQr(supabase);
 const reissueQr = reissueLaneQr(supabase);
@@ -62,6 +66,12 @@ export default function StaffPage() {
   const [access, setAccess] = useState<Access>({ status: 'checking' });
   const [eventId, setEventId] = useState('');
   const [tab, setTab] = useState<Tab>('stats');
+  const [modes, setModes] = useState<Record<string, PaymentConfirmMode>>({});
+  // 予約QR（?r=）から開いたときの照合結果。受付画面を最初に開くときだけ使う
+  const r = useQueryParam('r');
+  const [pendingQuery, setPendingQuery] = useState<string | null>(null);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const scanHandled = useRef(false);
 
   useLoadEffect(async () => {
     const { data: sessionData } = await supabase.auth.getSession();
@@ -88,9 +98,33 @@ export default function StaffPage() {
       return;
     }
     const events = (eventData as StaffEvent[] | null) || [];
+    const loadedModes = await getPaymentConfirmModes(supabase, events.map((e) => e.id));
+    setModes(loadedModes);
     setAccess({ status: 'ok', name: status.display_name, events });
     setEventId((current) => current || events[0]?.id || '');
   }, []);
+
+  // 受付QR（/staff?r=…）で開かれたら、アクセス確認のあとに1回だけ照合して、その企画の受付画面を開く
+  useLoadEffect(async () => {
+    if (access.status !== 'ok' || !r || scanHandled.current) return;
+    scanHandled.current = true;
+    const result = await findPaymentTarget(supabase, null, r);
+    if (result.error !== null) {
+      setScanError(result.error);
+      return;
+    }
+    const found = result.data;
+    // 期限切れ・キャンセルの結果には企画IDが無いので、いま選んでいる企画のまま受付画面に出す
+    const targetId =
+      (found.status === 'found' || found.status === 'other_event') && access.events.some((e) => e.id === found.event_id)
+        ? found.event_id
+        : null;
+    setPendingQuery(r);
+    if (targetId) setEventId(targetId);
+    setTab('receive');
+  }, [access.status, r]);
+
+  const login = r ? `/login?next=${encodeURIComponent(`/staff?r=${encodeURIComponent(r)}`)}` : '/login?next=%2Fstaff';
 
   if (access.status === 'checking') {
     return <div style={{ textAlign: 'center', padding: 64 }} role="status"><div className="loading-spinner" /><p style={{ color: 'var(--text-secondary)' }}>スタッフ情報を確認しています...</p></div>;
@@ -104,7 +138,7 @@ export default function StaffPage() {
         <p style={{ color: 'var(--text-secondary)', lineHeight: 1.7, marginBottom: 20 }}>
           自治会などの担当スタッフが、支払いQRの表示と受付状況の確認に使います。登録された大学Googleアカウントでログインしてください。
         </p>
-        <Link href="/login?next=%2Fstaff" className="btn btn-primary"><LogIn size={18} aria-hidden="true" />ログインする</Link>
+        <Link href={login} className="btn btn-primary"><LogIn size={18} aria-hidden="true" />ログインする</Link>
       </div>
     );
   }
@@ -127,12 +161,15 @@ export default function StaffPage() {
   }
 
   const event = access.events.find((row) => row.id === eventId);
+  const isStaffMode = event ? modes[event.id] === 'staff' : false;
   const tabs: { id: Tab; label: string; icon: typeof ChartColumn; enabled: boolean }[] = [
     { id: 'stats', label: '受付状況', icon: ChartColumn, enabled: true },
-    { id: 'dynamic', label: '動的QR', icon: QrCode, enabled: Boolean(event?.payment_required) },
-    { id: 'daily', label: '1日QR', icon: QrCode, enabled: Boolean(event?.payment_required) },
+    { id: 'receive', label: '支払い受付', icon: ScanLine, enabled: Boolean(event?.payment_required) && isStaffMode },
+    { id: 'dynamic', label: '動的QR', icon: QrCode, enabled: Boolean(event?.payment_required) && !isStaffMode },
+    { id: 'daily', label: '1日QR', icon: QrCode, enabled: Boolean(event?.payment_required) && !isStaffMode },
   ];
   const activeTab = tabs.find((t) => t.id === tab && t.enabled) ? tab : 'stats';
+  const hasReceiveTab = tabs.some((t) => t.id === 'receive' && t.enabled);
 
   return (
     <div style={{ maxWidth: 900, margin: '0 auto' }}>
@@ -142,7 +179,7 @@ export default function StaffPage() {
           <h1 style={{ fontSize: '1.5rem' }}>スタッフ用画面</h1>
         </div>
         <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', lineHeight: 1.7 }}>
-          {access.name ? `${access.name}さん、` : ''}担当している企画の支払いQRと受付状況を確認できます。企画の設定や予約者の個人情報は表示されません。
+          {access.name ? `${access.name}さん、` : ''}担当している企画の支払いQRと受付状況を確認できます。企画の設定は表示されません。{hasReceiveTab ? '支払い受付では、読み取った予約者の氏名・学籍番号が表示されます。' : '予約者の個人情報は表示されません。'}
         </p>
 
         {access.events.length === 0 ? (
@@ -150,7 +187,7 @@ export default function StaffPage() {
         ) : (
           <div className="form-group" style={{ marginTop: 16, marginBottom: 0 }}>
             <label className="form-label" htmlFor="staff-event">企画</label>
-            <select id="staff-event" className="form-input" value={eventId} onChange={(e) => setEventId(e.target.value)}>
+            <select id="staff-event" className="form-input" value={eventId} onChange={(e) => { setEventId(e.target.value); setPendingQuery(null); }}>
               {access.events.map((row) => (
                 <option key={row.id} value={row.id}>{row.title}{row.is_public ? '' : '（非公開）'}</option>
               ))}
@@ -158,6 +195,13 @@ export default function StaffPage() {
           </div>
         )}
       </div>
+
+      {scanError && (
+        <div className="error-banner" role="alert" style={{ marginBottom: 16 }}>
+          <TriangleAlert size={20} aria-hidden="true" style={{ flexShrink: 0 }} />
+          <span>{scanError}</span>
+        </div>
+      )}
 
       {event && (
         <>
@@ -169,7 +213,7 @@ export default function StaffPage() {
                 role="tab"
                 aria-selected={activeTab === id}
                 className={`admin-tab ${activeTab === id ? 'active' : ''}`}
-                onClick={() => setTab(id)}
+                onClick={() => { setTab(id); setPendingQuery(null); }}
               >
                 <Icon size={16} aria-hidden="true" style={{ verticalAlign: 'middle', marginRight: 6 }} />{label}
               </button>
@@ -178,6 +222,12 @@ export default function StaffPage() {
 
           <div className="glass-card" role="tabpanel">
             {activeTab === 'stats' && <EventStats event={event} />}
+            {activeTab === 'receive' && (
+              <>
+                <h2 style={{ fontSize: '1.2rem', marginBottom: 6 }}>支払い受付</h2>
+                <PaymentReceiveDesk key={event.id} client={supabase} eventId={event.id} isAdmin={false} initialQuery={pendingQuery} />
+              </>
+            )}
             {activeTab === 'dynamic' && (
               <>
                 <h2 style={{ fontSize: '1.2rem', marginBottom: 6 }}>動的支払いQR</h2>

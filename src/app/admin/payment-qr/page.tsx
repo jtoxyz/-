@@ -10,6 +10,8 @@ import { adminLaneQr, reissueLaneQr } from '@/lib/paymentQrRpc';
 
 type EventItem = { id: string; title: string };
 
+type EventRow = EventItem & { payment_confirm_mode?: string | null };
+
 const fetchLaneQr = adminLaneQr(supabase);
 const reissueQr = reissueLaneQr(supabase);
 
@@ -19,18 +21,22 @@ export default function AdminPaymentQrPage() {
   const [eventId, setEventId] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [staffCount, setStaffCount] = useState(0);
 
   useLoadEffect(async () => {
     if (authLoading || !user) return;
     const { data, error: fetchError } = await supabase
       .from('events')
-      .select('id,title')
+      .select('*')
       .eq('payment_required', true)
       .order('created_at', { ascending: false });
 
     if (fetchError) setError(fetchError.message);
     else {
-      const rows = (data as EventItem[]) || [];
+      const all = (data as EventRow[]) || [];
+      // 列がまだ無い環境では undefined になるので、学生が読む方式として扱う
+      const rows = all.filter((e) => e.payment_confirm_mode !== 'staff');
+      setStaffCount(all.length - rows.length);
       setEvents(rows);
       setEventId((currentId) => currentId || rows[0]?.id || '');
     }
@@ -55,6 +61,11 @@ export default function AdminPaymentQrPage() {
             </p>
 
             {error && <div className="error-banner" role="alert" style={{ marginBottom: 16 }}>{error}</div>}
+            {staffCount > 0 && (
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', marginBottom: 12 }}>
+                受付の係が確認する企画（{staffCount}件）は「支払い受付（係）」で受け付けます。
+              </p>
+            )}
 
             {events.length === 0 ? (
               <p style={{ color: 'var(--text-secondary)' }}>支払いが必要な企画がありません。</p>

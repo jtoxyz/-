@@ -15,6 +15,7 @@ import {
   LogOut,
   QrCode,
   RefreshCw,
+  ScanLine,
   Users,
 } from 'lucide-react';
 import { adminSupabase as supabase } from '@/lib/supabase';
@@ -28,6 +29,7 @@ const LINKS = [
   ['/admin/staff', IdCard, 'スタッフ管理'],
   ['/admin/settings/payment', Banknote, '支払い設定'],
   ['/admin/payment-management', BadgeCheck, '支払い管理'],
+  ['/admin/payment-receive', ScanLine, '支払い受付（係）'],
   ['/admin/payment-visits', DoorOpen, '委員会室 支払い受付'],
   ['/admin/payment-qr', RefreshCw, '動的支払いQR'],
   ['/admin/daily-payment-qr', FileText, '1日支払いQR'],
