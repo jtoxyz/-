@@ -12,6 +12,8 @@ export type AccountEvent = {
   payment_required?: boolean | null;
   payment_visit_required?: boolean | null;
   payment_visit_window_days?: number | null;
+  /** 受付・受取をスマホだけに限る企画か */
+  smartphone_only_ticket?: boolean | null;
 };
 
 export type AccountEventSlot = {

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowRight, CalendarDays, TriangleAlert } from 'lucide-react';
+import { ArrowRight, CalendarDays, Smartphone, TriangleAlert } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import MyTicketsList from '@/components/MyTicketsList';
 
@@ -71,6 +71,8 @@ export default function Home() {
   const [events, setEvents] = useState<PublicEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  // 受付・受取をスマホだけに限る企画のID（企画カードに案内を出す）
+  const [smartphoneOnlyIds, setSmartphoneOnlyIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     let active = true;
@@ -78,9 +80,16 @@ export default function Home() {
     const loadEvents = async () => {
       const { data, error: rpcError } = await supabase.rpc('get_public_events');
       if (!active) return;
-      setEvents((data as PublicEvent[] | null) || []);
+      const loaded = (data as PublicEvent[] | null) || [];
+      setEvents(loaded);
       setError(Boolean(rpcError));
       setLoading(false);
+      if (loaded.length > 0) {
+        const { data: flags } = await supabase.from('events').select('id, smartphone_only_ticket').in('id', loaded.map((event) => event.id));
+        if (!active) return;
+        const rows = (flags as { id: string; smartphone_only_ticket: boolean | null }[] | null) || [];
+        setSmartphoneOnlyIds(new Set(rows.filter((row) => row.smartphone_only_ticket === true).map((row) => row.id)));
+      }
     };
 
     void loadEvents();
@@ -140,6 +149,14 @@ export default function Home() {
                   <div className="info-value">{formatDateTime(event.starts_at)} 〜<br />{formatDateTime(event.ends_at)}</div>
                   <div className="info-label">予約受付期間</div>
                   <div className="info-value">{formatDateTime(event.reservation_starts_at)} 〜<br />{formatDateTime(event.reservation_ends_at)}</div>
+                  {smartphoneOnlyIds.has(event.id) && (
+                    <>
+                      <div className="info-label">受付・受取</div>
+                      <div className="info-value" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 800, color: 'var(--color-warning)' }}>
+                        <Smartphone size={15} aria-hidden="true" />スマホのみ（PC不可）
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 <div className="mt-4">
