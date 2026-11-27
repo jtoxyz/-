@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Banknote, CalendarDays, MapPin, Ticket, TriangleAlert, UserRound } from 'lucide-react';
 import RichText from '@/components/RichText';
+import SmartphoneOnlyNotice from '@/components/SmartphoneOnlyNotice';
 import { supabase } from '@/lib/supabase';
 import { type PaymentVisitSlot, fetchSelectableVisitSlots, formatVisitSlot, visitSlotPlace, visitWindowNotice } from '@/lib/paymentVisit';
 import {
@@ -77,7 +78,7 @@ export default function AccountReservationPage() {
 
       const [profileResult, eventResult, slotResult] = await Promise.all([
         supabase.from('user_profiles').select('student_name, student_number, university_email').eq('user_id', user.id).single(),
-        supabase.from('events').select('id, title, description, slot_selection_mode, payment_required, payment_visit_required, payment_visit_window_days, survey_config').eq('id', eventId).eq('is_public', true).single(),
+        supabase.from('events').select('id, title, description, slot_selection_mode, payment_required, payment_visit_required, payment_visit_window_days, smartphone_only_ticket, survey_config').eq('id', eventId).eq('is_public', true).single(),
         supabase.rpc('get_event_slots', { p_event_id: eventId }),
       ]);
 
@@ -239,6 +240,7 @@ export default function AccountReservationPage() {
     return (
       <div className="glass-card" style={{ maxWidth: 620, margin: '20px auto' }}>
         <h1 style={{ textAlign: 'center', marginBottom: 20 }}>予約が完了しました</h1>
+        {event.smartphone_only_ticket === true && <SmartphoneOnlyNotice style={{ marginBottom: 14 }} />}
         <div style={{ display: 'grid', gap: 10 }}>
           {results.map((result) => <Link key={result.id} href={`/my-tickets?reservationId=${encodeURIComponent(result.id)}`} className="glass-card interactive" style={{ padding: 14, display: 'flex', justifyContent: 'space-between' }}><span>{result.slot_label}</span><strong>チケットを表示</strong></Link>)}
         </div>
@@ -253,6 +255,7 @@ export default function AccountReservationPage() {
       <div className="glass-card" style={{ marginBottom: 18 }}>
         <h1 style={{ fontSize: '1.6rem', marginBottom: 10 }}>{event.title}</h1>
         {event.description && <RichText content={event.description} style={{ color: 'var(--text-secondary)', lineHeight: 1.75 }} />}
+        {event.smartphone_only_ticket === true && <SmartphoneOnlyNotice style={{ marginTop: 14 }} />}
       </div>
 
       <div className="glass-card" style={{ marginBottom: 18, display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -389,6 +392,7 @@ export default function AccountReservationPage() {
         )}
 
         <div style={{ display: 'grid', gap: 10, marginTop: 20 }}>
+          {event.smartphone_only_ticket === true && <SmartphoneOnlyNotice />}
           <button type="button" className="btn btn-primary" onClick={reserve} disabled={!reservable || saving} aria-describedby={reserveBlocker ? 'reserve-blocker' : undefined}><Ticket size={18} aria-hidden="true" />{saving ? '処理中...' : '選択した枠を予約する'}</button>
           {reserveBlocker && !walkinAvailable && <p id="reserve-blocker" style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary)', textAlign: 'center' }}>{reserveBlocker}</p>}
           {hasWalkinSlots && <button type="button" className="btn btn-secondary" onClick={getWalkin} disabled={!walkinAvailable || saving}>{saving ? '処理中...' : '選択した枠の当日券を取得する'}</button>}

@@ -95,6 +95,7 @@ export default function AdminEditEventPage({ id }: { id: string }) {
   const [ticketEnabled, setTicketEnabled] = useState(false);
   const [useButtonEnabled, setUseButtonEnabled] = useState(false);
   const [ticketRevealMinutes, setTicketRevealMinutes] = useState('5');
+  const [smartphoneOnlyTicket, setSmartphoneOnlyTicket] = useState(true);
 
   // Allowed domains
   const [allowedDomains, setAllowedDomains] = useState('');
@@ -149,6 +150,7 @@ export default function AdminEditEventPage({ id }: { id: string }) {
         setTicketEnabled(data.ticket_enabled ?? false);
         setUseButtonEnabled(data.use_button_enabled ?? false);
         setTicketRevealMinutes(String(data.ticket_reveal_minutes ?? 5));
+        setSmartphoneOnlyTicket(data.smartphone_only_ticket ?? true);
         setAllowedDomains(Array.isArray(data.allowed_email_domains) ? data.allowed_email_domains.join(', ') : 'ge.osaka-sandai.ac.jp');
         setSlotSelectionMode(data.slot_selection_mode === 'multiple' ? 'multiple' : 'single');
         
@@ -542,6 +544,7 @@ export default function AdminEditEventPage({ id }: { id: string }) {
       ticket_enabled: ticketEnabled,
       use_button_enabled: useButtonEnabled,
       ticket_reveal_minutes: Math.min(60, Math.max(1, parseInt(ticketRevealMinutes, 10) || 5)),
+      smartphone_only_ticket: smartphoneOnlyTicket,
       allowed_email_domains: domainsArray,
       slot_selection_mode: slotSelectionMode,
       survey_after_reservation_enabled: surveyAfterReservationEnabled,
@@ -1286,6 +1289,20 @@ export default function AdminEditEventPage({ id }: { id: string }) {
                     disabled={saving}
                   />
                   <span className="form-hint">「使用する」を押した後、受付確認用の「使用しました」画面をこの時間だけ表示します。過ぎると「使用済み」の表示だけになります（1〜60分）。</span>
+                </div>
+
+                <div className="form-group" style={{ marginLeft: '24px' }}>
+                  <label className="form-checkbox-label">
+                    <input
+                      type="checkbox"
+                      className="form-checkbox"
+                      checked={smartphoneOnlyTicket}
+                      onChange={(e) => setSmartphoneOnlyTicket(e.target.checked)}
+                      disabled={saving}
+                    />
+                    受付・受取をスマホのみにする（PCではチケットを表示しない）
+                  </label>
+                  <span className="form-hint" style={{ marginLeft: '28px' }}>PCを受付に持ってこられるのを防ぎます。タブレットとタッチ対応のPCは使えます。スタッフ・管理者のアカウントは制限されません。予約画面や自分の予約に「受付・受取はスマホのみです」と表示されます。</span>
                 </div>
 
                 <div style={{ marginLeft: '24px', padding: '10px 14px', borderRadius: 'var(--radius-sm)', background: 'rgba(99, 102, 241, 0.06)', border: '1px solid rgba(99, 102, 241, 0.15)', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>

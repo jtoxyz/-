@@ -11,6 +11,10 @@ import PaymentQrScanButton from '@/components/payment/PaymentQrScanButton';
 import ReceptionQrCard from '@/components/payment/ReceptionQrCard';
 import { getPaymentConfirmModes } from '@/lib/staffPaymentRpc';
 import type { PaymentConfirmMode } from '@/lib/staffPaymentScan';
+import PcBlockedTicket from '@/components/PcBlockedTicket';
+import SmartphoneOnlyNotice from '@/components/SmartphoneOnlyNotice';
+import { useIsPcDevice } from '@/hooks/useIsPcDevice';
+import { fetchIsStaffOrAdmin } from '@/lib/staffStatus';
 
 type MyTicket = {
   reservation_id: string;
@@ -27,6 +31,8 @@ type MyTicket = {
   slot_starts_at: string | null;
   ticket_option_label?: string | null;
   ticket_option_price_yen?: number | null;
+  /** 受付・受取をスマホだけに限る企画か（DB反映前は返らないので任意） */
+  smartphone_only_ticket?: boolean | null;
 };
 
 type CancelledTicket = {
@@ -119,16 +125,20 @@ export default function MyTicketsList() {
   const [cancelled, setCancelled] = useState<CancelledTicket[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isStaffOrAdmin, setIsStaffOrAdmin] = useState(false);
+  const isPc = useIsPcDevice();
 
   useEffect(() => {
     let active = true;
 
     const loadTickets = async () => {
-      const [{ data, error: rpcError }, cancelledResult] = await Promise.all([
+      const [{ data, error: rpcError }, cancelledResult, staffOrAdmin] = await Promise.all([
         supabase.rpc('get_my_tickets'),
         supabase.rpc('get_my_cancelled_tickets'),
+        fetchIsStaffOrAdmin(supabase),
       ]);
       if (!active) return;
+      setIsStaffOrAdmin(staffOrAdmin);
       setCancelled(cancelledResult.error ? [] : ((cancelledResult.data as CancelledTicket[] | null) || []));
 
       if (rpcError) {
@@ -165,7 +175,12 @@ export default function MyTicketsList() {
   const isStaffMode = (t: MyTicket) => modes[t.event_id] === 'staff';
   const unpaid = tickets.filter((t) => t.status === 'reserved' && t.payment_status === 'pending');
   // 受付の係が確認する企画ごとに、未払いの予約をまとめて1枚のQRにする
-  const receptionCards = [...new Set(unpaid.filter(isStaffMode).map((t) => t.event_id))].map((eventId) => {
+  // スマホ限定の企画では、一般の学生がPCで開いたときに受付で見せるQRを出さない（スタッフ・管理者は除く）
+  const pcBlocked = (t: MyTicket) => t.smartphone_only_ticket === true && isPc && !isStaffOrAdmin;
+  const hasSmartphoneOnly = tickets.some((t) => t.smartphone_only_ticket === true);
+  const receptionEventIds = [...new Set(unpaid.filter(isStaffMode).map((t) => t.event_id))];
+  const hiddenReceptionCount = receptionEventIds.filter((eventId) => unpaid.some((t) => t.event_id === eventId && pcBlocked(t))).length;
+  const receptionCards = receptionEventIds.filter((eventId) => !unpaid.some((t) => t.event_id === eventId && pcBlocked(t))).map((eventId) => {
     const rows = unpaid.filter((t) => t.event_id === eventId);
     const priced = rows.filter((t) => t.ticket_option_price_yen != null);
     return {
@@ -186,6 +201,8 @@ export default function MyTicketsList() {
         このGoogleアカウントに紐づく予約券・当日券です。別の端末からログインしても表示されます。
       </p>
 
+      {!loading && hasSmartphoneOnly && <SmartphoneOnlyNotice style={{ marginBottom: 14 }} />}
+
       {loading && <div style={{ textAlign: 'center', padding: 18 }}><div className="loading-spinner" style={{ margin: '0 auto' }} /></div>}
       {error && <div className="error-banner">{error}</div>}
 
@@ -193,6 +210,10 @@ export default function MyTicketsList() {
         <div style={{ padding: '20px 12px', textAlign: 'center', color: 'var(--text-secondary)' }}>
           現在、有効な予約はありません。
         </div>
+      )}
+
+      {!loading && hiddenReceptionCount > 0 && (
+        <div style={{ marginBottom: 12 }}><PcBlockedTicket what="受付で見せるQR" /></div>
       )}
 
       {!loading && receptionCards.length > 0 && (

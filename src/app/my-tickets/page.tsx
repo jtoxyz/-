@@ -13,6 +13,10 @@ import { useLoadEffect } from '@/hooks/useLoadEffect';
 import { useAccessStatus } from '@/components/AccessStatusContext';
 import { NOSHOW_RULE_TEXT } from '@/lib/accessStatus';
 import PaymentQrScanButton from '@/components/payment/PaymentQrScanButton';
+import PcBlockedTicket from '@/components/PcBlockedTicket';
+import SmartphoneOnlyNotice from '@/components/SmartphoneOnlyNotice';
+import { useIsPcDevice } from '@/hooks/useIsPcDevice';
+import { fetchIsStaffOrAdmin } from '@/lib/staffStatus';
 
 type TicketDetails = {
   reservation_id: string;
@@ -45,6 +49,8 @@ type TicketDetails = {
   use_ends_at: string | null;
   ticket_option_label?: string | null;
   ticket_option_price_yen?: number | null;
+  /** 受付・受取をスマホだけに限る企画か（DB反映前は返らないので任意） */
+  smartphone_only_ticket?: boolean | null;
 };
 
 function formatRemaining(ms: number): string {
@@ -102,11 +108,15 @@ export default function MyTicketPage() {
   const [usingTicket, setUsingTicket] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [nowTick, setNowTick] = useState(() => Date.now());
+  const [isStaffOrAdmin, setIsStaffOrAdmin] = useState(false);
+  const isPc = useIsPcDevice();
 
   const loadTicket = useCallback(async (id: string) => {
-    const { data, error: rpcError } = await supabase.rpc('get_my_ticket', {
-      p_reservation_id: id,
-    });
+    const [{ data, error: rpcError }, staffOrAdmin] = await Promise.all([
+      supabase.rpc('get_my_ticket', { p_reservation_id: id }),
+      fetchIsStaffOrAdmin(supabase),
+    ]);
+    setIsStaffOrAdmin(staffOrAdmin);
     if (rpcError || !data || data.length === 0) {
       setError(rpcError?.message || '本人のチケットが見つからないか、使用期限が終了しています。');
       setTicket(null);
@@ -137,8 +147,11 @@ export default function MyTicketPage() {
     return () => clearInterval(id);
   }, [reservationId, ticket?.status, ticket?.payment_status, loadTicket]);
 
+  // スマホ限定の企画では、一般の学生がPCで開いたときにチケットと「使用する」を出さない（スタッフ・管理者は除く）
+  const smartphoneOnly = ticket?.smartphone_only_ticket === true;
+  const pcBlocked = smartphoneOnly && isPc && !isStaffOrAdmin;
   const blockReason = ticketBlockReason(ticket, nowTick);
-  const useAllowed = Boolean(ticket && ticket.status === 'reserved' && !blockReason);
+  const useAllowed = Boolean(ticket && ticket.status === 'reserved' && !blockReason && !pcBlocked);
 
   const ticketReveal = useMemo(() => {
     if (!ticket || ticket.status !== 'used' || !ticket.used_at) return null;
@@ -200,9 +213,12 @@ export default function MyTicketPage() {
     <div style={{ maxWidth: 520, margin: '0 auto' }}>
       <div style={{ marginBottom: 18 }}><Link href="/#my-tickets">← 自分の予約へ戻る</Link></div>
       {error && <div className="error-banner" role="alert" style={{ marginBottom: 16 }}>{error}</div>}
+      {smartphoneOnly && !pcBlocked && <SmartphoneOnlyNotice style={{ marginBottom: 16 }} />}
+
+      {pcBlocked && <PcBlockedTicket />}
 
       {/* 紙のチケットの形：上が企画（券面）、切り取り線の下が本人情報と使用状態（半券） */}
-      <article className={`ticket ticket--${ticket.status}`} aria-label={`${ticket.event_title}の${kindLabel}${optionText ? `・${optionText}` : ''}（${statusLabel}）`}>
+      {!pcBlocked && <article className={`ticket ticket--${ticket.status}`} aria-label={`${ticket.event_title}の${kindLabel}${optionText ? `・${optionText}` : ''}（${statusLabel}）`}>
         <div className="ticket-head">
           <div className="ticket-kind">
             <span>{kindLabel}</span>
@@ -269,7 +285,7 @@ export default function MyTicketPage() {
             </div>
           )}
         </div>
-      </article>
+      </article>}
 
       <div style={{ marginTop: 20 }}>
           <div className="glass-card" style={{ padding: 14, marginBottom: 18, display: 'flex', alignItems: 'center', gap: 9 }}>
@@ -323,7 +339,7 @@ export default function MyTicketPage() {
           )}
           {ticket.use_starts_at && <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: 'var(--text-secondary)', marginBottom: 14 }}><Clock3 size={17} aria-hidden="true" />使用可能：{formatAccountDate(ticket.use_starts_at)} 〜 {formatAccountDate(ticket.use_ends_at)}</div>}
 
-          {ticket.status === 'reserved' && (
+          {ticket.status === 'reserved' && !pcBlocked && (
             <>
               <button type="button" className="btn btn-primary" onClick={handleUse} disabled={!useAllowed || usingTicket} style={{ width: '100%' }} aria-describedby={blockReason ? 'use-block-reason' : undefined}>
                 {usingTicket ? '処理中...' : useAllowed ? 'このチケットを使用する' : '現在は使用できません'}
